@@ -15,6 +15,40 @@ function Game({
   const [loading, setLoading] = useState(true);
   const [showNextButton, setShowNextButton] = useState(false);
   const [revealed, setRevealed] = useState(false);
+  const playTrack = async (uri) => {
+  const token = localStorage.getItem("token");
+
+  const devices = await fetch(
+    "https://api.spotify.com/v1/me/player/devices",
+    {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    }
+  );
+
+  const deviceData = await devices.json();
+
+  const deviceId = deviceData.devices[0]?.id;
+
+  if (!deviceId) {
+    alert("No Spotify device found. Open Spotify once.");
+    return;
+  }
+
+  await fetch(
+    `https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`,
+    {
+      method: "PUT",
+      body: JSON.stringify({ uris: [uri] }),
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`
+      }
+    }
+  );
+};
+
 
   const currentPlayer = players[currentPlayerIndex];
 
@@ -142,7 +176,7 @@ function Game({
                 <div className="card-front new">
                   <div
                     className="play-button"
-                    onClick={() => window.open(card.url)}
+                    onClick={() => playTrack(card.uri)}
                   >
                     ▶
                   </div>
