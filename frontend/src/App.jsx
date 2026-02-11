@@ -12,6 +12,27 @@ function App() {
   const hash = window.location.hash;
   let token = window.localStorage.getItem("token");
 
+    useEffect(() => {
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get("code");
+
+  if (code) {
+    const codeVerifier = localStorage.getItem("code_verifier");
+
+    fetch(`/api/token?code=${code}`, {
+      headers: {
+        "x-code-verifier": codeVerifier
+      }
+    })
+      .then(res => res.json())
+      .then(data => {
+        localStorage.setItem("token", data.access_token);
+        window.location.href = "/";
+      });
+  }
+}, []);
+
+
   if (!token) {
   return (
     <div className="container">
@@ -27,7 +48,6 @@ function App() {
     </div>
   );
 }
-
 }, []);
 
 
