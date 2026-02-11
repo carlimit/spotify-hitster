@@ -7,8 +7,11 @@ function Game({
   setPlayers,
   setGamePhase,
   setWinner,
-  selectedGenres
-}) {
+  selectedGenres,
+  minYear,
+  maxYear
+})
+ {
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0);
   const [cards, setCards] = useState([]);
   const [result, setResult] = useState(null);
@@ -83,7 +86,10 @@ function Game({
     const randomGenre =
       selectedGenres[Math.floor(Math.random() * selectedGenres.length)];
 
-    const res = await axios.get(`/api/track?genre=${randomGenre}`);
+    const res = await axios.get(
+  `/api/track?genre=${randomGenre}&minYear=${minYear}&maxYear=${maxYear}`
+);
+
 
     return {
       id: Date.now(),

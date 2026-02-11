@@ -210,3 +210,24 @@ button:hover {
 .result-wrong .revealed-year {
   color: #ffffff;
 }
+.year-filter {
+  margin-top: 30px;
+}
+
+.slider-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+input[type="range"] {
+  width: 100%;
+  accent-color: #1DB954;
+}
+
+.year-label {
+  margin-top: 10px;
+  font-weight: bold;
+  font-size: 18px;
+}

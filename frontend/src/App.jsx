@@ -76,6 +76,8 @@ function App() {
           setGamePhase={setGamePhase}
           selectedGenres={selectedGenres}
           setWinner={setWinner}
+          minYear={minYear}
+          maxYear={maxYear}
         />
       )}
 

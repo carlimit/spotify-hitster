@@ -1,5 +1,6 @@
 export default async function handler(req, res) {
-  const { genre } = req.query;
+  const { genre, minYear, maxYear } = req.query;
+;
 
   const CLIENT_ID = process.env.SPOTIFY_CLIENT_ID;
   const CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET;
@@ -21,14 +22,17 @@ export default async function handler(req, res) {
   const authData = await authResponse.json();
   const accessToken = authData.access_token;
 
-  const response = await fetch(
-    `https://api.spotify.com/v1/search?q=genre:${genre}&type=track&limit=50`,
-    {
-      headers: {
-        Authorization: `Bearer ${accessToken}`
-      }
+  const query = `genre:${genre} year:${minYear}-${maxYear}`;
+
+const response = await fetch(
+  `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=50`,
+  {
+    headers: {
+      Authorization: `Bearer ${accessToken}`
     }
-  );
+  }
+);
+
 
   const data = await response.json();
 
