@@ -15,61 +15,88 @@ function Game({
   const [loading, setLoading] = useState(true);
   const [showNextButton, setShowNextButton] = useState(false);
   const [revealed, setRevealed] = useState(false);
-  const playTrack = async (uri) => {
-  const token = localStorage.getItem("token");
 
-  const devices = await fetch(
-    "https://api.spotify.com/v1/me/player/devices",
-    {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    }
-  );
-
-  const deviceData = await devices.json();
-
-  const deviceId = deviceData.devices[0]?.id;
-
-  if (!deviceId) {
-    alert("No Spotify device found. Open Spotify once.");
-    return;
-  }
-
-  await fetch(
-    `https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`,
-    {
-      method: "PUT",
-      body: JSON.stringify({ uris: [uri] }),
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`
-      }
-    }
-  );
-};
-
+  // ✅ Spotify SDK states
+  const [player, setPlayer] = useState(null);
+  const [deviceId, setDeviceId] = useState(null);
 
   const currentPlayer = players[currentPlayerIndex];
 
+  // -----------------------------
+  // 🎵 Spotify Web Playback SDK
+  // -----------------------------
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+
+    if (!window.Spotify) return;
+
+    const spotifyPlayer = new window.Spotify.Player({
+      name: "Spotify Hitster Player",
+      getOAuthToken: cb => cb(token),
+      volume: 0.5
+    });
+
+    spotifyPlayer.addListener("ready", ({ device_id }) => {
+      console.log("Ready with Device ID:", device_id);
+      setDeviceId(device_id);
+    });
+
+    spotifyPlayer.addListener("initialization_error", e => console.error(e));
+    spotifyPlayer.addListener("authentication_error", e => console.error(e));
+    spotifyPlayer.addListener("account_error", e => console.error(e));
+    spotifyPlayer.addListener("playback_error", e => console.error(e));
+
+    spotifyPlayer.connect();
+    setPlayer(spotifyPlayer);
+  }, []);
+
+  // -----------------------------
+  // 🎵 Play Track
+  // -----------------------------
+  const playTrack = async (uri) => {
+    const token = localStorage.getItem("token");
+
+    if (!deviceId) {
+      alert("Player not ready yet.");
+      return;
+    }
+
+    await fetch(
+      `https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`,
+      {
+        method: "PUT",
+        body: JSON.stringify({ uris: [uri] }),
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        }
+      }
+    );
+  };
+
+  // -----------------------------
+  // 🎲 Generate Card
+  // -----------------------------
   const generateCard = async () => {
     const randomGenre =
       selectedGenres[Math.floor(Math.random() * selectedGenres.length)];
 
-    const res = await axios.get(`/api/track?genre=${randomGenre}`)
-
+    const res = await axios.get(`/api/track?genre=${randomGenre}`);
 
     return {
       id: Date.now(),
       year: parseInt(res.data.year),
       name: res.data.name,
       artist: res.data.artist,
-      url: res.data.url,
+      uri: res.data.uri,
       cover: res.data.cover,
       type: "new"
     };
   };
 
+  // -----------------------------
+  // 🔄 Load Card on Player Change
+  // -----------------------------
   useEffect(() => {
     const loadCard = async () => {
       setLoading(true);
@@ -81,6 +108,9 @@ function Game({
     loadCard();
   }, [currentPlayerIndex]);
 
+  // -----------------------------
+  // 🧠 Reveal Logic
+  // -----------------------------
   const handleReveal = () => {
     setRevealed(true);
 
@@ -126,9 +156,7 @@ function Game({
   };
 
   const nextTurn = () => {
-    const nextIndex =
-      (currentPlayerIndex + 1) % players.length;
-
+    const nextIndex = (currentPlayerIndex + 1) % players.length;
     setCurrentPlayerIndex(nextIndex);
     setRevealed(false);
     setResult(null);
@@ -154,7 +182,7 @@ function Game({
         onReorder={setCards}
         className="timeline"
       >
-        {cards.map((card) => (
+        {cards.map(card => (
           <Reorder.Item
             key={card.id}
             value={card}
@@ -172,7 +200,6 @@ function Game({
                   ${result === "wrong" ? "result-wrong" : ""}
                 `}
               >
-                {/* FRONT */}
                 <div className="card-front new">
                   <div
                     className="play-button"
@@ -183,21 +210,11 @@ function Game({
                   <div>Drag to place</div>
                 </div>
 
-                {/* BACK */}
                 <div className="card-back">
-                  <img
-                    src={card.cover}
-                    className="cover-large"
-                  />
-
-                  <div className="revealed-year">
-                    {card.year}
-                  </div>
-
+                  <img src={card.cover} className="cover-large" />
+                  <div className="revealed-year">{card.year}</div>
                   <strong>{card.artist}</strong>
-                  <div className="song-title">
-                    {card.name}
-                  </div>
+                  <div className="song-title">{card.name}</div>
                 </div>
               </div>
             ) : (
@@ -210,18 +227,13 @@ function Game({
       </Reorder.Group>
 
       {!revealed && (
-        <button
-          className="reveal-button"
-          onClick={handleReveal}
-        >
+        <button className="reveal-button" onClick={handleReveal}>
           Reveal
         </button>
       )}
 
       {showNextButton && (
-        <button onClick={nextTurn}>
-          Next Player
-        </button>
+        <button onClick={nextTurn}>Next Player</button>
       )}
     </div>
   );
