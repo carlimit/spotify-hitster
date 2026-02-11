@@ -22,9 +22,8 @@ function Game({
     const randomGenre =
       selectedGenres[Math.floor(Math.random() * selectedGenres.length)];
 
-    const res = await axios.get(
-      `http://localhost:3001/track?genre=${randomGenre}`
-    );
+    const res = await axios.get(`/api/track?genre=${randomGenre}`)
+
 
     return {
       id: Date.now(),
