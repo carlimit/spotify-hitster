@@ -56,18 +56,6 @@ function App() {
   const [selectedGenres, setSelectedGenres] = useState([]);
   const [winner, setWinner] = useState(null);
 
-if (!token) {
-  return (
-    <div className="container">
-      <h1>Spotify Hitster</h1>
-      <a href={loginUrl}>
-        <button>Login with Spotify</button>
-      </a>
-    </div>
-  );
-}
-
-
   return (
     <div>
       
