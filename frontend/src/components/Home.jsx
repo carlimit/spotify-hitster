@@ -16,19 +16,30 @@ function Home({
   const [playerName, setPlayerName] = useState("");
 
   const addPlayer = () => {
-    if (!playerName.trim()) return;
+  if (!playerName.trim()) return;
 
-    setPlayers([
-      ...players,
-      {
-        name: playerName,
-        score: 0,
-        timeline: [{ id: Date.now(), year: 2005, type: "fixed" }]
-      }
-    ]);
+  // Zufälliges Startjahr zwischen minYear und maxYear
+  const randomStartYear =
+    Math.floor(Math.random() * (maxYear - minYear + 1)) + minYear;
 
-    setPlayerName("");
-  };
+  setPlayers([
+    ...players,
+    {
+      name: playerName,
+      score: 0,
+      timeline: [
+        {
+          id: Date.now(),
+          year: randomStartYear,
+          type: "fixed"
+        }
+      ]
+    }
+  ]);
+
+  setPlayerName("");
+};
+
 
   const toggleGenre = genre => {
     if (selectedGenres.includes(genre)) {

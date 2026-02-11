@@ -180,71 +180,75 @@ function Game({
   }
 
   return (
-    <div className="container">
-      <h2>{currentPlayer.name}'s Turn</h2>
-      <h3>Score: {currentPlayer.score}</h3>
+  <div className="container">
+    <h2>{currentPlayer.name}'s Turn</h2>
+    <h3>Score: {currentPlayer.score}</h3>
 
-      <Reorder.Group
-        axis="y"
-        values={cards}
-        onReorder={setCards}
-        className="timeline"
-      >
-        {cards.map(card => (
-          <Reorder.Item
-            key={card.id}
-            value={card}
-            drag={!revealed}
-            dragListener={card.type === "new"}
-            className={`card ${
-              card.type === "new" && revealed ? "card-expanded" : ""
-            }`}
-          >
-            {card.type === "new" ? (
-              <div
-                className={`card-inner 
-                  ${revealed ? "flipped" : ""} 
-                  ${result === "correct" ? "result-correct" : ""}
-                  ${result === "wrong" ? "result-wrong" : ""}
-                `}
-              >
-                <div className="card-front new">
-                  <div
-                    className="play-button"
-                    onClick={() => handlePlayPause(card.uri)}
-                  >
-                    {isPlaying ? "⏸" : "▶"}
-                  </div>
-                  <div>Drag to place</div>
+    <Reorder.Group
+      axis="y"
+      values={cards}
+      onReorder={setCards}
+      className="timeline"
+    >
+      {cards.map(card => (
+        <Reorder.Item
+          key={card.id}
+          value={card}
+          drag={!revealed}
+          dragListener={card.type === "new"}
+          className={`card ${
+            card.type === "new" && revealed ? "card-expanded" : ""
+          }`}
+        >
+          {card.type === "new" ? (
+            <div
+              className={`card-inner 
+                ${revealed ? "flipped" : ""} 
+                ${result === "correct" ? "result-correct" : ""}
+                ${result === "wrong" ? "result-wrong" : ""}
+              `}
+            >
+              <div className="card-front new">
+                <div
+                  className="play-button"
+                  onClick={() => handlePlayPause(card.uri)}
+                >
+                  {isPlaying ? "⏸" : "▶"}
                 </div>
-
-                <div className="card-back">
-                  <img src={card.cover} className="cover-large" />
-                  <div className="revealed-year">{card.year}</div>
-                  <strong>{card.artist}</strong>
-                  <div className="song-title">{card.name}</div>
-                </div>
+                <div>Drag to place</div>
               </div>
-            ) : (
-              <div className="card-front fixed">
-                <div className="year">{card.year}</div>
-              </div>
-            )}
-          </Reorder.Item>
-        ))}
-      </Reorder.Group>
 
+              <div className="card-back">
+                <img src={card.cover} className="cover-large" />
+                <div className="revealed-year">{card.year}</div>
+                <strong>{card.artist}</strong>
+                <div className="song-title">{card.name}</div>
+              </div>
+            </div>
+          ) : (
+            <div className="card-front fixed">
+              <div>{card.year}</div>
+            </div>
+          )}
+        </Reorder.Item>
+      ))}
+    </Reorder.Group>
+
+    <div className="action-bar">
       {!revealed && (
-        <button className="reveal-button" onClick={handleReveal}>
+        <button onClick={handleReveal}>
           Reveal
         </button>
       )}
 
       {showNextButton && (
-        <button onClick={nextTurn}>Next Player</button>
+        <button onClick={nextTurn}>
+          Next Player
+        </button>
       )}
     </div>
-  );
+  </div>
+);
 }
 
 export default Game;

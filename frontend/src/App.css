@@ -7,6 +7,8 @@ body {
   background: #0f0f0f;
   font-family: -apple-system, BlinkMacSystemFont, sans-serif;
   color: white;
+  -webkit-tap-highlight-color: transparent;
+  overflow-x: hidden;
 }
 
 /* ---------- Layout ---------- */
@@ -21,8 +23,27 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 30px;
-  margin-top: 25px;
+  gap: 24px;
+  margin-top: 20px;
+}
+
+/* ---------- Action Bar ---------- */
+
+.action-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  padding: 16px;
+  background: linear-gradient(to top, #0f0f0f 70%, transparent);
+  display: flex;
+  justify-content: center;
+  z-index: 100;
+}
+
+.action-bar button {
+  width: 95%;
+  max-width: 420px;
 }
 
 /* ---------- Buttons ---------- */
@@ -30,41 +51,31 @@ body {
 button {
   background: #1DB954;
   color: white;
-  padding: 12px 20px;
-  border-radius: 14px;
+  padding: 16px;
+  border-radius: 22px;
   border: none;
-  cursor: pointer;
   font-weight: 600;
-  font-size: 15px;
+  font-size: 17px;
   transition: 0.2s ease;
+  box-shadow: 0 8px 25px rgba(0,0,0,0.6);
 }
 
-button:hover {
-  opacity: 0.9;
+button:active {
+  transform: scale(0.97);
 }
 
-.reveal-button {
-  position: fixed;
-  bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 100;
-}
-
-/* ---------- Card Base ---------- */
+/* ---------- Cards ---------- */
 
 .card {
-  width: 240px;
-  height: 140px;
+  width: 92vw;
+  max-width: 380px;
+  height: 150px;
   perspective: 1200px;
   transition: width 0.4s ease, height 0.4s ease;
 }
 
-
-/* Karte wächst beim Reveal */
 .card-expanded {
-  width: 260px;
-  height: 360px;
+  height: 420px;
 }
 
 /* ---------- 3D Flip ---------- */
@@ -88,7 +99,7 @@ button:hover {
   position: absolute;
   width: 100%;
   height: 100%;
-  border-radius: 18px;
+  border-radius: 24px;
   backface-visibility: hidden;
   display: flex;
   flex-direction: column;
@@ -100,16 +111,16 @@ button:hover {
 
 .card-front.fixed {
   background: #1c1c1c;
-  font-size: 26px;
+  font-size: 28px;
   font-weight: bold;
-  box-shadow: 0 6px 18px rgba(0,0,0,0.4);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.6);
 }
 
 /* ---------- New Card Front ---------- */
 
 .card-front.new {
-  background: linear-gradient(135deg, #1DB954, #121212);
-  box-shadow: 0 8px 25px rgba(0,0,0,0.6);
+  background: linear-gradient(145deg, #1DB954, #121212);
+  box-shadow: 0 10px 35px rgba(0,0,0,0.7);
 }
 
 /* ---------- Card Back ---------- */
@@ -117,117 +128,77 @@ button:hover {
 .card-back {
   background: #1c1c1c;
   transform: rotateY(180deg);
-  padding: 15px;
+  padding: 20px;
   justify-content: flex-start;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.7);
+  box-shadow: 0 15px 40px rgba(0,0,0,0.7);
 }
 
 /* ---------- Cover ---------- */
 
 .cover-large {
   width: 100%;
-  height: 160px;
+  height: 190px;
   object-fit: cover;
-  border-radius: 14px;
-  margin-bottom: 15px;
+  border-radius: 18px;
+  margin-bottom: 18px;
 }
 
 /* ---------- Year Highlight ---------- */
 
 .revealed-year {
-  font-size: 42px;
+  font-size: 52px;
   font-weight: 900;
-  color: #1DB954;
   margin-bottom: 10px;
-  letter-spacing: 1px;
 }
 
 /* ---------- Song Info ---------- */
 
 .song-title {
-  font-size: 14px;
-  opacity: 0.8;
-  margin-top: 4px;
+  font-size: 15px;
+  opacity: 0.85;
 }
 
 .card-back strong {
-  font-size: 15px;
+  font-size: 17px;
+  margin-bottom: 4px;
 }
 
 /* ---------- Play Button ---------- */
 
 .play-button {
-  font-size: 36px;
+  font-size: 42px;
   cursor: pointer;
   margin-bottom: 10px;
   transition: 0.2s ease;
 }
 
-.play-button:hover {
-  transform: scale(1.1);
+.play-button:active {
+  transform: scale(0.9);
 }
 
-/* ---------- Result Feedback ---------- */
-
-.correct {
-  box-shadow: 0 0 30px rgba(29, 185, 84, 0.8);
-}
-
-.wrong {
-  animation: shake 0.4s;
-}
-
-@keyframes shake {
-  0% { transform: translateX(0); }
-  25% { transform: translateX(-6px); }
-  50% { transform: translateX(6px); }
-  75% { transform: translateX(-4px); }
-  100% { transform: translateX(0); }
-}
-
-/* ---------- RESULT COLOR PALETTES ---------- */
+/* ---------- Result Palettes ---------- */
 
 .result-correct .card-back {
   background: linear-gradient(160deg, #1DB954, #0f3d22);
-}
-
-.result-correct .card-front.new {
-  background: linear-gradient(160deg, #1DB954, #0f3d22);
-}
-
-.result-correct .revealed-year {
-  color: #ffffff;
 }
 
 .result-wrong .card-back {
   background: linear-gradient(160deg, #ff3b3b, #5c0f0f);
 }
 
-.result-wrong .card-front.new {
-  background: linear-gradient(160deg, #ff3b3b, #5c0f0f);
-}
-
+.result-correct .revealed-year,
 .result-wrong .revealed-year {
   color: #ffffff;
 }
+
+/* ---------- Year Filter ---------- */
+
 .year-filter {
   margin-top: 30px;
 }
 
-.slider-container {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 10px;
-}
-
-input[type="range"] {
-  width: 100%;
-  accent-color: #1DB954;
-}
-
 .year-label {
-  margin-top: 10px;
+  margin-top: 12px;
   font-weight: bold;
   font-size: 18px;
 }
