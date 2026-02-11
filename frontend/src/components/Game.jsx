@@ -2,11 +2,6 @@ import { useState, useEffect } from "react";
 import { Reorder } from "framer-motion";
 import axios from "axios";
 
-if (typeof window !== "undefined") {
-  window.onSpotifyWebPlaybackSDKReady = window.onSpotifyWebPlaybackSDKReady || (() => {});
-}
-
-
 function Game({
   players,
   setPlayers,
@@ -23,7 +18,7 @@ function Game({
   const [showNextButton, setShowNextButton] = useState(false);
   const [revealed, setRevealed] = useState(false);
 
-  // 🎵 Spotify
+  // Spotify
   const [player, setPlayer] = useState(null);
   const [deviceId, setDeviceId] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -31,34 +26,49 @@ function Game({
   const currentPlayer = players[currentPlayerIndex];
 
   // -----------------------------
-  // 🎵 Spotify Web Playback SDK
+  // 🎵 Spotify SDK Loader
   // -----------------------------
   useEffect(() => {
     const token = localStorage.getItem("token");
 
-    window.onSpotifyWebPlaybackSDKReady = () => {
-      const spotifyPlayer = new window.Spotify.Player({
-        name: "Spotify Hitster Player",
-        getOAuthToken: cb => cb(token),
-        volume: 0.5
-      });
+    const script = document.createElement("script");
+    script.src = "https://sdk.scdn.co/spotify-player.js";
+    script.async = true;
+    document.body.appendChild(script);
 
-      spotifyPlayer.addListener("ready", ({ device_id }) => {
-        setDeviceId(device_id);
-      });
+    script.onload = () => {
+      window.onSpotifyWebPlaybackSDKReady = () => {
+        const spotifyPlayer = new window.Spotify.Player({
+          name: "Spotify Hitster Player",
+          getOAuthToken: cb => cb(token),
+          volume: 0.5
+        });
 
-      spotifyPlayer.addListener("player_state_changed", state => {
-        if (!state) return;
-        setIsPlaying(!state.paused);
-      });
+        spotifyPlayer.addListener("ready", ({ device_id }) => {
+          setDeviceId(device_id);
+        });
 
-      spotifyPlayer.addListener("initialization_error", e => console.error(e));
-      spotifyPlayer.addListener("authentication_error", e => console.error(e));
-      spotifyPlayer.addListener("account_error", e => console.error(e));
-      spotifyPlayer.addListener("playback_error", e => console.error(e));
+        spotifyPlayer.addListener("player_state_changed", state => {
+          if (!state) return;
+          setIsPlaying(!state.paused);
+        });
 
-      spotifyPlayer.connect();
-      setPlayer(spotifyPlayer);
+        spotifyPlayer.addListener("initialization_error", e =>
+          console.error(e)
+        );
+        spotifyPlayer.addListener("authentication_error", e =>
+          console.error(e)
+        );
+        spotifyPlayer.addListener("account_error", e =>
+          console.error(e)
+        );
+        spotifyPlayer.addListener("playback_error", e =>
+          console.error(e)
+        );
+
+        spotifyPlayer.connect();
+        setPlayer(spotifyPlayer);
+      };
     };
   }, []);
 
@@ -110,7 +120,7 @@ function Game({
   };
 
   // -----------------------------
-  // 🔄 Load Card
+  // 🔄 Load New Card
   // -----------------------------
   useEffect(() => {
     const loadCard = async () => {

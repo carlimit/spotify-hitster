@@ -14,8 +14,6 @@ function App() {
   const [minYear, setMinYear] = useState(1990);
   const [maxYear, setMaxYear] = useState(2024);
 
-
-  // 🔥 PKCE Token Exchange
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const code = params.get("code");
@@ -24,9 +22,7 @@ function App() {
       const codeVerifier = localStorage.getItem("code_verifier");
 
       fetch(`/api/token?code=${code}`, {
-        headers: {
-          "x-code-verifier": codeVerifier
-        }
+        headers: { "x-code-verifier": codeVerifier }
       })
         .then(res => res.json())
         .then(data => {
@@ -36,13 +32,10 @@ function App() {
         });
     } else {
       const storedToken = localStorage.getItem("token");
-      if (storedToken) {
-        setToken(storedToken);
-      }
+      if (storedToken) setToken(storedToken);
     }
   }, []);
 
-  // 🔥 LOGIN SCREEN
   if (!token) {
     return (
       <div className="container">
@@ -59,7 +52,6 @@ function App() {
     );
   }
 
-  // 🔥 NORMAL APP
   return (
     <div>
       {gamePhase === "home" && (
@@ -69,6 +61,10 @@ function App() {
           setPlayers={setPlayers}
           selectedGenres={selectedGenres}
           setSelectedGenres={setSelectedGenres}
+          minYear={minYear}
+          setMinYear={setMinYear}
+          maxYear={maxYear}
+          setMaxYear={setMaxYear}
         />
       )}
 
