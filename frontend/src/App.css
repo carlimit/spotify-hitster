@@ -1,0 +1,212 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #0f0f0f;
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  color: white;
+}
+
+/* ---------- Layout ---------- */
+
+.container {
+  min-height: 100vh;
+  padding: 20px 20px 120px 20px;
+  text-align: center;
+}
+
+.timeline {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 30px;
+  margin-top: 25px;
+}
+
+/* ---------- Buttons ---------- */
+
+button {
+  background: #1DB954;
+  color: white;
+  padding: 12px 20px;
+  border-radius: 14px;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 15px;
+  transition: 0.2s ease;
+}
+
+button:hover {
+  opacity: 0.9;
+}
+
+.reveal-button {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+}
+
+/* ---------- Card Base ---------- */
+
+.card {
+  width: 240px;
+  height: 140px;
+  perspective: 1200px;
+  transition: width 0.4s ease, height 0.4s ease;
+}
+
+
+/* Karte wächst beim Reveal */
+.card-expanded {
+  width: 260px;
+  height: 360px;
+}
+
+/* ---------- 3D Flip ---------- */
+
+.card-inner {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  transition: transform 0.6s ease;
+  transform-style: preserve-3d;
+}
+
+.card-inner.flipped {
+  transform: rotateY(180deg);
+}
+
+/* ---------- Card Faces ---------- */
+
+.card-front,
+.card-back {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 18px;
+  backface-visibility: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ---------- Fixed Cards ---------- */
+
+.card-front.fixed {
+  background: #1c1c1c;
+  font-size: 26px;
+  font-weight: bold;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.4);
+}
+
+/* ---------- New Card Front ---------- */
+
+.card-front.new {
+  background: linear-gradient(135deg, #1DB954, #121212);
+  box-shadow: 0 8px 25px rgba(0,0,0,0.6);
+}
+
+/* ---------- Card Back ---------- */
+
+.card-back {
+  background: #1c1c1c;
+  transform: rotateY(180deg);
+  padding: 15px;
+  justify-content: flex-start;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.7);
+}
+
+/* ---------- Cover ---------- */
+
+.cover-large {
+  width: 100%;
+  height: 160px;
+  object-fit: cover;
+  border-radius: 14px;
+  margin-bottom: 15px;
+}
+
+/* ---------- Year Highlight ---------- */
+
+.revealed-year {
+  font-size: 42px;
+  font-weight: 900;
+  color: #1DB954;
+  margin-bottom: 10px;
+  letter-spacing: 1px;
+}
+
+/* ---------- Song Info ---------- */
+
+.song-title {
+  font-size: 14px;
+  opacity: 0.8;
+  margin-top: 4px;
+}
+
+.card-back strong {
+  font-size: 15px;
+}
+
+/* ---------- Play Button ---------- */
+
+.play-button {
+  font-size: 36px;
+  cursor: pointer;
+  margin-bottom: 10px;
+  transition: 0.2s ease;
+}
+
+.play-button:hover {
+  transform: scale(1.1);
+}
+
+/* ---------- Result Feedback ---------- */
+
+.correct {
+  box-shadow: 0 0 30px rgba(29, 185, 84, 0.8);
+}
+
+.wrong {
+  animation: shake 0.4s;
+}
+
+@keyframes shake {
+  0% { transform: translateX(0); }
+  25% { transform: translateX(-6px); }
+  50% { transform: translateX(6px); }
+  75% { transform: translateX(-4px); }
+  100% { transform: translateX(0); }
+}
+
+/* ---------- RESULT COLOR PALETTES ---------- */
+
+.result-correct .card-back {
+  background: linear-gradient(160deg, #1DB954, #0f3d22);
+}
+
+.result-correct .card-front.new {
+  background: linear-gradient(160deg, #1DB954, #0f3d22);
+}
+
+.result-correct .revealed-year {
+  color: #ffffff;
+}
+
+.result-wrong .card-back {
+  background: linear-gradient(160deg, #ff3b3b, #5c0f0f);
+}
+
+.result-wrong .card-front.new {
+  background: linear-gradient(160deg, #ff3b3b, #5c0f0f);
+}
+
+.result-wrong .revealed-year {
+  color: #ffffff;
+}
