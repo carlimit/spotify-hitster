@@ -2,6 +2,11 @@ import { useState, useEffect } from "react";
 import { Reorder } from "framer-motion";
 import axios from "axios";
 
+if (typeof window !== "undefined") {
+  window.onSpotifyWebPlaybackSDKReady = window.onSpotifyWebPlaybackSDKReady || (() => {});
+}
+
+
 function Game({
   players,
   setPlayers,

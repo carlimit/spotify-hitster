@@ -1,6 +1,17 @@
 import { useState } from "react";
 
-function Home({ setGamePhase, players, setPlayers, selectedGenres, setSelectedGenres }) {
+function Home({
+  setGamePhase,
+  players,
+  setPlayers,
+  selectedGenres,
+  setSelectedGenres,
+  minYear,
+  setMinYear,
+  maxYear,
+  setMaxYear
+})
+ {
   const [playerName, setPlayerName] = useState("");
   const [minYear, setMinYear] = useState(1990);
   const [maxYear, setMaxYear] = useState(2024);
@@ -34,33 +45,6 @@ function Home({ setGamePhase, players, setPlayers, selectedGenres, setSelectedGe
       setSelectedGenres([...selectedGenres, genre]);
     }
   };
-
-<div className="year-filter">
-  <h3>Year Range</h3>
-
-  <div className="slider-container">
-    <input
-      type="range"
-      min="1960"
-      max="2024"
-      value={minYear}
-      onChange={(e) => setMinYear(parseInt(e.target.value))}
-    />
-
-    <input
-      type="range"
-      min="1960"
-      max="2024"
-      value={maxYear}
-      onChange={(e) => setMaxYear(parseInt(e.target.value))}
-    />
-  </div>
-
-  <div className="year-label">
-    {minYear} - {maxYear}
-  </div>
-</div>
-
 
   return (
     <div className="container">
@@ -98,6 +82,33 @@ function Home({ setGamePhase, players, setPlayers, selectedGenres, setSelectedGe
           </button>
         ))}
       </div>
+
+      <div className="year-filter">
+  <h3>Year Range</h3>
+
+  <div className="slider-container">
+    <input
+      type="range"
+      min="1960"
+      max="2024"
+      value={minYear}
+      onChange={(e) => setMinYear(parseInt(e.target.value))}
+    />
+
+    <input
+      type="range"
+      min="1960"
+      max="2024"
+      value={maxYear}
+      onChange={(e) => setMaxYear(parseInt(e.target.value))}
+    />
+  </div>
+
+  <div className="year-label">
+    {minYear} - {maxYear}
+  </div>
+</div>
+
 
       <button
         onClick={() => {
