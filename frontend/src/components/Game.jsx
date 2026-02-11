@@ -234,19 +234,20 @@ function Game({
       ))}
     </Reorder.Group>
 
-    <div className="action-bar">
-      {!revealed && (
-        <button onClick={handleReveal}>
-          Reveal
-        </button>
-      )}
+    <div className="action-container">
+  {!revealed && (
+    <button onClick={handleReveal}>
+      Reveal
+    </button>
+  )}
 
-      {showNextButton && (
-        <button onClick={nextTurn}>
-          Next Player
-        </button>
-      )}
-    </div>
+  {showNextButton && (
+    <button onClick={nextTurn}>
+      Next Player
+    </button>
+  )}
+</div>
+
   </div>
 );
 }

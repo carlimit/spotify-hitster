@@ -8,77 +8,45 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, sans-serif;
   color: white;
   -webkit-tap-highlight-color: transparent;
-  overflow-x: hidden;
 }
 
 /* ---------- Layout ---------- */
 
 .container {
   min-height: 100vh;
-  padding: 20px 20px 120px 20px;
-  text-align: center;
-}
-
-.timeline {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 24px;
-  margin-top: 20px;
+  padding: 24px 16px 120px 16px;
 }
 
-/* ---------- Action Bar ---------- */
+h2, h3 {
+  margin: 6px 0;
+}
 
-.action-bar {
-  position: fixed;
-  bottom: 0;
-  left: 0;
+/* ---------- Timeline ---------- */
+
+.timeline {
   width: 100%;
-  padding: 16px;
-  background: linear-gradient(to top, #0f0f0f 70%, transparent);
+  max-width: 520px;
   display: flex;
-  justify-content: center;
-  z-index: 100;
-}
-
-.action-bar button {
-  width: 95%;
-  max-width: 420px;
-}
-
-/* ---------- Buttons ---------- */
-
-button {
-  background: #1DB954;
-  color: white;
-  padding: 16px;
-  border-radius: 22px;
-  border: none;
-  font-weight: 600;
-  font-size: 17px;
-  transition: 0.2s ease;
-  box-shadow: 0 8px 25px rgba(0,0,0,0.6);
-}
-
-button:active {
-  transform: scale(0.97);
+  flex-direction: column;
+  gap: 28px;
+  margin-top: 20px;
 }
 
 /* ---------- Cards ---------- */
 
 .card {
-  width: 92vw;
-  max-width: 380px;
-  height: 150px;
+  width: 100%;
+  aspect-ratio: 3 / 2;
   perspective: 1200px;
-  transition: width 0.4s ease, height 0.4s ease;
+  transition: all 0.4s ease;
 }
 
 .card-expanded {
-  height: 420px;
+  aspect-ratio: 3 / 4;
 }
-
-/* ---------- 3D Flip ---------- */
 
 .card-inner {
   width: 100%;
@@ -92,14 +60,12 @@ button:active {
   transform: rotateY(180deg);
 }
 
-/* ---------- Card Faces ---------- */
-
 .card-front,
 .card-back {
   position: absolute;
   width: 100%;
   height: 100%;
-  border-radius: 24px;
+  border-radius: 22px;
   backface-visibility: hidden;
   display: flex;
   flex-direction: column;
@@ -107,23 +73,23 @@ button:active {
   justify-content: center;
 }
 
-/* ---------- Fixed Cards ---------- */
+/* Fixed Cards */
 
 .card-front.fixed {
   background: #1c1c1c;
-  font-size: 28px;
+  font-size: clamp(22px, 5vw, 32px);
   font-weight: bold;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+  box-shadow: 0 8px 25px rgba(0,0,0,0.5);
 }
 
-/* ---------- New Card Front ---------- */
+/* New Card */
 
 .card-front.new {
   background: linear-gradient(145deg, #1DB954, #121212);
-  box-shadow: 0 10px 35px rgba(0,0,0,0.7);
+  box-shadow: 0 10px 35px rgba(0,0,0,0.6);
 }
 
-/* ---------- Card Back ---------- */
+/* Card Back */
 
 .card-back {
   background: #1c1c1c;
@@ -133,42 +99,41 @@ button:active {
   box-shadow: 0 15px 40px rgba(0,0,0,0.7);
 }
 
-/* ---------- Cover ---------- */
+/* Cover */
 
 .cover-large {
   width: 100%;
-  height: 190px;
+  aspect-ratio: 1 / 1;
   object-fit: cover;
-  border-radius: 18px;
-  margin-bottom: 18px;
+  border-radius: 16px;
+  margin-bottom: 16px;
 }
 
-/* ---------- Year Highlight ---------- */
+/* Year */
 
 .revealed-year {
-  font-size: 52px;
+  font-size: clamp(36px, 8vw, 56px);
   font-weight: 900;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
-/* ---------- Song Info ---------- */
+/* Song Info */
 
 .song-title {
-  font-size: 15px;
+  font-size: 14px;
   opacity: 0.85;
 }
 
 .card-back strong {
-  font-size: 17px;
-  margin-bottom: 4px;
+  font-size: 16px;
 }
 
-/* ---------- Play Button ---------- */
+/* Play Button */
 
 .play-button {
-  font-size: 42px;
+  font-size: clamp(36px, 8vw, 48px);
   cursor: pointer;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
   transition: 0.2s ease;
 }
 
@@ -176,7 +141,7 @@ button:active {
   transform: scale(0.9);
 }
 
-/* ---------- Result Palettes ---------- */
+/* ---------- Result Styles ---------- */
 
 .result-correct .card-back {
   background: linear-gradient(160deg, #1DB954, #0f3d22);
@@ -188,17 +153,34 @@ button:active {
 
 .result-correct .revealed-year,
 .result-wrong .revealed-year {
-  color: #ffffff;
+  color: white;
 }
 
-/* ---------- Year Filter ---------- */
+/* ---------- Sticky Button Area ---------- */
 
-.year-filter {
-  margin-top: 30px;
+.action-container {
+  position: sticky;
+  bottom: 0;
+  width: 100%;
+  max-width: 520px;
+  margin-top: 40px;
+  padding-top: 20px;
+  background: #0f0f0f;
 }
 
-.year-label {
-  margin-top: 12px;
-  font-weight: bold;
-  font-size: 18px;
+.action-container button {
+  width: 100%;
+  padding: 16px;
+  font-size: 17px;
+  border-radius: 20px;
+  background: #1DB954;
+  border: none;
+  color: white;
+  font-weight: 600;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+  transition: 0.2s ease;
+}
+
+.action-container button:active {
+  transform: scale(0.97);
 }
