@@ -16,9 +16,10 @@ function Game({
   const [showNextButton, setShowNextButton] = useState(false);
   const [revealed, setRevealed] = useState(false);
 
-  // ✅ Spotify SDK states
+  // 🎵 Spotify
   const [player, setPlayer] = useState(null);
   const [deviceId, setDeviceId] = useState(null);
+  const [isPlaying, setIsPlaying] = useState(false);
 
   const currentPlayer = players[currentPlayerIndex];
 
@@ -37,41 +38,42 @@ function Game({
     });
 
     spotifyPlayer.addListener("ready", ({ device_id }) => {
-      console.log("Ready with Device ID:", device_id);
       setDeviceId(device_id);
     });
 
-    spotifyPlayer.addListener("initialization_error", e => console.error(e));
-    spotifyPlayer.addListener("authentication_error", e => console.error(e));
-    spotifyPlayer.addListener("account_error", e => console.error(e));
-    spotifyPlayer.addListener("playback_error", e => console.error(e));
+    spotifyPlayer.addListener("player_state_changed", state => {
+      if (!state) return;
+      setIsPlaying(!state.paused);
+    });
 
     spotifyPlayer.connect();
     setPlayer(spotifyPlayer);
   }, []);
 
   // -----------------------------
-  // 🎵 Play Track
+  // 🎵 Play / Pause
   // -----------------------------
-  const playTrack = async (uri) => {
+  const handlePlayPause = async (uri) => {
     const token = localStorage.getItem("token");
 
-    if (!deviceId) {
-      alert("Player not ready yet.");
-      return;
-    }
+    if (!deviceId || !player) return;
 
-    await fetch(
-      `https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`,
-      {
-        method: "PUT",
-        body: JSON.stringify({ uris: [uri] }),
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
+    // Wenn noch nichts läuft → starte Track
+    if (!isPlaying) {
+      await fetch(
+        `https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`,
+        {
+          method: "PUT",
+          body: JSON.stringify({ uris: [uri] }),
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`
+          }
         }
-      }
-    );
+      );
+    } else {
+      player.togglePlay();
+    }
   };
 
   // -----------------------------
@@ -94,9 +96,6 @@ function Game({
     };
   };
 
-  // -----------------------------
-  // 🔄 Load Card on Player Change
-  // -----------------------------
   useEffect(() => {
     const loadCard = async () => {
       setLoading(true);
@@ -161,6 +160,7 @@ function Game({
     setRevealed(false);
     setResult(null);
     setShowNextButton(false);
+    setIsPlaying(false);
   };
 
   if (loading) {
@@ -203,9 +203,9 @@ function Game({
                 <div className="card-front new">
                   <div
                     className="play-button"
-                    onClick={() => playTrack(card.uri)}
+                    onClick={() => handlePlayPause(card.uri)}
                   >
-                    ▶
+                    {isPlaying ? "⏸" : "▶"}
                   </div>
                   <div>Drag to place</div>
                 </div>
