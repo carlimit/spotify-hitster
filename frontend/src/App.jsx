@@ -11,6 +11,9 @@ function App() {
   const [players, setPlayers] = useState([]);
   const [selectedGenres, setSelectedGenres] = useState([]);
   const [winner, setWinner] = useState(null);
+  const [minYear, setMinYear] = useState(1990);
+  const [maxYear, setMaxYear] = useState(2024);
+
 
   // 🔥 PKCE Token Exchange
   useEffect(() => {

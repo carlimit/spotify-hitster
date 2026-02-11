@@ -10,8 +10,7 @@ function Game({
   selectedGenres,
   minYear,
   maxYear
-})
- {
+}) {
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0);
   const [cards, setCards] = useState([]);
   const [result, setResult] = useState(null);
@@ -32,25 +31,30 @@ function Game({
   useEffect(() => {
     const token = localStorage.getItem("token");
 
-    if (!window.Spotify) return;
+    window.onSpotifyWebPlaybackSDKReady = () => {
+      const spotifyPlayer = new window.Spotify.Player({
+        name: "Spotify Hitster Player",
+        getOAuthToken: cb => cb(token),
+        volume: 0.5
+      });
 
-    const spotifyPlayer = new window.Spotify.Player({
-      name: "Spotify Hitster Player",
-      getOAuthToken: cb => cb(token),
-      volume: 0.5
-    });
+      spotifyPlayer.addListener("ready", ({ device_id }) => {
+        setDeviceId(device_id);
+      });
 
-    spotifyPlayer.addListener("ready", ({ device_id }) => {
-      setDeviceId(device_id);
-    });
+      spotifyPlayer.addListener("player_state_changed", state => {
+        if (!state) return;
+        setIsPlaying(!state.paused);
+      });
 
-    spotifyPlayer.addListener("player_state_changed", state => {
-      if (!state) return;
-      setIsPlaying(!state.paused);
-    });
+      spotifyPlayer.addListener("initialization_error", e => console.error(e));
+      spotifyPlayer.addListener("authentication_error", e => console.error(e));
+      spotifyPlayer.addListener("account_error", e => console.error(e));
+      spotifyPlayer.addListener("playback_error", e => console.error(e));
 
-    spotifyPlayer.connect();
-    setPlayer(spotifyPlayer);
+      spotifyPlayer.connect();
+      setPlayer(spotifyPlayer);
+    };
   }, []);
 
   // -----------------------------
@@ -61,7 +65,6 @@ function Game({
 
     if (!deviceId || !player) return;
 
-    // Wenn noch nichts läuft → starte Track
     if (!isPlaying) {
       await fetch(
         `https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`,
@@ -87,9 +90,8 @@ function Game({
       selectedGenres[Math.floor(Math.random() * selectedGenres.length)];
 
     const res = await axios.get(
-  `/api/track?genre=${randomGenre}&minYear=${minYear}&maxYear=${maxYear}`
-);
-
+      `/api/track?genre=${randomGenre}&minYear=${minYear}&maxYear=${maxYear}`
+    );
 
     return {
       id: Date.now(),
@@ -102,6 +104,9 @@ function Game({
     };
   };
 
+  // -----------------------------
+  // 🔄 Load Card
+  // -----------------------------
   useEffect(() => {
     const loadCard = async () => {
       setLoading(true);
