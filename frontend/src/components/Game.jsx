@@ -29,48 +29,30 @@ function Game({
   // 🎵 Spotify SDK Loader
   // -----------------------------
   useEffect(() => {
-    const token = localStorage.getItem("token");
+  const token = localStorage.getItem("token");
 
-    const script = document.createElement("script");
-    script.src = "https://sdk.scdn.co/spotify-player.js";
-    script.async = true;
-    document.body.appendChild(script);
+  if (!window.Spotify) return;
 
-    script.onload = () => {
-      window.onSpotifyWebPlaybackSDKReady = () => {
-        const spotifyPlayer = new window.Spotify.Player({
-          name: "Spotify Hitster Player",
-          getOAuthToken: cb => cb(token),
-          volume: 0.5
-        });
+  const spotifyPlayer = new window.Spotify.Player({
+    name: "Spotify Hitster Player",
+    getOAuthToken: cb => cb(token),
+    volume: 0.5
+  });
 
-        spotifyPlayer.addListener("ready", ({ device_id }) => {
-          setDeviceId(device_id);
-        });
+  spotifyPlayer.addListener("ready", ({ device_id }) => {
+    setDeviceId(device_id);
+  });
 
-        spotifyPlayer.addListener("player_state_changed", state => {
-          if (!state) return;
-          setIsPlaying(!state.paused);
-        });
+  spotifyPlayer.addListener("player_state_changed", state => {
+    if (!state) return;
+    setIsPlaying(!state.paused);
+  });
 
-        spotifyPlayer.addListener("initialization_error", e =>
-          console.error(e)
-        );
-        spotifyPlayer.addListener("authentication_error", e =>
-          console.error(e)
-        );
-        spotifyPlayer.addListener("account_error", e =>
-          console.error(e)
-        );
-        spotifyPlayer.addListener("playback_error", e =>
-          console.error(e)
-        );
+  spotifyPlayer.connect();
+  setPlayer(spotifyPlayer);
 
-        spotifyPlayer.connect();
-        setPlayer(spotifyPlayer);
-      };
-    };
-  }, []);
+}, []);
+
 
   // -----------------------------
   // 🎵 Play / Pause
