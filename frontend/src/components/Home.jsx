@@ -13,8 +13,6 @@ function Home({
 })
  {
   const [playerName, setPlayerName] = useState("");
-  const [minYear, setMinYear] = useState(1990);
-  const [maxYear, setMaxYear] = useState(2024);
 
 
   const addPlayer = () => {
