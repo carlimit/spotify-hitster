@@ -1,7 +1,6 @@
 const CLIENT_ID = "c6cc6b6bb4a5414781ab9d9f3baf416e";
 const REDIRECT_URI = "https://spotify-hitster.vercel.app";
 const AUTH_ENDPOINT = "https://accounts.spotify.com/authorize";
-const RESPONSE_TYPE = "token";
 
 const SCOPES = [
   "streaming",
@@ -9,6 +8,40 @@ const SCOPES = [
   "user-read-private"
 ];
 
-export const loginUrl = `${AUTH_ENDPOINT}?client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}&scope=${SCOPES.join(
-  "%20"
-)}&response_type=${RESPONSE_TYPE}&show_dialog=true`;
+// PKCE helper
+function generateRandomString(length) {
+  const possible =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  let text = "";
+  for (let i = 0; i < length; i++) {
+    text += possible.charAt(Math.floor(Math.random() * possible.length));
+  }
+  return text;
+}
+
+async function generateCodeChallenge(codeVerifier) {
+  const data = new TextEncoder().encode(codeVerifier);
+  const digest = await window.crypto.subtle.digest("SHA-256", data);
+  return btoa(String.fromCharCode(...new Uint8Array(digest)))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+}
+
+export async function getLoginUrl() {
+  const codeVerifier = generateRandomString(128);
+  const codeChallenge = await generateCodeChallenge(codeVerifier);
+
+  localStorage.setItem("code_verifier", codeVerifier);
+
+  const args = new URLSearchParams({
+    response_type: "code",
+    client_id: CLIENT_ID,
+    scope: SCOPES.join(" "),
+    redirect_uri: REDIRECT_URI,
+    code_challenge_method: "S256",
+    code_challenge: codeChallenge
+  });
+
+  return `${AUTH_ENDPOINT}?${args.toString()}`;
+}

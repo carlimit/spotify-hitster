@@ -3,7 +3,7 @@ import Home from "./components/Home";
 import Game from "./components/Game";
 import Winner from "./components/Winner";
 import "./App.css";
-import { loginUrl } from "./spotify";
+import { getLoginUrl } from "./spotify";
 
 function App() {
   const [token, setToken] = useState(null);
@@ -12,19 +12,22 @@ function App() {
   const hash = window.location.hash;
   let token = window.localStorage.getItem("token");
 
-  if (!token && hash) {
-    const accessToken = hash
-      .substring(1)
-      .split("&")
-      .find(elem => elem.startsWith("access_token"))
-      .split("=")[1];
+  if (!token) {
+  return (
+    <div className="container">
+      <h1>Spotify Hitster</h1>
+      <button
+        onClick={async () => {
+          const url = await getLoginUrl();
+          window.location.href = url;
+        }}
+      >
+        Login with Spotify
+      </button>
+    </div>
+  );
+}
 
-    window.location.hash = "";
-    window.localStorage.setItem("token", accessToken);
-    setToken(accessToken);
-  } else {
-    setToken(token);
-  }
 }, []);
 
 
