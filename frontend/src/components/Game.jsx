@@ -71,7 +71,12 @@ function Game({
 
   useEffect(() => {
     socket.on("turn_changed", ({ players: newPlayers, currentPlayerIndex: newIndex }) => {
-      if (!newPlayers || newIndex === undefined) return;
+      console.log("🔄 turn_changed received", { newPlayers, newIndex, myId: socket.id });
+
+      if (!newPlayers || newIndex === undefined) {
+        console.error("❌ turn_changed missing data!");
+        return;
+      }
 
       updatePlayers(newPlayers);
       setCurrentPlayerIndex(newIndex);
@@ -85,13 +90,16 @@ function Game({
       setInsertIndex(null);
 
       const myTurn = newPlayers[newIndex]?.id === socket.id;
+      console.log("🎮 Is my turn?", myTurn, "| my id:", socket.id, "| active player id:", newPlayers[newIndex]?.id);
       isMyTurnRef.current = myTurn;
       setIsMyTurn(myTurn);
 
       if (myTurn) {
+        console.log("📥 Loading new card for", newPlayers[newIndex]?.name);
         loadNewCard(newPlayers[newIndex]);
       } else {
         const c = newPlayers[newIndex]?.timeline || [];
+        console.log("👁 Showing timeline for", newPlayers[newIndex]?.name, c);
         setCards(c);
         cardsRef.current = c;
       }
@@ -230,6 +238,7 @@ function Game({
   // ============================================================
 
   const handleReveal = () => {
+    console.log("🃏 handleReveal called", { isMyTurn, isMyTurnRef: isMyTurnRef.current, revealed, cards: cardsRef.current });
     const currentCards = cardsRef.current;
     const newCardIndex = currentCards.findIndex(c => c.type === "new");
     if (newCardIndex === -1) return;
@@ -326,7 +335,9 @@ function Game({
                     : undefined,
                   transition: isDragged
                     ? "box-shadow 0.15s"
-                    : "transform 0.18s ease, box-shadow 0.15s",
+                    : shiftY !== 0
+                      ? "transform 0.18s ease"
+                      : "transform 0.18s ease, box-shadow 0.15s",
                   cursor: isNewCard && !revealed && isMyTurn
                     ? (dragging ? "grabbing" : "grab")
                     : "default",
