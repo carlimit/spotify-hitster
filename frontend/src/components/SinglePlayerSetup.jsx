@@ -2,6 +2,7 @@ import { useState } from "react";
 import Slider from "rc-slider";
 import "rc-slider/assets/index.css";
 import axios from "axios";
+import { getLoginUrl } from "../spotify";
 
 function SinglePlayerSetup({ t,
   setScreen,
@@ -14,6 +15,7 @@ function SinglePlayerSetup({ t,
   const [playlistUrl, setPlaylistUrl] = useState("");
   const [playlistLoading, setPlaylistLoading] = useState(false);
   const [playlistError, setPlaylistError] = useState(null);
+  const hasToken = !!localStorage.getItem("token");
 
   const toggleGenre = (g) => {
     setGenres(prev => prev.includes(g) ? prev.filter(x => x !== g) : [...prev, g]);
@@ -40,6 +42,28 @@ function SinglePlayerSetup({ t,
       <p style={{ color: "#b3b3b3", textAlign: "center", marginBottom: 16 }}>
         {t?.soloDesc || "Place as many songs as you can correctly. See how long your streak goes!"}
       </p>
+
+      {!hasToken && (
+        <div className="spotify-login-banner">
+          <p>{t?.spotifyNeeded || "Login with Spotify to play music while you guess."}</p>
+          <button
+            style={{ background: "#1DB954" }}
+            onClick={async () => {
+              localStorage.setItem("login_origin", "singleplayer-setup");
+              const url = await getLoginUrl();
+              window.location.href = url;
+            }}
+          >
+            {t?.loginWithSpotify || "Login with Spotify"}
+          </button>
+        </div>
+      )}
+
+      {hasToken && (
+        <div className="spotify-connected-banner">
+          🎵 {t?.spotifyConnected || "Spotify connected"}
+        </div>
+      )}
 
       <div className="home-section">
         <h2>{ t?.genres || "Genres" }</h2>

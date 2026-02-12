@@ -48,16 +48,18 @@ function App() {
 
     if (spotifyCode) {
       const codeVerifier = localStorage.getItem("code_verifier");
+      const loginOrigin = localStorage.getItem("login_origin") || "lobby";
       fetch(`/api/token?code=${spotifyCode}`, {
         headers: { "x-code-verifier": codeVerifier }
       })
         .then(res => res.json())
         .then(data => {
           localStorage.setItem("token", data.access_token);
+          localStorage.removeItem("login_origin");
           setToken(data.access_token);
-          setIsHost(true);
+          setIsHost(loginOrigin !== "singleplayer-setup");
           window.history.replaceState({}, document.title, "/");
-          setScreen("lobby"); // ✅ go straight to lobby after login
+          setScreen(loginOrigin);
         });
     }
   }, []);

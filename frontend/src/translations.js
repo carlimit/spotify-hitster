@@ -63,6 +63,8 @@ const translations = {
     shareScore: "📤 Share Score",
     shareText: (score, streak, acc) => `🎵 Spotify Hitster Solo\n✅ ${score} correct\n🔥 Best streak: ${streak}\n🎯 ${acc}% accuracy`,
     scoreCopied: "Score copied to clipboard!",
+    spotifyNeeded: "Login with Spotify to play music while you guess.",
+    spotifyConnected: "Spotify connected",
   },
 
   de: {
@@ -129,6 +131,8 @@ const translations = {
     shareScore: "📤 Ergebnis teilen",
     shareText: (score, streak, acc) => `🎵 Spotify Hitster Solo\n✅ ${score} richtig\n🔥 Beste Serie: ${streak}\n🎯 ${acc}% Genauigkeit`,
     scoreCopied: "Ergebnis in Zwischenablage kopiert!",
+    spotifyNeeded: "Melde dich mit Spotify an, um Musik während des Spiels zu hören.",
+    spotifyConnected: "Spotify verbunden",
   }
 };
 

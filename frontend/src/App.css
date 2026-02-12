@@ -588,6 +588,39 @@ button:active {
   padding: 4px 12px;
 }
 
+/* ---------- Spotify Login Banner ---------- */
+
+.spotify-login-banner {
+  width: 100%;
+  max-width: 480px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  border-radius: 16px;
+  padding: 16px 20px;
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.spotify-login-banner p {
+  color: #b3b3b3;
+  font-size: 14px;
+  margin-bottom: 12px;
+}
+
+.spotify-connected-banner {
+  width: 100%;
+  max-width: 480px;
+  background: rgba(29, 185, 84, 0.1);
+  border: 2px solid rgba(29, 185, 84, 0.3);
+  border-radius: 16px;
+  padding: 10px 20px;
+  text-align: center;
+  color: #1DB954;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+
 /* ---------- Language Toggle ---------- */
 
 .lang-toggle {
