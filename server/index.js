@@ -23,23 +23,18 @@ let accessToken = "";
 async function getSpotifyToken() {
   const response = await axios.post(
     "https://accounts.spotify.com/api/token",
-    new URLSearchParams({
-      grant_type: "client_credentials"
-    }),
+    new URLSearchParams({ grant_type: "client_credentials" }),
     {
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
         Authorization:
           "Basic " +
           Buffer.from(
-            process.env.SPOTIFY_CLIENT_ID +
-              ":" +
-              process.env.SPOTIFY_CLIENT_SECRET
+            process.env.SPOTIFY_CLIENT_ID + ":" + process.env.SPOTIFY_CLIENT_SECRET
           ).toString("base64")
       }
     }
   );
-
   accessToken = response.data.access_token;
 }
 
@@ -49,33 +44,22 @@ async function getSpotifyToken() {
 
 app.get("/api/track", async (req, res) => {
   const { genre, minYear, maxYear } = req.query;
-
   try {
     const randomOffset = Math.floor(Math.random() * 500);
-
-    const response = await axios.get(
-      "https://api.spotify.com/v1/search",
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`
-        },
-        params: {
-          q: `genre:${genre} year:${minYear}-${maxYear}`,
-          type: "track",
-          limit: 50,
-          offset: randomOffset
-        }
+    const response = await axios.get("https://api.spotify.com/v1/search", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      params: {
+        q: `genre:${genre} year:${minYear}-${maxYear}`,
+        type: "track",
+        limit: 50,
+        offset: randomOffset
       }
-    );
+    });
 
     let tracks = response.data.tracks.items;
+    if (!tracks.length) return res.status(404).json({ error: "No tracks found" });
 
-    if (!tracks.length)
-      return res.status(404).json({ error: "No tracks found" });
-
-    const randomTrack =
-      tracks[Math.floor(Math.random() * tracks.length)];
-
+    const randomTrack = tracks[Math.floor(Math.random() * tracks.length)];
     res.json({
       name: randomTrack.name,
       artist: randomTrack.artists[0].name,
@@ -83,7 +67,6 @@ app.get("/api/track", async (req, res) => {
       uri: randomTrack.uri,
       cover: randomTrack.album.images[0]?.url
     });
-
   } catch (err) {
     res.status(500).json({ error: "Spotify error" });
   }
@@ -113,19 +96,13 @@ io.on("connection", (socket) => {
           id: socket.id,
           name,
           score: 0,
-          timeline: [
-  {
-    id: Date.now(),
-    year: Math.floor(Math.random() * 30) + 1990, // temporär
-    type: "fixed"
-  }
-]
-
-
+          timeline: []  // will be set on start_game
         }
       ],
       currentPlayerIndex: 0,
-      started: false
+      started: false,
+      minYear: 1990,
+      maxYear: 2024
     };
 
     socket.join(code);
@@ -135,75 +112,51 @@ io.on("connection", (socket) => {
 
   /* JOIN GAME */
   socket.on("join_game", ({ code, name }) => {
-  const game = games[code];
-  if (!game) return;
+    const game = games[code];
+    if (!game) return socket.emit("error", { message: "Game not found" });
 
-  const alreadyJoined = game.players.find(p => p.id === socket.id);
-  if (alreadyJoined) return;
+    const alreadyJoined = game.players.find(p => p.id === socket.id);
+    if (alreadyJoined) return;
+    if (game.started) return socket.emit("error", { message: "Game already started" });
 
-  if (game.started) return;
+    game.players.push({
+      id: socket.id,
+      name,
+      score: 0,
+      timeline: []
+    });
 
-  game.players.push({
-    id: socket.id,
-    name,
-    score: 0,
-    timeline: [
-      {
-        id: Date.now() + Math.random(),
-        year:
-          Math.floor(
-            Math.random() * (game.maxYear - game.minYear + 1)
-          ) + game.minYear,
-        type: "fixed"
-      }
-    ]
-
+    socket.join(code);
+    socket.emit("joined_success", { code });
+    io.to(code).emit("player_list", game.players);
   });
-
-  socket.join(code);
-
-  socket.emit("joined_success", { code }); // 🔥 DAS FEHLT
-  io.to(code).emit("player_list", game.players);
-});
-
 
   /* START GAME */
   socket.on("start_game", ({ code, minYear, maxYear }) => {
-  const game = games[code];
-  if (!game) return;
+    const game = games[code];
+    if (!game) return;
 
-  game.started = true;
+    game.started = true;
+    game.minYear = parseInt(minYear);
+    game.maxYear = parseInt(maxYear);
+    game.currentPlayerIndex = 0;
 
-  // 🔥 Für jeden Spieler eine Startkarte erzeugen
-  game.players = game.players.map(player => {
-    const randomYear =
-      Math.floor(Math.random() * (maxYear - minYear + 1)) + parseInt(minYear);
+    // Give every player a random start card
+    game.players = game.players.map(player => {
+      const randomYear =
+        Math.floor(Math.random() * (game.maxYear - game.minYear + 1)) + game.minYear;
+      return {
+        ...player,
+        timeline: [{ id: Date.now() + Math.random(), year: randomYear, type: "fixed" }],
+        score: 0
+      };
+    });
 
-    return {
-      ...player,
-      timeline: [
-        {
-          id: Date.now() + Math.random(),
-          year: randomYear,
-          type: "fixed"
-        }
-      ],
-      score: 0
-    };
+    io.to(code).emit("game_started", {
+      players: game.players,
+      currentPlayerIndex: game.currentPlayerIndex
+    });
   });
-
-  io.to(code).emit("game_started", {
-    players: game.players,
-    currentPlayerIndex: game.currentPlayerIndex
-  });
-
-io.to(code).emit("turn_changed", {
-  players: game.players,
-  currentPlayerIndex: game.currentPlayerIndex
-});
-
-});
-
 
   /* NEXT TURN */
   socket.on("next_turn", ({ code }) => {
@@ -213,12 +166,11 @@ io.to(code).emit("turn_changed", {
     game.currentPlayerIndex =
       (game.currentPlayerIndex + 1) % game.players.length;
 
+    // ✅ Always send players along with currentPlayerIndex
     io.to(code).emit("turn_changed", {
+      players: game.players,
       currentPlayerIndex: game.currentPlayerIndex
     });
-
-    const activePlayer = game.players[game.currentPlayerIndex];
-    io.to(activePlayer.id).emit("your_turn");
   });
 
   socket.on("disconnect", () => {
@@ -234,4 +186,3 @@ server.listen(PORT, async () => {
   await getSpotifyToken();
   console.log("Server running on port " + PORT);
 });
-
