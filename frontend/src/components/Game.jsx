@@ -100,8 +100,8 @@ function Game({
       setIsMyTurn(myTurn);
 
       if (myTurn) {
-        console.log("📥 Loading new card for", newPlayers[newIndex]?.name);
-        loadNewCard(newPlayers[newIndex]);
+        console.log("📥 Loading new card for", newPlayers[newIndex]?.name, "| timeline:", newPlayers[newIndex]?.timeline);
+        loadNewCard(newPlayers[newIndex]); // uses server's saved timeline
       } else {
         const c = newPlayers[newIndex]?.timeline || [];
         console.log("👁 Showing timeline for", newPlayers[newIndex]?.name, c);
@@ -267,15 +267,23 @@ function Game({
 
     setResult("correct");
 
+    const updatedTimeline = currentCards.map(c =>
+      c.id === newCard.id ? { ...c, type: "fixed" } : c
+    );
     const updatedPlayers = [...players];
     updatedPlayers[currentPlayerIndex] = {
       ...currentPlayer,
-      timeline: currentCards.map(c =>
-        c.id === newCard.id ? { ...c, type: "fixed" } : c
-      ),
+      timeline: updatedTimeline,
       score: currentPlayer.score + 1
     };
     updatePlayers(updatedPlayers);
+
+    // ✅ Save updated timeline + score to server
+    socket.emit("update_timeline", {
+      code: roomCode,
+      timeline: updatedTimeline,
+      score: currentPlayer.score + 1
+    });
 
     if (updatedPlayers[currentPlayerIndex].score >= 10) {
       setWinner(updatedPlayers[currentPlayerIndex]);

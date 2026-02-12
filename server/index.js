@@ -163,6 +163,18 @@ io.on("connection", (socket) => {
   });
 
 
+  /* UPDATE TIMELINE */
+  socket.on("update_timeline", ({ code, timeline, score }) => {
+    const game = games[code];
+    if (!game) return;
+
+    const playerIndex = game.players.findIndex(p => p.id === socket.id);
+    if (playerIndex === -1) return;
+
+    game.players[playerIndex].timeline = timeline;
+    game.players[playerIndex].score = score;
+  });
+
   /* NEXT TURN */
   socket.on("next_turn", ({ code }) => {
     const game = games[code];
