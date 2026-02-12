@@ -292,6 +292,16 @@ io.on("connection", (socket) => {
     socket.to(code).emit("player_state", { playing });
   });
 
+  /* GIVE COIN — next player rewards active player for guessing correctly */
+  socket.on("give_coin", ({ code }) => {
+    const game = games[code];
+    if (!game) return;
+    const activePlayer = game.players[game.currentPlayerIndex];
+    if (!activePlayer) return;
+    activePlayer.coins = (activePlayer.coins || 0) + 1;
+    io.to(code).emit("coins_updated_players", { players: game.players });
+  });
+
   /* PLACE COIN — spectator places a coin between two cards */
   socket.on("place_coin", ({ code, insertIndex }) => {
     const game = games[code];
@@ -335,35 +345,56 @@ io.on("connection", (socket) => {
     if (!game) return;
 
     const coins = game.coins || {};
+
+    // Build the timeline WITHOUT the new card to get the fixed cards in order
+    // activeInsertIndex is where the new card was dropped among all cards
+    // We need to figure out the year boundaries for each slot
+
+    // Get fixed cards only (sorted by year), these are the reference points
+    // The active player's timeline (before this turn) is their existing fixed cards
     const activePlayer = game.players[game.currentPlayerIndex];
+    const fixedCards = activePlayer.timeline
+      .filter(c => c.type === "fixed")
+      .sort((a, b) => a.year - b.year);
+
+    // For a slot index i (0 = before all, fixedCards.length = after all):
+    // correct if newCard.year >= fixedCards[i-1].year (or i=0)
+    //        AND newCard.year <= fixedCards[i].year (or i=fixedCards.length)
+    const isSlotCorrect = (slotIndex) => {
+      const cardYear = parseInt(newCard.year);
+      const leftYear = slotIndex > 0 ? parseInt(fixedCards[slotIndex - 1]?.year ?? 0) : -Infinity;
+      const rightYear = slotIndex < fixedCards.length ? parseInt(fixedCards[slotIndex]?.year ?? Infinity) : Infinity;
+      return cardYear >= leftYear && cardYear <= rightYear;
+    };
 
     // Evaluate each coin
     Object.values(coins).forEach(({ playerId, insertIndex }) => {
       const coinPlayerIndex = game.players.findIndex(p => p.id === playerId);
       if (coinPlayerIndex === -1) return;
       const coinPlayer = game.players[coinPlayerIndex];
-      const coinCorrect = insertIndex === activeInsertIndex;
+
+      // Coin is correct if the year fits in that slot
+      const coinCorrect = isSlotCorrect(insertIndex);
 
       if (activeCorrect && coinCorrect) {
-        // Active right, coin right → coin player gets coin back (no change)
+        // Both right → coin returned (no change to coins)
       } else if (activeCorrect && !coinCorrect) {
-        // Active right, coin wrong → coin destroyed
-        game.players[coinPlayerIndex].coins = Math.max(0, coinPlayer.coins - 1);
+        // Active right, coin wrong → lose coin
+        game.players[coinPlayerIndex].coins = Math.max(0, (coinPlayer.coins || 0) - 1);
       } else if (!activeCorrect && coinCorrect) {
-        // Active wrong, coin right → coin player gets coin back + card into their timeline
+        // Active wrong, coin right → coin returned + win the card
         const cardWithFixed = { ...newCard, type: "fixed" };
-        game.players[coinPlayerIndex].timeline = [
-          ...coinPlayer.timeline,
-          cardWithFixed
-        ].sort((a, b) => a.year - b.year);
+        const newTimeline = [...coinPlayer.timeline, cardWithFixed]
+          .sort((a, b) => a.year - b.year);
+        game.players[coinPlayerIndex].timeline = newTimeline;
         game.players[coinPlayerIndex].score = (coinPlayer.score || 0) + 1;
       } else {
-        // Both wrong → coin destroyed
-        game.players[coinPlayerIndex].coins = Math.max(0, coinPlayer.coins - 1);
+        // Both wrong → lose coin
+        game.players[coinPlayerIndex].coins = Math.max(0, (coinPlayer.coins || 0) - 1);
       }
     });
 
-    // Clear all coins for next round
+    // Clear coins for next round
     game.coins = {};
 
     // Advance turn

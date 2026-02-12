@@ -449,9 +449,10 @@ function Game({
                 {/* Coin slot ABOVE each card — only for spectators, before reveal */}
                 {!isMyTurn && !revealed && (
                   <div className="coin-slot">
-                    {coinsHere > 0 && (
+                    {/* Show other players' coins but not your own (your button IS the coin) */}
+                    {coinsHere - (myMyCoinHere ? 1 : 0) > 0 && (
                       <div className="coins-on-slot">
-                        {"🪙".repeat(Math.min(coinsHere, 5))}
+                        {"🪙".repeat(Math.min(coinsHere - (myMyCoinHere ? 1 : 0), 5))}
                       </div>
                     )}
                     {myMyCoinHere ? (
@@ -535,16 +536,22 @@ function Game({
               {/* Coin slot AFTER last card */}
               {index === cards.length - 1 && !isMyTurn && !revealed && (
                 <div className="coin-slot">
-                  {coinsBySlot[cards.length] > 0 && (
-                    <div className="coins-on-slot">
-                      {"🪙".repeat(Math.min(coinsBySlot[cards.length], 5))}
-                    </div>
-                  )}
-                  {myCoinIndex === cards.length ? (
-                    <button className="coin-btn coin-placed" onClick={removeCoin}>🪙</button>
-                  ) : !hasCoinPlaced && myCoins > 0 ? (
-                    <button className="coin-btn coin-plus" onClick={() => placeCoin(cards.length)}>+</button>
-                  ) : null}
+                  {(() => {
+                    const bottomSlot = cards.length;
+                    const bottomCoins = coinsBySlot[bottomSlot] || 0;
+                    const myBottomCoin = myCoinIndex === bottomSlot;
+                    const othersCoins = bottomCoins - (myBottomCoin ? 1 : 0);
+                    return <>
+                      {othersCoins > 0 && (
+                        <div className="coins-on-slot">{"🪙".repeat(Math.min(othersCoins, 5))}</div>
+                      )}
+                      {myBottomCoin ? (
+                        <button className="coin-btn coin-placed" onClick={removeCoin}>🪙</button>
+                      ) : !hasCoinPlaced && myCoins > 0 ? (
+                        <button className="coin-btn coin-plus" onClick={() => placeCoin(bottomSlot)}>+</button>
+                      ) : null}
+                    </>;
+                  })()}
                 </div>
               )}
             </div>
