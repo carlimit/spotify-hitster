@@ -55,7 +55,7 @@ function App() {
     const spotifyCode = params.get("code");
 
     if (spotifyCode) {
-      const codeVerifier = localStorage.getItem("code_verifier");
+      const codeVerifier = sessionStorage.getItem("code_verifier");
       const loginOrigin = localStorage.getItem("login_origin") || "lobby";
       fetch(`/api/token?code=${spotifyCode}`, {
         headers: { "x-code-verifier": codeVerifier }

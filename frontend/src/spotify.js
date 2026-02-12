@@ -34,7 +34,7 @@ export async function getLoginUrl() {
   const codeVerifier = generateRandomString(128);
   const codeChallenge = await generateCodeChallenge(codeVerifier);
 
-  localStorage.setItem("code_verifier", codeVerifier);
+  sessionStorage.setItem("code_verifier", codeVerifier);
 
   const args = new URLSearchParams({
     response_type: "code",
