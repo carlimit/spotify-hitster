@@ -90,7 +90,10 @@ function Home({
       const res = await axios.get(`/api/playlist?url=${encodeURIComponent(playlistUrl)}`);
       setPlaylistInfo(res.data);
     } catch (err) {
-      setPlaylistError("Couldn't load playlist. Make sure it's a public Spotify playlist URL.");
+      const detail = err.response?.data?.detail;
+      setPlaylistError(detail
+        ? `Spotify error: ${detail}`
+        : "Couldn't load playlist. Make sure it's a public Spotify playlist URL.");
     } finally {
       setPlaylistLoading(false);
     }

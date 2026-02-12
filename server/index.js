@@ -36,6 +36,9 @@ async function getSpotifyToken() {
     }
   );
   accessToken = response.data.access_token;
+  console.log("✅ Spotify token refreshed");
+  // Auto-refresh every 50 minutes (token expires in 60)
+  setTimeout(getSpotifyToken, 50 * 60 * 1000);
 }
 
 /* =========================================
@@ -143,8 +146,12 @@ app.get("/api/playlist", async (req, res) => {
       }))
     });
   } catch (err) {
-    console.error("Playlist error:", err.response?.data || err.message);
-    res.status(500).json({ error: "Could not load playlist" });
+    const spotifyError = err.response?.data;
+    console.error("Playlist error:", spotifyError || err.message);
+    res.status(500).json({ 
+      error: "Could not load playlist",
+      detail: spotifyError?.error?.message || err.message
+    });
   }
 });
 
