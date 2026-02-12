@@ -20,10 +20,12 @@ function Game({
   const [showNextButton, setShowNextButton] = useState(false);
   const [revealed, setRevealed] = useState(false);
 
+  const [isMyTurn, setIsMyTurn] = useState(false);
+
   // Drag state
   const [dragY, setDragY] = useState(0);
   const [dragging, setDragging] = useState(false);
-  const [insertIndex, setInsertIndex] = useState(null); // where card WOULD land
+  const [insertIndex, setInsertIndex] = useState(null);
 
   // Refs — always fresh, avoids stale closure bugs
   const selectedGenresRef = useRef(selectedGenres);
@@ -53,6 +55,7 @@ function Game({
   useEffect(() => {
     const myTurn = players[0]?.id === socket.id;
     isMyTurnRef.current = myTurn;
+    setIsMyTurn(myTurn);
     if (myTurn) {
       loadNewCard(players[0]);
     } else {
@@ -83,6 +86,7 @@ function Game({
 
       const myTurn = newPlayers[newIndex]?.id === socket.id;
       isMyTurnRef.current = myTurn;
+      setIsMyTurn(myTurn);
 
       if (myTurn) {
         loadNewCard(newPlayers[newIndex]);
@@ -285,7 +289,7 @@ function Game({
   return (
     <div className="container">
       <h2>{currentPlayer.name}'s Turn</h2>
-      <h3>{isMyTurnRef.current ? "Your turn!" : `Waiting for ${currentPlayer.name}...`}</h3>
+      <h3>{isMyTurn ? "Your turn!" : `Waiting for ${currentPlayer.name}...`}</h3>
 
       {loading && <div className="loading-card">Loading song...</div>}
 
@@ -323,14 +327,14 @@ function Game({
                   transition: isDragged
                     ? "box-shadow 0.15s"
                     : "transform 0.18s ease, box-shadow 0.15s",
-                  cursor: isNewCard && !revealed && isMyTurnRef.current
+                  cursor: isNewCard && !revealed && isMyTurn
                     ? (dragging ? "grabbing" : "grab")
                     : "default",
                   touchAction: "none",
                   userSelect: "none",
                 }}
-                onMouseDown={isNewCard && !revealed && isMyTurnRef.current ? handleDragStart : undefined}
-                onTouchStart={isNewCard && !revealed && isMyTurnRef.current ? handleDragStart : undefined}
+                onMouseDown={isNewCard && !revealed && isMyTurn ? handleDragStart : undefined}
+                onTouchStart={isNewCard && !revealed && isMyTurn ? handleDragStart : undefined}
               >
                 {isNewCard ? (
                   <div
@@ -341,7 +345,7 @@ function Game({
                     `}
                   >
                     <div className="card-front new">
-                      <div>{isMyTurnRef.current ? "Drag to place" : `${currentPlayer.name} is playing...`}</div>
+                      <div>{isMyTurn ? "Drag to place" : `${currentPlayer.name} is playing...`}</div>
                     </div>
                     <div className="card-back">
                       <img src={card.cover} className="cover-large" alt="" />
@@ -362,10 +366,10 @@ function Game({
       )}
 
       <div className="action-container">
-        {isMyTurnRef.current && !revealed && !loading && (
+        {isMyTurn && !revealed && !loading && (
           <button onClick={handleReveal}>Reveal</button>
         )}
-        {isMyTurnRef.current && showNextButton && (
+        {isMyTurn && showNextButton && (
           <button onClick={nextTurn}>Next Player</button>
         )}
       </div>
