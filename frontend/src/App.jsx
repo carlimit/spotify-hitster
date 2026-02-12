@@ -21,6 +21,12 @@ function App() {
   const [token, setToken] = useState(null);
   const [isHost, setIsHost] = useState(false);
   const [screen, setScreen] = useState("start");
+  const [loginUrl, setLoginUrl] = useState(null);
+
+  // Pre-compute login URL immediately so button tap is instant (no async gap)
+  useEffect(() => {
+    getLoginUrl().then(url => setLoginUrl(url));
+  }, []);
   const [players, setPlayers] = useState([]);
   const [selectedGenres, setSelectedGenres] = useState([]);
   const [winner, setWinner] = useState(null);
@@ -99,8 +105,17 @@ function App() {
       <div className="container">
         <h1>{t.appName}</h1>
         <h2>{t.loginToHost}</h2>
-        <button onClick={async () => { const url = await getLoginUrl(); window.location.href = url; }}>
-          {t.loginWithSpotify}
+        <button
+          disabled={!loginUrl}
+          onClick={() => {
+            if (!loginUrl) return;
+            const url = loginUrl;
+            setLoginUrl(null); // clear so it regenerates
+            getLoginUrl().then(u => setLoginUrl(u)); // pre-compute next one
+            window.location.href = url; // synchronous — mobile won't block it
+          }}
+        >
+          {loginUrl ? t.loginWithSpotify : "…"}
         </button>
       </div>
     );
@@ -147,6 +162,7 @@ function App() {
         maxYear={singlePlayerMaxYear} setMaxYear={setSinglePlayerMaxYear}
         playlist={singlePlayerPlaylist} setPlaylist={setSinglePlayerPlaylist}
         timerSeconds={timerSeconds} setTimerSeconds={setTimerSeconds}
+        loginUrl={loginUrl} refreshLoginUrl={() => getLoginUrl().then(u => setLoginUrl(u))}
       />
     );
   }

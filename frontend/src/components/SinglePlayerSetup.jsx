@@ -2,7 +2,6 @@ import { useState } from "react";
 import Slider from "rc-slider";
 import "rc-slider/assets/index.css";
 import axios from "axios";
-import { getLoginUrl } from "../spotify";
 
 function SinglePlayerSetup({ t,
   setScreen,
@@ -10,7 +9,8 @@ function SinglePlayerSetup({ t,
   minYear, setMinYear,
   maxYear, setMaxYear,
   playlist, setPlaylist,
-  timerSeconds, setTimerSeconds
+  timerSeconds, setTimerSeconds,
+  loginUrl, refreshLoginUrl
 }) {
   const [playlistUrl, setPlaylistUrl] = useState("");
   const [playlistLoading, setPlaylistLoading] = useState(false);
@@ -48,13 +48,16 @@ function SinglePlayerSetup({ t,
           <p>{t?.spotifyNeeded || "Login with Spotify to play music while you guess."}</p>
           <button
             style={{ background: "#1DB954" }}
-            onClick={async () => {
+            disabled={!loginUrl}
+            onClick={() => {
+              if (!loginUrl) return;
               localStorage.setItem("login_origin", "singleplayer-setup");
-              const url = await getLoginUrl();
+              const url = loginUrl;
+              refreshLoginUrl?.();
               window.location.href = url;
             }}
           >
-            {t?.loginWithSpotify || "Login with Spotify"}
+            {loginUrl ? (t?.loginWithSpotify || "Login with Spotify") : "…"}
           </button>
         </div>
       )}
