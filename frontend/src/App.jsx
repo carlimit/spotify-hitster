@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import Home from "./components/Home";
 import Game from "./components/Game";
 import Winner from "./components/Winner";
+import SinglePlayerSetup from "./components/SinglePlayerSetup";
+import SinglePlayerGame from "./components/SinglePlayerGame";
 import "./App.css";
 import { getLoginUrl } from "./spotify";
 import { socket } from "./socket";
@@ -10,7 +12,7 @@ function App() {
 
   const [isHost, setIsHost] = useState(false);
   const [token, setToken] = useState(null);
-  const [screen, setScreen] = useState("start"); // "start" | "host-login" | "lobby" | "playing" | "winner"
+  const [screen, setScreen] = useState("start");
   const [players, setPlayers] = useState([]);
   const [selectedGenres, setSelectedGenres] = useState([]);
   const [winner, setWinner] = useState(null);
@@ -18,6 +20,13 @@ function App() {
   const [maxYear, setMaxYear] = useState(2024);
   const [roomCode, setRoomCode] = useState(null);
   const [playlistTracks, setPlaylistTracks] = useState(null);
+  const [winGoal, setWinGoal] = useState(10);
+  const [timerSeconds, setTimerSeconds] = useState(0); // 0 = no timer
+  // Singleplayer settings (reuse genre/year/playlist)
+  const [singlePlayerGenres, setSinglePlayerGenres] = useState([]);
+  const [singlePlayerMinYear, setSinglePlayerMinYear] = useState(1990);
+  const [singlePlayerMaxYear, setSinglePlayerMaxYear] = useState(2024);
+  const [singlePlayerPlaylist, setSinglePlayerPlaylist] = useState(null);
 
   // ============================================================
   // 🔐 Spotify Redirect — runs on load, handles OAuth callback
@@ -69,6 +78,12 @@ function App() {
         >
           Join Game
         </button>
+        <button
+          style={{ marginTop: "15px", background: "#1a472a" }}
+          onClick={() => setScreen("singleplayer-setup")}
+        >
+          🎮 Solo Mode
+        </button>
       </div>
     );
   }
@@ -110,13 +125,13 @@ function App() {
         isHost={isHost}
         setRoomCode={setRoomCode}
         setPlaylistTracks={setPlaylistTracks}
+        winGoal={winGoal}
+        setWinGoal={setWinGoal}
+        timerSeconds={timerSeconds}
+        setTimerSeconds={setTimerSeconds}
       />
     );
   }
-
-  // ============================================================
-  // 🟢 PLAYING
-  // ============================================================
 
   if (screen === "playing") {
     return (
@@ -130,13 +145,42 @@ function App() {
         setScreen={setScreen}
         setWinner={setWinner}
         playlistTracks={playlistTracks}
+        winGoal={winGoal}
+        timerSeconds={timerSeconds}
       />
     );
   }
 
-  // ============================================================
-  // 🟢 WINNER
-  // ============================================================
+  if (screen === "singleplayer-setup") {
+    return (
+      <SinglePlayerSetup
+        setScreen={setScreen}
+        genres={singlePlayerGenres}
+        setGenres={setSinglePlayerGenres}
+        minYear={singlePlayerMinYear}
+        setMinYear={setSinglePlayerMinYear}
+        maxYear={singlePlayerMaxYear}
+        setMaxYear={setSinglePlayerMaxYear}
+        playlist={singlePlayerPlaylist}
+        setPlaylist={setSinglePlayerPlaylist}
+        timerSeconds={timerSeconds}
+        setTimerSeconds={setTimerSeconds}
+      />
+    );
+  }
+
+  if (screen === "singleplayer") {
+    return (
+      <SinglePlayerGame
+        setScreen={setScreen}
+        selectedGenres={singlePlayerGenres}
+        minYear={singlePlayerMinYear}
+        maxYear={singlePlayerMaxYear}
+        playlistTracks={singlePlayerPlaylist}
+        timerSeconds={timerSeconds}
+      />
+    );
+  }
 
   if (screen === "winner") {
     return (

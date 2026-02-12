@@ -476,7 +476,119 @@ button:active {
   box-shadow: 0 8px 24px rgba(29, 185, 84, 0.4);
 }
 
-/* ---------- Playlist Info ---------- */
+/* ---------- Timer ---------- */
+
+.timer-display {
+  font-size: 48px;
+  font-weight: 900;
+  color: #1DB954;
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  border: 4px solid #1DB954;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 8px auto;
+  transition: color 0.3s, border-color 0.3s;
+}
+
+.timer-urgent {
+  color: #ff4444 !important;
+  border-color: #ff4444 !important;
+  animation: timerPulse 0.5s ease-in-out infinite;
+}
+
+@keyframes timerPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+
+/* ---------- Number Picker ---------- */
+
+.number-picker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  margin: 8px 0;
+}
+
+.number-picker button {
+  width: 44px !important;
+  height: 44px !important;
+  min-width: unset !important;
+  border-radius: 50% !important;
+  font-size: 24px !important;
+  padding: 0 !important;
+  background: #444 !important;
+}
+
+.number-picker span {
+  font-size: 32px;
+  font-weight: 800;
+  min-width: 48px;
+  text-align: center;
+}
+
+/* ---------- Timer Options ---------- */
+
+.timer-options {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin: 8px 0;
+}
+
+.timer-options button {
+  min-width: 56px !important;
+  padding: 8px 12px !important;
+}
+
+/* ---------- Singleplayer Stats ---------- */
+
+.sp-stats {
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+  margin: 24px 0;
+  flex-wrap: wrap;
+}
+
+.sp-stat {
+  background: rgba(255,255,255,0.07);
+  border-radius: 16px;
+  padding: 16px 24px;
+  text-align: center;
+  min-width: 90px;
+}
+
+.sp-stat-num {
+  font-size: 36px;
+  font-weight: 900;
+  color: #1DB954;
+}
+
+.sp-stat-label {
+  font-size: 13px;
+  color: #b3b3b3;
+  margin-top: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.streak-badge {
+  font-size: 22px;
+  font-weight: 800;
+  color: #ff9500;
+  background: rgba(255, 149, 0, 0.15);
+  border: 2px solid rgba(255, 149, 0, 0.4);
+  border-radius: 20px;
+  padding: 4px 12px;
+}
+
+/* ---------- Timer ---------- */
 
 .playlist-info {
   width: 100%;

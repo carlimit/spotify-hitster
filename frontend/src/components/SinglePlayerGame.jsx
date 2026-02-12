@@ -1,0 +1,346 @@
+import { useState, useEffect, useRef, useCallback } from "react";
+import axios from "axios";
+
+function SinglePlayerGame({
+  setScreen,
+  selectedGenres,
+  minYear,
+  maxYear,
+  playlistTracks,
+  timerSeconds = 0
+}) {
+  const [cards, setCards] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState(null); // "correct" | "wrong"
+  const [revealed, setRevealed] = useState(false);
+  const [score, setScore] = useState(0);
+  const [streak, setStreak] = useState(0);
+  const [bestStreak, setBestStreak] = useState(0);
+  const [totalPlayed, setTotalPlayed] = useState(0);
+  const [gameOver, setGameOver] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(null);
+
+  // Drag
+  const [dragY, setDragY] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const [insertIndex, setInsertIndex] = useState(null);
+
+  const cardsRef = useRef(cards);
+  const revealedRef = useRef(false);
+  const dragYRef = useRef(0);
+  const draggingRef = useRef(false);
+  const startYRef = useRef(0);
+  const timelineRef = useRef(null);
+  const timerRef = useRef(null);
+  const usedUrisRef = useRef(new Set());
+  const playlistRef = useRef(playlistTracks || null);
+  const genresRef = useRef(selectedGenres);
+  const minYearRef = useRef(minYear);
+  const maxYearRef = useRef(maxYear);
+
+  useEffect(() => { cardsRef.current = cards; }, [cards]);
+  useEffect(() => { revealedRef.current = revealed; }, [revealed]);
+  useEffect(() => { dragYRef.current = dragY; }, [dragY]);
+
+  // ── Generate a card ──
+  const generateCard = async () => {
+    const playlist = playlistRef.current;
+
+    if (playlist && playlist.length > 0) {
+      const unused = playlist.filter(t => !usedUrisRef.current.has(t.uri));
+      const pool = unused.length > 0 ? unused : playlist;
+      const track = pool[Math.floor(Math.random() * pool.length)];
+      usedUrisRef.current.add(track.uri);
+      return { id: Date.now(), year: parseInt(track.year), name: track.name, artist: track.artist, uri: track.uri, cover: track.cover, type: "new" };
+    }
+
+    const genres = genresRef.current;
+    const genre = genres.length > 0 ? genres[Math.floor(Math.random() * genres.length)] : "";
+    const res = await axios.get(`/api/track?genre=${genre}&minYear=${minYearRef.current}&maxYear=${maxYearRef.current}`);
+    return {
+      id: Date.now(),
+      year: parseInt(res.data.year),
+      name: res.data.name,
+      artist: res.data.artist,
+      uri: res.data.uri,
+      cover: res.data.cover,
+      type: "new"
+    };
+  };
+
+  // ── Load first card on mount ──
+  useEffect(() => {
+    loadCard([]);
+    return () => clearInterval(timerRef.current);
+  }, []);
+
+  const loadCard = async (existingTimeline) => {
+    setLoading(true);
+    clearInterval(timerRef.current);
+    setTimeLeft(null);
+    setResult(null);
+    setRevealed(false);
+    revealedRef.current = false;
+    setDragging(false);
+    draggingRef.current = false;
+    setInsertIndex(null);
+
+    try {
+      const card = await generateCard();
+      const newCards = [card, ...existingTimeline];
+      setCards(newCards);
+      cardsRef.current = newCards;
+
+      if (timerSeconds > 0) {
+        setTimeLeft(timerSeconds);
+        timerRef.current = setInterval(() => {
+          setTimeLeft(t => {
+            if (t <= 1) {
+              clearInterval(timerRef.current);
+              if (!revealedRef.current) doReveal(cardsRef.current);
+              return 0;
+            }
+            return t - 1;
+          });
+        }, 1000);
+      }
+    } catch (err) {
+      console.error("Failed to load card:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ── Reveal ──
+  const doReveal = (currentCards) => {
+    if (revealedRef.current) return;
+    revealedRef.current = true;
+    setRevealed(true);
+    clearInterval(timerRef.current);
+    setTimeLeft(null);
+
+    const newCard = currentCards.find(c => c.type === "new");
+    if (!newCard) return;
+
+    const fixedCards = currentCards.filter(c => c.type === "fixed").sort((a, b) => a.year - b.year);
+    const newIdx = currentCards.indexOf(newCard);
+    const fixedIdx = currentCards.filter((c, i) => c.type === "fixed" && i < newIdx).length;
+
+    const leftYear = fixedIdx > 0 ? fixedCards[fixedIdx - 1].year : -Infinity;
+    const rightYear = fixedIdx < fixedCards.length ? fixedCards[fixedIdx].year : Infinity;
+    const correct = newCard.year >= leftYear && newCard.year <= rightYear;
+
+    setTotalPlayed(p => p + 1);
+
+    if (correct) {
+      setResult("correct");
+      setScore(s => s + 1);
+      setStreak(s => {
+        const next = s + 1;
+        setBestStreak(b => Math.max(b, next));
+        return next;
+      });
+    } else {
+      setResult("wrong");
+      setStreak(0);
+    }
+  };
+
+  const handleReveal = () => doReveal(cardsRef.current);
+
+  // ── Next card ──
+  const nextCard = () => {
+    const currentCards = cardsRef.current;
+    const newCard = currentCards.find(c => c.type === "new");
+    const isCorrect = result === "correct";
+
+    let newTimeline;
+    if (isCorrect && newCard) {
+      newTimeline = currentCards.map(c => c.id === newCard.id ? { ...c, type: "fixed" } : c);
+    } else {
+      newTimeline = currentCards.filter(c => c.type === "fixed");
+    }
+
+    loadCard(newTimeline);
+  };
+
+  // ── Drag (same logic as multiplayer) ──
+  const handleDragStart = useCallback((e) => {
+    if (revealedRef.current) return;
+    e.preventDefault();
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    startYRef.current = clientY;
+    draggingRef.current = true;
+    setDragging(true);
+
+    const onMove = (ev) => {
+      if (!draggingRef.current) return;
+      const y = ev.touches ? ev.touches[0].clientY : ev.clientY;
+      const dy = y - startYRef.current;
+      dragYRef.current = dy;
+      setDragY(dy);
+
+      const cards = cardsRef.current;
+      const container = timelineRef.current;
+      if (!container) return;
+      const cardEls = container.querySelectorAll(".card");
+      let newInsert = cards.findIndex(c => c.type === "new");
+      for (let i = 0; i < cardEls.length; i++) {
+        const rect = cardEls[i].getBoundingClientRect();
+        if (y < rect.top + rect.height / 2) { newInsert = i; break; }
+        if (i === cardEls.length - 1) newInsert = i + 1;
+      }
+      setInsertIndex(newInsert);
+    };
+
+    const onEnd = () => {
+      draggingRef.current = false;
+      setDragging(false);
+      setDragY(0);
+
+      const currentCards = cardsRef.current;
+      const origIdx = currentCards.findIndex(c => c.type === "new");
+      setInsertIndex(idx => {
+        if (idx !== null && idx !== origIdx) {
+          const newCards = [...currentCards];
+          const [card] = newCards.splice(origIdx, 1);
+          const targetIdx = idx > origIdx ? idx - 1 : idx;
+          newCards.splice(targetIdx, 0, card);
+          setCards(newCards);
+          cardsRef.current = newCards;
+        }
+        return null;
+      });
+
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onEnd);
+      document.removeEventListener("touchmove", onMove);
+      document.removeEventListener("touchend", onEnd);
+    };
+
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onEnd);
+    document.addEventListener("touchmove", onMove, { passive: false });
+    document.addEventListener("touchend", onEnd);
+  }, []);
+
+  // ── Share score ──
+  const shareScore = () => {
+    const text = `🎵 Spotify Hitster Solo\n✅ ${score} correct\n🔥 Best streak: ${bestStreak}\n🎯 ${Math.round((score / Math.max(totalPlayed, 1)) * 100)}% accuracy`;
+    if (navigator.share) {
+      navigator.share({ title: "Hitster Score", text });
+    } else {
+      navigator.clipboard.writeText(text);
+      alert("Score copied to clipboard!");
+    }
+  };
+
+  // ── Game Over screen ──
+  if (gameOver) {
+    return (
+      <div className="container">
+        <h1>Game Over!</h1>
+        <div className="sp-stats">
+          <div className="sp-stat"><div className="sp-stat-num">{score}</div><div className="sp-stat-label">Correct</div></div>
+          <div className="sp-stat"><div className="sp-stat-num">{bestStreak}</div><div className="sp-stat-label">Best Streak</div></div>
+          <div className="sp-stat"><div className="sp-stat-num">{Math.round((score / Math.max(totalPlayed, 1)) * 100)}%</div><div className="sp-stat-label">Accuracy</div></div>
+        </div>
+        <button onClick={shareScore} style={{ background: "#1DB954", marginBottom: 12 }}>📤 Share Score</button>
+        <button onClick={() => setScreen("singleplayer-setup")} style={{ background: "#444" }}>Play Again</button>
+        <button onClick={() => setScreen("start")} style={{ background: "transparent", color: "#b3b3b3", marginTop: 8 }}>← Home</button>
+      </div>
+    );
+  }
+
+  const newCardOriginalIndex = cards.findIndex(c => c.type === "new");
+
+  return (
+    <div className="container">
+      <div className="game-header">
+        <div>
+          <h2>Solo Mode</h2>
+          <h3>Score: {score}</h3>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+          {streak >= 2 && <div className="streak-badge">🔥 {streak}</div>}
+          <button onClick={() => setGameOver(true)} style={{ background: "#444", fontSize: 13, padding: "6px 12px", minWidth: "auto" }}>End</button>
+        </div>
+      </div>
+
+      {loading && <div className="loading-card">Loading song...</div>}
+
+      {timeLeft !== null && (
+        <div className={`timer-display ${timeLeft <= 5 ? "timer-urgent" : ""}`}>{timeLeft}s</div>
+      )}
+
+      {!loading && (
+        <div className="timeline" ref={timelineRef}>
+          {cards.map((card, index) => {
+            const isNewCard = card.type === "new";
+            const isDragged = isNewCard && dragging;
+
+            let shiftY = 0;
+            if (dragging && !isNewCard && insertIndex !== null) {
+              const origIdx = newCardOriginalIndex;
+              const cardEls = timelineRef.current?.querySelectorAll(".card");
+              const cardH = cardEls?.[0]?.getBoundingClientRect().height + 16 || 196;
+              if (insertIndex < origIdx && index >= insertIndex && index < origIdx) shiftY = cardH;
+              else if (insertIndex > origIdx && index > origIdx && index <= insertIndex) shiftY = -cardH;
+            }
+
+            return (
+              <div key={card.id} style={{ width: "100%", maxWidth: 480 }}>
+                <div
+                  className={`card ${isNewCard && revealed ? "card-expanded" : ""}`}
+                  style={{
+                    position: "relative",
+                    zIndex: isDragged ? 1000 : 1,
+                    transform: isDragged ? `translateY(${dragY}px) scale(1.04)` : `translateY(${shiftY}px) scale(1)`,
+                    boxShadow: isDragged ? "0 28px 70px rgba(29,185,84,0.55)" : undefined,
+                    transition: isDragged ? "box-shadow 0.15s" : "transform 0.18s ease",
+                    cursor: isNewCard && !revealed ? (dragging ? "grabbing" : "grab") : "default",
+                    touchAction: "none",
+                    userSelect: "none"
+                  }}
+                  onMouseDown={isNewCard && !revealed ? handleDragStart : undefined}
+                  onTouchStart={isNewCard && !revealed ? handleDragStart : undefined}
+                >
+                  {isNewCard ? (
+                    <div className={`card-inner ${revealed ? "flipped" : ""} ${result === "correct" ? "result-correct" : ""} ${result === "wrong" ? "result-wrong" : ""}`}>
+                      <div className="card-front new">
+                        <div className="drag-hint">Drag to place</div>
+                      </div>
+                      <div className="card-back">
+                        <img src={card.cover} className="cover-large" alt="" />
+                        <div className="revealed-year">{card.year}</div>
+                        <strong>{card.artist}</strong>
+                        <div className="song-title">{card.name}</div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="card-front fixed">
+                      <div>{card.year}</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="action-container">
+        {!revealed && !loading && (
+          <button onClick={handleReveal}>Reveal</button>
+        )}
+        {revealed && (
+          <button onClick={nextCard}>
+            {result === "correct" ? "✅ Next Song" : "❌ Next Song"}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default SinglePlayerGame;

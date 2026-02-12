@@ -216,17 +216,18 @@ io.on("connection", (socket) => {
   });
 
   /* START GAME */
-  socket.on("start_game", ({ code, minYear, maxYear, selectedGenres, playlistTracks }) => {
+  socket.on("start_game", ({ code, minYear, maxYear, selectedGenres, playlistTracks, winGoal, timerSeconds }) => {
     const game = games[code];
     if (!game) return;
 
     game.started = true;
     game.selectedGenres = selectedGenres || [];
     game.playlistTracks = playlistTracks || null;
-    game.usedUris = new Set(); // track used songs to prevent repeats
+    game.usedUris = new Set();
     game.currentPlayerIndex = 0;
+    game.winGoal = winGoal || 10;
+    game.timerSeconds = timerSeconds || 0;
 
-    // If playlist mode, derive year range from playlist tracks
     if (playlistTracks && playlistTracks.length) {
       const years = playlistTracks.map(t => parseInt(t.year)).filter(y => !isNaN(y));
       game.minYear = Math.min(...years);
@@ -243,7 +244,7 @@ io.on("connection", (socket) => {
         ...player,
         timeline: [{ id: Date.now() + Math.random(), year: randomYear, type: "fixed" }],
         score: 0,
-        coins: 3  // start with 3 coins
+        coins: 3
       };
     });
 
@@ -253,7 +254,9 @@ io.on("connection", (socket) => {
       selectedGenres: game.selectedGenres,
       minYear: game.minYear,
       maxYear: game.maxYear,
-      playlistTracks: game.playlistTracks
+      playlistTracks: game.playlistTracks,
+      winGoal: game.winGoal,
+      timerSeconds: game.timerSeconds
     });
   });
 

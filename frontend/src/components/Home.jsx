@@ -15,7 +15,11 @@ function Home({
   setMaxYear,
   isHost,
   setRoomCode,
-  setPlaylistTracks
+  setPlaylistTracks,
+  winGoal,
+  setWinGoal,
+  timerSeconds,
+  setTimerSeconds
 }) {
   const [playerName, setPlayerName] = useState("");
   const [inputCode, setInputCode] = useState("");
@@ -112,7 +116,9 @@ function Home({
       minYear,
       maxYear,
       selectedGenres,
-      playlistTracks: playlistInfo?.tracks || null
+      playlistTracks: playlistInfo?.tracks || null,
+      winGoal,
+      timerSeconds
     });
   };
 
@@ -244,6 +250,30 @@ function Home({
                 />
                 <div style={{ marginTop: "10px", fontWeight: "bold" }}>
                   {minYear} – {maxYear}
+                </div>
+              </div>
+
+              <div className="home-section">
+                <h2>Cards to Win</h2>
+                <div className="number-picker">
+                  <button onClick={() => setWinGoal(g => Math.max(3, g - 1))}>−</button>
+                  <span>{winGoal}</span>
+                  <button onClick={() => setWinGoal(g => Math.min(20, g + 1))}>+</button>
+                </div>
+              </div>
+
+              <div className="home-section">
+                <h2>Timer</h2>
+                <div className="timer-options">
+                  {[0, 15, 30, 45, 60].map(s => (
+                    <button
+                      key={s}
+                      onClick={() => setTimerSeconds(s)}
+                      style={{ background: timerSeconds === s ? "#1DB954" : "#444" }}
+                    >
+                      {s === 0 ? "Off" : `${s}s`}
+                    </button>
+                  ))}
                 </div>
               </div>
 

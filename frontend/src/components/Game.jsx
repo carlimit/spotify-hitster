@@ -12,7 +12,9 @@ function Game({
   roomCode,
   setScreen,
   setWinner,
-  playlistTracks: initialPlaylistTracks
+  playlistTracks: initialPlaylistTracks,
+  winGoal = 10,
+  timerSeconds = 0
 }) {
   const [players, setLocalPlayers] = useState(initialPlayers);
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0);
@@ -27,6 +29,10 @@ function Game({
   const [coins, setCoins] = useState({});
   const [myCoinIndex, setMyCoinIndex] = useState(null); // where I placed my coin (null = no coin placed)
   const [showRecognition, setShowRecognition] = useState(false); // "I know this!" button after reveal
+
+  // Timer
+  const [timeLeft, setTimeLeft] = useState(null);
+  const timerRef = useRef(null);
 
   // Spotify
   const { ready: spotifyReady, playing, togglePlay, stop } = useSpotifyPlayer(roomCode);
@@ -115,6 +121,8 @@ function Game({
       setMyCoinIndex(null);
       setShowRecognition(false);
       stop();
+      clearInterval(timerRef.current);
+      setTimeLeft(null);
 
       const myTurn = newPlayers[newIndex]?.id === socket.id;
       isMyTurnRef.current = myTurn;
@@ -201,12 +209,28 @@ function Game({
 
   const loadNewCard = async (player) => {
     setLoading(true);
+    clearInterval(timerRef.current);
+    setTimeLeft(null);
     try {
       const newCard = await generateCard();
-      // New card at TOP so no scrolling needed
       const newCards = [newCard, ...player.timeline];
       setCards(newCards);
       cardsRef.current = newCards;
+
+      // Start countdown if timer enabled and it's my turn
+      if (timerSeconds > 0 && isMyTurnRef.current) {
+        setTimeLeft(timerSeconds);
+        timerRef.current = setInterval(() => {
+          setTimeLeft(t => {
+            if (t <= 1) {
+              clearInterval(timerRef.current);
+              if (!revealedRef.current) handleReveal();
+              return 0;
+            }
+            return t - 1;
+          });
+        }, 1000);
+      }
     } catch (err) {
       console.error("Failed to load card:", err);
     } finally {
@@ -328,7 +352,7 @@ function Game({
       score: currentPlayer.score + 1
     });
 
-    if (updatedPlayers[currentPlayerIndex].score >= 10) {
+    if (updatedPlayers[currentPlayerIndex].score >= winGoal) {
       setWinner(updatedPlayers[currentPlayerIndex]);
       setScreen("winner");
       return;
@@ -421,6 +445,12 @@ function Game({
       </div>
 
       {loading && <div className="loading-card">Loading song...</div>}
+
+      {timeLeft !== null && isMyTurn && (
+        <div className={`timer-display ${timeLeft <= 5 ? "timer-urgent" : ""}`}>
+          {timeLeft}s
+        </div>
+      )}
 
       {!loading && (
         <div className="timeline" ref={timelineRef}>
