@@ -221,11 +221,20 @@ io.on("connection", (socket) => {
     if (!game) return;
 
     game.started = true;
-    game.minYear = parseInt(minYear);
-    game.maxYear = parseInt(maxYear);
     game.selectedGenres = selectedGenres || [];
     game.playlistTracks = playlistTracks || null;
+    game.usedUris = new Set(); // track used songs to prevent repeats
     game.currentPlayerIndex = 0;
+
+    // If playlist mode, derive year range from playlist tracks
+    if (playlistTracks && playlistTracks.length) {
+      const years = playlistTracks.map(t => parseInt(t.year)).filter(y => !isNaN(y));
+      game.minYear = Math.min(...years);
+      game.maxYear = Math.max(...years);
+    } else {
+      game.minYear = parseInt(minYear);
+      game.maxYear = parseInt(maxYear);
+    }
 
     game.players = game.players.map(player => {
       const randomYear =
@@ -268,6 +277,13 @@ io.on("connection", (socket) => {
     io.to(game.host).emit("play_track", { uri });
   });
 
+  /* MARK TRACK USED — called when a card is dealt to prevent repeats */
+  socket.on("mark_used", ({ code, uri }) => {
+    const game = games[code];
+    if (!game) return;
+    game.usedUris.add(uri);
+  });
+
   /* NEXT TURN */
   socket.on("next_turn", ({ code }) => {
     const game = games[code];
@@ -282,7 +298,8 @@ io.on("connection", (socket) => {
       selectedGenres: game.selectedGenres,
       minYear: game.minYear,
       maxYear: game.maxYear,
-      playlistTracks: game.playlistTracks
+      playlistTracks: game.playlistTracks,
+      usedUris: Array.from(game.usedUris)
     });
   });
 

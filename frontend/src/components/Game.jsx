@@ -36,6 +36,7 @@ function Game({
   const minYearRef = useRef(minYear);
   const maxYearRef = useRef(maxYear);
   const playlistTracksRef = useRef(initialPlaylistTracks || null);
+  const usedUrisRef = useRef(new Set());
   const cardsRef = useRef(cards);
   const isMyTurnRef = useRef(false);
   const revealedRef = useRef(false);
@@ -83,7 +84,8 @@ function Game({
       selectedGenres: genres,
       minYear: min,
       maxYear: max,
-      playlistTracks: pt
+      playlistTracks: pt,
+      usedUris
     }) => {
       if (!newPlayers || newIndex === undefined) return;
 
@@ -91,6 +93,7 @@ function Game({
       if (min) minYearRef.current = Number(min);
       if (max) maxYearRef.current = Number(max);
       if (pt !== undefined) playlistTracksRef.current = pt;
+      if (usedUris) usedUrisRef.current = new Set(usedUris);
 
       updatePlayers(newPlayers);
       setCurrentPlayerIndex(newIndex);
@@ -128,9 +131,17 @@ function Game({
   const generateCard = async () => {
     const playlist = playlistTracksRef.current;
 
-    // Playlist mode — pick a random track from the loaded playlist
+    // Playlist mode — pick a random unused track
     if (playlist && playlist.length > 0) {
-      const track = playlist[Math.floor(Math.random() * playlist.length)];
+      const unused = playlist.filter(t => !usedUrisRef.current.has(t.uri));
+      // If somehow all tracks used, reset and use full list
+      const pool = unused.length > 0 ? unused : playlist;
+      const track = pool[Math.floor(Math.random() * pool.length)];
+
+      // Mark as used locally and tell server
+      usedUrisRef.current.add(track.uri);
+      socket.emit("mark_used", { code: roomCode, uri: track.uri });
+
       return {
         id: Date.now(),
         year: parseInt(track.year),
@@ -152,6 +163,11 @@ function Game({
     const res = await axios.get(
       `/api/track?genre=${genre}&minYear=${min}&maxYear=${max}`
     );
+
+    // Mark as used to prevent repeats in search mode too
+    usedUrisRef.current.add(res.data.uri);
+    socket.emit("mark_used", { code: roomCode, uri: res.data.uri });
+
     return {
       id: Date.now(),
       year: parseInt(res.data.year),
