@@ -11,7 +11,6 @@ function Game({
   maxYear,
   isHost
 }) {
-
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0);
   const [cards, setCards] = useState([]);
   const [result, setResult] = useState(null);
@@ -20,89 +19,32 @@ function Game({
   const [revealed, setRevealed] = useState(false);
   const [isMyTurn, setIsMyTurn] = useState(false);
 
-  // ==============================
-  // Spotify (Host only)
-  // ==============================
+  const currentPlayer = players[currentPlayerIndex];
 
-  const [player, setPlayer] = useState(null);
-  const [deviceId, setDeviceId] = useState(null);
-  const [isPlaying, setIsPlaying] = useState(false);
+  // ============================================================
+  // 🔁 SYNC CARDS WHEN PLAYERS CHANGE
+  // ============================================================
 
   useEffect(() => {
-    if (!isHost) return;
-
-    const token = localStorage.getItem("token");
-    if (!window.Spotify || !token) return;
-
-    const spotifyPlayer = new window.Spotify.Player({
-      name: "Spotify Hitster Host Player",
-      getOAuthToken: cb => cb(token),
-      volume: 0.5
-    });
-
-    spotifyPlayer.addListener("ready", ({ device_id }) => {
-      setDeviceId(device_id);
-    });
-
-    spotifyPlayer.addListener("player_state_changed", state => {
-      if (!state) return;
-      setIsPlaying(!state.paused);
-    });
-
-    spotifyPlayer.connect();
-    setPlayer(spotifyPlayer);
-
-  }, [isHost]);
-
-  const handlePlayPause = async (uri) => {
-    if (!isHost) return;
-
-    const token = localStorage.getItem("token");
-    if (!deviceId || !player) return;
-
-    if (!isPlaying) {
-      await fetch(
-        `https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`,
-        {
-          method: "PUT",
-          body: JSON.stringify({ uris: [uri] }),
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`
-          }
-        }
-      );
-    } else {
-      player.togglePlay();
+    if (players.length > 0 && players[currentPlayerIndex]) {
+      setCards(players[currentPlayerIndex].timeline || []);
     }
-  };
+  }, [players, currentPlayerIndex]);
 
-  // ==============================
-  // SOCKET EVENTS
-  // ==============================
+  // ============================================================
+  // 🎮 SOCKET EVENTS
+  // ============================================================
 
   useEffect(() => {
 
     socket.on("game_started", ({ players, currentPlayerIndex }) => {
       setPlayers(players);
       setCurrentPlayerIndex(currentPlayerIndex);
-
-      const timeline = players[currentPlayerIndex]?.timeline || [];
-      setCards(timeline);
-
-      setIsMyTurn(false);
-      setRevealed(false);
-      setShowNextButton(false);
-      setResult(null);
     });
 
     socket.on("turn_changed", ({ players, currentPlayerIndex }) => {
       setPlayers(players);
       setCurrentPlayerIndex(currentPlayerIndex);
-
-      const timeline = players[currentPlayerIndex]?.timeline || [];
-      setCards(timeline);
-
       setIsMyTurn(false);
       setRevealed(false);
       setShowNextButton(false);
@@ -115,11 +57,9 @@ function Game({
       setIsMyTurn(true);
       setLoading(true);
 
-      const timeline = players[currentPlayerIndex]?.timeline || [];
-
       const newCard = await generateCard();
 
-      setCards([...timeline, newCard]);
+      setCards(prev => [...prev, newCard]);
       setLoading(false);
     });
 
@@ -131,9 +71,9 @@ function Game({
 
   }, []);
 
-  // ==============================
-  // GENERATE CARD
-  // ==============================
+  // ============================================================
+  // 🎲 GENERATE CARD
+  // ============================================================
 
   const generateCard = async () => {
     const randomGenre =
@@ -154,9 +94,9 @@ function Game({
     };
   };
 
-  // ==============================
-  // REVEAL
-  // ==============================
+  // ============================================================
+  // 🧠 REVEAL
+  // ============================================================
 
   const handleReveal = () => {
     if (!isMyTurn) return;
@@ -164,8 +104,6 @@ function Game({
     setRevealed(true);
 
     const newCardIndex = cards.findIndex(c => c.type === "new");
-    if (newCardIndex === -1) return;
-
     const left = cards[newCardIndex - 1];
     const right = cards[newCardIndex + 1];
     const newCard = cards[newCardIndex];
@@ -189,11 +127,9 @@ function Game({
     socket.emit("next_turn");
   };
 
-  // ==============================
+  // ============================================================
   // UI
-  // ==============================
-
-  const currentPlayer = players[currentPlayerIndex];
+  // ============================================================
 
   if (!currentPlayer) {
     return <div className="container">Waiting for players...</div>;
@@ -234,14 +170,6 @@ function Game({
                 `}
               >
                 <div className="card-front new">
-                  {isHost && (
-                    <div
-                      className="play-button"
-                      onClick={() => handlePlayPause(card.uri)}
-                    >
-                      {isPlaying ? "⏸" : "▶"}
-                    </div>
-                  )}
                   <div>Drag to place</div>
                 </div>
 
