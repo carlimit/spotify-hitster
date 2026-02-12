@@ -19,6 +19,7 @@ function App() {
     localStorage.setItem("lang", l);
   };
   const [token, setToken] = useState(null);
+  const [isHost, setIsHost] = useState(false);
   const [screen, setScreen] = useState("start");
   const [players, setPlayers] = useState([]);
   const [selectedGenres, setSelectedGenres] = useState([]);
@@ -72,8 +73,8 @@ function App() {
     return (
       <div className="container">
         <div className="lang-toggle">
-          <button onClick={() => switchLang("en")} className={lang === "en" ? "lang-active" : ""}>EN</button>
-          <button onClick={() => switchLang("de")} className={lang === "de" ? "lang-active" : ""}>DE</button>
+          <button onClick={() => switchLang("en")} className={lang === "en" ? "lang-active" : ""}>🇬🇧 EN</button>
+          <button onClick={() => switchLang("de")} className={lang === "de" ? "lang-active" : ""}>🇩🇪 DE</button>
         </div>
         <h1>{t.appName}</h1>
         <button onClick={() => { setIsHost(true); setScreen("host-login"); }}>
