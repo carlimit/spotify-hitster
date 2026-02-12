@@ -247,7 +247,6 @@ function Game({
     </button>
   )}
 </div>
-
   </div>
 );
 }
