@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Reorder } from "framer-motion";
+import { motion } from "framer-motion";
 import axios from "axios";
 import { socket } from "../socket";
 
@@ -18,6 +18,7 @@ function Game({
   const [showNextButton, setShowNextButton] = useState(false);
   const [revealed, setRevealed] = useState(false);
   const [isMyTurn, setIsMyTurn] = useState(false);
+  const [draggedCardIndex, setDraggedCardIndex] = useState(null);
 
   const currentPlayer = players[currentPlayerIndex];
 
@@ -40,22 +41,39 @@ function Game({
     socket.on("game_started", ({ players, currentPlayerIndex }) => {
       setPlayers(players);
       setCurrentPlayerIndex(currentPlayerIndex);
+      
+      // Check if it's my turn when game starts
+      const mySocketId = socket.id;
+      const isMyTurnNow = players[currentPlayerIndex]?.id === mySocketId;
+      setIsMyTurn(isMyTurnNow);
+      
+      // Load card if it's my turn
+      if (isMyTurnNow) {
+        loadNewCard(players[currentPlayerIndex]);
+      }
     });
 
     socket.on("turn_changed", ({ players, currentPlayerIndex }) => {
       setPlayers(players);
       setCurrentPlayerIndex(currentPlayerIndex);
-      setIsMyTurn(false);
       setRevealed(false);
       setShowNextButton(false);
       setResult(null);
+      
+      // Check if it's my turn
+      const mySocketId = socket.id;
+      const isMyTurnNow = players[currentPlayerIndex]?.id === mySocketId;
+      setIsMyTurn(isMyTurnNow);
+      
+      // Load new card if it's my turn
+      if (isMyTurnNow) {
+        loadNewCard(players[currentPlayerIndex]);
+      }
     });
 
     socket.on("your_turn", () => {
-  console.log("🔥 I RECEIVED YOUR TURN");
-});
-
-
+      console.log("🔥 I RECEIVED YOUR TURN");
+    });
 
     return () => {
       socket.off("game_started");
@@ -64,6 +82,23 @@ function Game({
     };
 
   }, []);
+
+  // ============================================================
+  // 📥 LOAD NEW CARD WHEN IT'S MY TURN
+  // ============================================================
+
+  const loadNewCard = async (player) => {
+    setLoading(true);
+    try {
+      const newCard = await generateCard();
+      const updatedTimeline = [...player.timeline, newCard];
+      setCards(updatedTimeline);
+    } catch (error) {
+      console.error("Error loading card:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // ============================================================
   // 🎲 GENERATE CARD
@@ -86,6 +121,44 @@ function Game({
       cover: res.data.cover,
       type: "new"
     };
+  };
+
+  // ============================================================
+  // 🎯 Handle Drag End - Reorder cards
+  // ============================================================
+
+  const handleDragEnd = (event, info) => {
+    const newCardIndex = cards.findIndex(c => c.type === "new");
+    const draggedCard = cards[newCardIndex];
+    
+    // Get positions of all cards
+    const cardElements = document.querySelectorAll('.card');
+    const positions = Array.from(cardElements).map(el => {
+      const rect = el.getBoundingClientRect();
+      return rect.top + rect.height / 2;
+    });
+    
+    // Find where to insert based on drag position
+    const dragY = event.clientY || (event.touches && event.touches[0].clientY);
+    let insertIndex = 0;
+    
+    for (let i = 0; i < positions.length; i++) {
+      if (dragY > positions[i]) {
+        insertIndex = i + 1;
+      }
+    }
+    
+    // Don't count the dragged card itself
+    if (insertIndex > newCardIndex) {
+      insertIndex--;
+    }
+    
+    // Reorder
+    const newCards = [...cards];
+    newCards.splice(newCardIndex, 1);
+    newCards.splice(insertIndex, 0, draggedCard);
+    setCards(newCards);
+    setDraggedCardIndex(null);
   };
 
   // ============================================================
@@ -114,11 +187,23 @@ function Game({
     }
 
     setResult("correct");
+    
+    // Update score locally (you might want to emit this to server)
+    const updatedPlayers = [...players];
+    updatedPlayers[currentPlayerIndex] = {
+      ...currentPlayer,
+      timeline: cards.map(c =>
+        c.id === newCard.id ? { ...c, type: "fixed" } : c
+      ),
+      score: currentPlayer.score + 1
+    };
+    setPlayers(updatedPlayers);
+    
     setTimeout(() => setShowNextButton(true), 700);
   };
 
   const nextTurn = () => {
-    socket.emit("next_turn");
+    socket.emit("next_turn", { code: roomCode }); // Pass actual room code as prop
   };
 
   // ============================================================
@@ -136,24 +221,29 @@ function Game({
 
       {loading && <p>Loading song...</p>}
 
-      <Reorder.Group
-        axis="y"
-        values={cards}
-        onReorder={setCards}
-        className="timeline"
-      >
-        {cards.map(card => (
-          <Reorder.Item
+      <div className="timeline">
+        {cards.map((card, index) => (
+          <motion.div
             key={card.id}
-            value={card}
-            dragListener={card.type === "new" && isMyTurn && !revealed}
-            dragElastic={0}
-            dragMomentum={false}
-            layout="position"
-            transition={{ duration: 0.15 }}
             className={`card ${
               card.type === "new" && revealed ? "card-expanded" : ""
             }`}
+            drag={!revealed && card.type === "new" && isMyTurn ? "y" : false}
+            dragElastic={0}
+            dragMomentum={false}
+            onDragStart={() => setDraggedCardIndex(index)}
+            onDragEnd={handleDragEnd}
+            whileDrag={{ 
+              scale: 1.05,
+              boxShadow: "0 20px 60px rgba(29, 185, 84, 0.6)",
+              zIndex: 1000
+            }}
+            style={{
+              zIndex: draggedCardIndex === index ? 1000 : (card.type === "new" && revealed ? 100 : 1),
+              cursor: card.type === "new" && !revealed && isMyTurn ? "grab" : "default"
+            }}
+            animate={draggedCardIndex !== index ? { y: 0 } : {}}
+            transition={{ type: "spring", stiffness: 500, damping: 30 }}
           >
             {card.type === "new" ? (
               <div
@@ -179,9 +269,9 @@ function Game({
                 <div>{card.year}</div>
               </div>
             )}
-          </Reorder.Item>
+          </motion.div>
         ))}
-      </Reorder.Group>
+      </div>
 
       <div className="action-container">
         {isMyTurn && !revealed && (

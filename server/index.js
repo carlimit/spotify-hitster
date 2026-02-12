@@ -197,12 +197,11 @@ io.on("connection", (socket) => {
     currentPlayerIndex: game.currentPlayerIndex
   });
 
-  const activePlayer = game.players[game.currentPlayerIndex];
+io.to(code).emit("turn_changed", {
+  players: game.players,
+  currentPlayerIndex: game.currentPlayerIndex
+});
 
-  io.to(activePlayer.id).emit("your_turn", {
-    players: game.players,
-    currentPlayerIndex: game.currentPlayerIndex
-  });
 });
 
 
