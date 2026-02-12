@@ -51,17 +51,18 @@ function Game({
       setResult(null);
     });
 
-    socket.on("your_turn", async ({ players, currentPlayerIndex }) => {
-      setPlayers(players);
-      setCurrentPlayerIndex(currentPlayerIndex);
+    socket.on("your_turn", async () => {
+
       setIsMyTurn(true);
       setLoading(true);
 
       const newCard = await generateCard();
 
       setCards(prev => [...prev, newCard]);
+
       setLoading(false);
     });
+
 
     return () => {
       socket.off("game_started");
