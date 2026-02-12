@@ -22,6 +22,7 @@ function App() {
   const [isHost, setIsHost] = useState(false);
   const [screen, setScreen] = useState("start");
   const [loginUrl, setLoginUrl] = useState(null);
+  const [loginError, setLoginError] = useState(null);
 
   // Pre-compute login URL immediately so button tap is instant (no async gap)
   useEffect(() => {
@@ -61,13 +62,21 @@ function App() {
       })
         .then(res => res.json())
         .then(data => {
+          console.log("Token response:", JSON.stringify(data).slice(0,300));
+          if (!data.access_token) {
+            const msg = data.error_description || data.error || JSON.stringify(data);
+            setLoginError(msg);
+            window.history.replaceState({}, document.title, "/");
+            return;
+          }
           localStorage.setItem("token", data.access_token);
           localStorage.removeItem("login_origin");
           setToken(data.access_token);
           setIsHost(loginOrigin !== "singleplayer-setup");
           window.history.replaceState({}, document.title, "/");
           setScreen(loginOrigin);
-        });
+        })
+        .catch(err => { setLoginError(err.message); window.history.replaceState({}, document.title, "/"); });
     }
   }, []);
 
@@ -78,6 +87,11 @@ function App() {
   if (screen === "start") {
     return (
       <div className="container">
+        {loginError && (
+          <div style={{background:"#ff4444",color:"#fff",padding:"12px",borderRadius:"8px",marginBottom:"16px",fontSize:"13px",wordBreak:"break-all"}}>
+            ⚠️ Login failed: {loginError}
+          </div>
+        )}
         <div className="lang-toggle">
           <button onClick={() => switchLang("en")} className={lang === "en" ? "lang-active" : ""}>🇬🇧 EN</button>
           <button onClick={() => switchLang("de")} className={lang === "de" ? "lang-active" : ""}>🇩🇪 DE</button>
