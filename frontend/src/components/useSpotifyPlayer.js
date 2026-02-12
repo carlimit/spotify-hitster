@@ -17,10 +17,7 @@ function injectSDKScript() {
 }
 
 function initSDK(token, onReady) {
-  // Already ready — fire callback immediately
   if (sdkReady && sdkDeviceId) { onReady(sdkDeviceId); return; }
-
-  // Queue callback and wait if already initialising
   sdkReadyCallbacks.push(onReady);
   if (sdkInitialising) return;
   sdkInitialising = true;
@@ -32,7 +29,6 @@ function initSDK(token, onReady) {
       volume: 0.8
     });
     player.addListener("ready", ({ device_id }) => {
-      console.log("🎵 Spotify SDK ready:", device_id);
       sdkDeviceId = device_id;
       sdkReady = true;
       sdkPlayer = player;
@@ -41,7 +37,11 @@ function initSDK(token, onReady) {
     });
     player.addListener("not_ready", () => { sdkReady = false; sdkDeviceId = null; });
     player.addListener("initialization_error", ({ message }) => console.error("Spotify init:", message));
-    player.addListener("authentication_error", ({ message }) => console.error("Spotify auth:", message));
+    player.addListener("authentication_error", ({ message }) => {
+      console.error("Spotify auth failed — token may be expired or missing scopes");
+      // Clear bad token so user gets prompted to re-login
+      localStorage.removeItem("token");
+    });
     player.addListener("account_error", ({ message }) => console.error("Spotify Premium needed:", message));
     player.connect();
   };
@@ -69,14 +69,10 @@ async function pauseSDK() { await sdkPlayer?.pause(); }
 async function resumeSDK() { await sdkPlayer?.resume(); }
 
 // ── MULTIPLAYER hook ──
-// Host controls playback directly (no socket round-trip for play/pause).
-// State is broadcast to guests via socket.
 export function useSpotifyPlayer(roomCode) {
   const [ready, setReady] = useState(sdkReady);
   const [playing, setPlaying] = useState(false);
   const isHost = !!localStorage.getItem("token");
-
-  // Refs so callbacks always see current values
   const playingRef = useRef(false);
   const currentUriRef = useRef(null);
   const roomCodeRef = useRef(roomCode);
@@ -84,10 +80,8 @@ export function useSpotifyPlayer(roomCode) {
 
   useEffect(() => {
     if (!isHost) return;
-
     initSDK(localStorage.getItem("token"), () => setReady(true));
 
-    // Poll SDK state → broadcast to guests
     const poll = setInterval(async () => {
       if (!sdkPlayer) return;
       const state = await sdkPlayer.getCurrentState();
@@ -103,7 +97,6 @@ export function useSpotifyPlayer(roomCode) {
     return () => clearInterval(poll);
   }, [isHost]);
 
-  // Guests receive state from host
   useEffect(() => {
     if (isHost) return;
     const handler = ({ playing: p }) => setPlaying(p);
@@ -154,7 +147,6 @@ export function useSpotifyDirect() {
 
   useEffect(() => {
     if (!hasToken) return;
-
     initSDK(localStorage.getItem("token"), () => {
       setReady(true);
       pollRef.current = setInterval(async () => {
@@ -167,7 +159,6 @@ export function useSpotifyDirect() {
         }
       }, 500);
     });
-
     return () => clearInterval(pollRef.current);
   }, [hasToken]);
 

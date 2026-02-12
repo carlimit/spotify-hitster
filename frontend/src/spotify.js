@@ -5,7 +5,9 @@ const AUTH_ENDPOINT = "https://accounts.spotify.com/authorize";
 const SCOPES = [
   "streaming",
   "user-read-email",
-  "user-read-private"
+  "user-read-private",
+  "user-read-playback-state",
+  "user-modify-playback-state"
 ];
 
 // PKCE helper
