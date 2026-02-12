@@ -22,11 +22,13 @@ function App() {
   const [isHost, setIsHost] = useState(false);
   const [screen, setScreen] = useState("start");
   const [loginUrl, setLoginUrl] = useState(null);
+  const [singleLoginUrl, setSingleLoginUrl] = useState(null);
   const [loginError, setLoginError] = useState(null);
 
   // Pre-compute login URL immediately so button tap is instant (no async gap)
   useEffect(() => {
-    getLoginUrl().then(url => setLoginUrl(url));
+    getLoginUrl("lobby").then(url => setLoginUrl(url));
+    getLoginUrl("singleplayer-setup").then(url => setSingleLoginUrl(url));
   }, []);
   const [players, setPlayers] = useState([]);
   const [selectedGenres, setSelectedGenres] = useState([]);
@@ -55,14 +57,30 @@ function App() {
     const spotifyCode = params.get("code");
 
     if (spotifyCode) {
-      const codeVerifier = sessionStorage.getItem("code_verifier");
-      const loginOrigin = localStorage.getItem("login_origin") || "lobby";
+      // Read verifier + origin from state param — avoids Brave wiping localStorage/sessionStorage
+      let codeVerifier = null;
+      let loginOrigin = "lobby";
+      const stateParam = params.get("state");
+      if (stateParam) {
+        try {
+          const decoded = JSON.parse(atob(stateParam));
+          codeVerifier = decoded.codeVerifier;
+          loginOrigin = decoded.loginOrigin || "lobby";
+        } catch {
+          // Fallback to storage if state isn't our encoded format
+          codeVerifier = sessionStorage.getItem("code_verifier") || localStorage.getItem("code_verifier");
+          loginOrigin = localStorage.getItem("login_origin") || "lobby";
+        }
+      } else {
+        codeVerifier = sessionStorage.getItem("code_verifier") || localStorage.getItem("code_verifier");
+        loginOrigin = localStorage.getItem("login_origin") || "lobby";
+      }
+
       fetch(`/api/token?code=${spotifyCode}`, {
         headers: { "x-code-verifier": codeVerifier }
       })
         .then(res => res.json())
         .then(data => {
-          console.log("Token response:", JSON.stringify(data).slice(0,300));
           if (!data.access_token) {
             const msg = data.error_description || data.error || JSON.stringify(data);
             setLoginError(msg);
@@ -70,7 +88,6 @@ function App() {
             return;
           }
           localStorage.setItem("token", data.access_token);
-          localStorage.removeItem("login_origin");
           setToken(data.access_token);
           setIsHost(loginOrigin !== "singleplayer-setup");
           window.history.replaceState({}, document.title, "/");
@@ -125,7 +142,7 @@ function App() {
             if (!loginUrl) return;
             const url = loginUrl;
             setLoginUrl(null); // clear so it regenerates
-            getLoginUrl().then(u => setLoginUrl(u)); // pre-compute next one
+            getLoginUrl("lobby").then(u => setLoginUrl(u)); // pre-compute next one
             window.location.href = url; // synchronous — mobile won't block it
           }}
         >
@@ -176,7 +193,7 @@ function App() {
         maxYear={singlePlayerMaxYear} setMaxYear={setSinglePlayerMaxYear}
         playlist={singlePlayerPlaylist} setPlaylist={setSinglePlayerPlaylist}
         timerSeconds={timerSeconds} setTimerSeconds={setTimerSeconds}
-        loginUrl={loginUrl} refreshLoginUrl={() => getLoginUrl().then(u => setLoginUrl(u))}
+        loginUrl={singleLoginUrl} refreshLoginUrl={() => getLoginUrl("singleplayer-setup").then(u => setSingleLoginUrl(u))}
       />
     );
   }

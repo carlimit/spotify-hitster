@@ -10,10 +10,8 @@ const SCOPES = [
   "user-modify-playback-state"
 ];
 
-// PKCE helper
 function generateRandomString(length) {
-  const possible =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  const possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
   let text = "";
   for (let i = 0; i < length; i++) {
     text += possible.charAt(Math.floor(Math.random() * possible.length));
@@ -30,11 +28,12 @@ async function generateCodeChallenge(codeVerifier) {
     .replace(/=+$/, "");
 }
 
-export async function getLoginUrl() {
+export async function getLoginUrl(loginOrigin = "lobby") {
   const codeVerifier = generateRandomString(128);
   const codeChallenge = await generateCodeChallenge(codeVerifier);
 
-  sessionStorage.setItem("code_verifier", codeVerifier);
+  // Encode verifier + origin in state param — survives Brave wiping storage
+  const state = btoa(JSON.stringify({ codeVerifier, loginOrigin }));
 
   const args = new URLSearchParams({
     response_type: "code",
@@ -42,7 +41,8 @@ export async function getLoginUrl() {
     scope: SCOPES.join(" "),
     redirect_uri: REDIRECT_URI,
     code_challenge_method: "S256",
-    code_challenge: codeChallenge
+    code_challenge: codeChallenge,
+    state
   });
 
   return `${AUTH_ENDPOINT}?${args.toString()}`;

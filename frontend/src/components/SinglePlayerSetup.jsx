@@ -51,7 +51,6 @@ function SinglePlayerSetup({ t,
             disabled={!loginUrl}
             onClick={() => {
               if (!loginUrl) return;
-              localStorage.setItem("login_origin", "singleplayer-setup");
               const url = loginUrl;
               refreshLoginUrl?.();
               window.location.href = url;
