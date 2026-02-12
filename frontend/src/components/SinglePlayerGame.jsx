@@ -32,6 +32,7 @@ function SinglePlayerGame({ t,
   const dragYRef = useRef(0);
   const draggingRef = useRef(false);
   const startYRef = useRef(0);
+  const startXRef = useRef(0);
   const timelineRef = useRef(null);
   const timerRef = useRef(null);
   const usedUrisRef = useRef(new Set());
@@ -192,26 +193,37 @@ function SinglePlayerGame({ t,
   const handleDragStart = useCallback((e) => {
     if (revealedRef.current) return;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     startYRef.current = clientY;
+    startXRef.current = clientX;
     draggingRef.current = false;
   }, []);
 
   useEffect(() => {
     const onMove = (e) => {
+      if (startYRef.current === 0) return;
+
       const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-      const delta = clientY - startYRef.current;
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const deltaY = clientY - startYRef.current;
+      const deltaX = clientX - startXRef.current;
 
       if (!draggingRef.current) {
-        if (Math.abs(delta) < 8 || startYRef.current === 0) return;
+        const movedEnough = Math.abs(deltaY) >= 8;
+        const isVertical = Math.abs(deltaY) > Math.abs(deltaX);
+        if (!movedEnough) return;
+        if (!isVertical) { startYRef.current = 0; return; } // horizontal — let scroll happen
         draggingRef.current = true;
         setDragging(true);
       }
 
-      e.preventDefault();
-      dragYRef.current = delta;
+      // Only block scroll AFTER confirmed vertical drag
+      if (e.cancelable) e.preventDefault();
+
+      dragYRef.current = deltaY;
 
       if (dragCardRef.current) {
-        dragCardRef.current.style.transform = `translateY(${delta}px) scale(1.04)`;
+        dragCardRef.current.style.transform = `translateY(${deltaY}px) scale(1.04)`;
         dragCardRef.current.style.boxShadow = "0 28px 70px rgba(29,185,84,0.55)";
         dragCardRef.current.style.zIndex = "1000";
       }
@@ -224,22 +236,15 @@ function SinglePlayerGame({ t,
       const timeline = timelineRef.current;
       if (timeline) {
         const tlRect = timeline.getBoundingClientRect();
-        const timelineOverflowsTop = tlRect.top < 0;
-        const timelineOverflowsBottom = tlRect.bottom > window.innerHeight;
-
-        if (clientY < SCROLL_ZONE && timelineOverflowsTop) {
+        if (clientY < SCROLL_ZONE && tlRect.top < 0) {
           scrollIntervalRef.current = setInterval(() => {
             window.scrollBy(0, -SCROLL_SPEED);
-            if (timelineRef.current?.getBoundingClientRect().top >= 0) {
-              clearInterval(scrollIntervalRef.current);
-            }
+            if ((timelineRef.current?.getBoundingClientRect().top ?? 0) >= 0) clearInterval(scrollIntervalRef.current);
           }, 16);
-        } else if (clientY > window.innerHeight - SCROLL_ZONE && timelineOverflowsBottom) {
+        } else if (clientY > window.innerHeight - SCROLL_ZONE && tlRect.bottom > window.innerHeight) {
           scrollIntervalRef.current = setInterval(() => {
             window.scrollBy(0, SCROLL_SPEED);
-            if (timelineRef.current?.getBoundingClientRect().bottom <= window.innerHeight) {
-              clearInterval(scrollIntervalRef.current);
-            }
+            if ((timelineRef.current?.getBoundingClientRect().bottom ?? 0) <= window.innerHeight) clearInterval(scrollIntervalRef.current);
           }, 16);
         }
       }
@@ -262,21 +267,21 @@ function SinglePlayerGame({ t,
 
       let fixedSlot = fixedMidpoints.length;
       for (let i = 0; i < fixedMidpoints.length; i++) {
-        if (draggedCenterY < fixedMidpoints[i].midY) {
-          fixedSlot = i;
-          break;
-        }
+        if (draggedCenterY < fixedMidpoints[i].midY) { fixedSlot = i; break; }
       }
 
       let arraySlot = fixedSlot <= newIdx ? fixedSlot : fixedSlot + 1;
       arraySlot = Math.max(0, Math.min(currentCards.length, arraySlot));
-
       insertIndexRef.current = arraySlot;
       setInsertIndex(prev => prev === arraySlot ? prev : arraySlot);
     };
 
     const onEnd = () => {
-      if (!draggingRef.current) { startYRef.current = 0; return; }
+      if (startYRef.current === 0) return;
+      startYRef.current = 0;
+      startXRef.current = 0;
+
+      if (!draggingRef.current) return;
       draggingRef.current = false;
       clearInterval(scrollIntervalRef.current);
 
@@ -288,7 +293,6 @@ function SinglePlayerGame({ t,
 
       setDragging(false);
       setDragY(0);
-      startYRef.current = 0;
 
       const currentCards = cardsRef.current;
       const newIdx = currentCards.findIndex(c => c.type === "new");
@@ -308,11 +312,13 @@ function SinglePlayerGame({ t,
     window.addEventListener("touchmove", onMove, { passive: false });
     window.addEventListener("mouseup", onEnd);
     window.addEventListener("touchend", onEnd);
+    window.addEventListener("touchcancel", onEnd);
     return () => {
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("touchmove", onMove);
       window.removeEventListener("mouseup", onEnd);
       window.removeEventListener("touchend", onEnd);
+      window.removeEventListener("touchcancel", onEnd);
     };
   }, []);
 

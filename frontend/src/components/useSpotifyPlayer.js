@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { socket } from "../socket";
 
-// ── Shared SDK — only one instance ever ──
+// ── Shared SDK — singleton across the whole app lifetime ──
 let sdkPlayer = null;
 let sdkDeviceId = null;
 let sdkReady = false;
@@ -17,8 +17,16 @@ function injectSDKScript() {
 }
 
 function initSDK(token, onReady) {
-  if (sdkReady && sdkDeviceId) { onReady(sdkDeviceId); return; }
+  // Already ready — fire immediately
+  if (sdkReady && sdkDeviceId) {
+    onReady(sdkDeviceId);
+    return;
+  }
+
+  // Queue the callback
   sdkReadyCallbacks.push(onReady);
+
+  // Already initialising — just wait for the ready event
   if (sdkInitialising) return;
   sdkInitialising = true;
 
@@ -26,7 +34,7 @@ function initSDK(token, onReady) {
     const player = new window.Spotify.Player({
       name: "Hitster Game",
       getOAuthToken: cb => cb(localStorage.getItem("token") || token),
-      volume: 0.8
+      volume: 0.8,
     });
     player.addListener("ready", ({ device_id }) => {
       console.log("🎵 Spotify ready, device:", device_id);
@@ -36,10 +44,13 @@ function initSDK(token, onReady) {
       sdkReadyCallbacks.forEach(cb => cb(device_id));
       sdkReadyCallbacks.length = 0;
     });
-    player.addListener("not_ready", () => { sdkReady = false; sdkDeviceId = null; });
-    player.addListener("initialization_error", ({ message }) => console.error("Spotify init:", message));
-    player.addListener("authentication_error", ({ message }) => console.error("Spotify auth:", message));
-    player.addListener("account_error", ({ message }) => console.error("Spotify needs Premium:", message));
+    player.addListener("not_ready", () => {
+      sdkReady = false;
+      sdkDeviceId = null;
+    });
+    player.addListener("initialization_error", ({ message }) => console.error("Spotify init error:", message));
+    player.addListener("authentication_error", ({ message }) => console.error("Spotify auth error:", message));
+    player.addListener("account_error", () => console.error("Spotify Premium required"));
     player.connect();
   };
 
@@ -58,7 +69,7 @@ async function playUri(uri) {
   await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${sdkDeviceId}`, {
     method: "PUT",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ uris: [uri] })
+    body: JSON.stringify({ uris: [uri] }),
   });
 }
 
@@ -67,29 +78,30 @@ async function resumeSDK() { if (sdkPlayer) await sdkPlayer.resume(); }
 
 // ── MULTIPLAYER hook ──
 export function useSpotifyPlayer(roomCode) {
-  const [ready, setReady] = useState(false);
+  const [ready, setReady] = useState(sdkReady); // initialise from global — handles remounts
   const [playing, setPlaying] = useState(false);
 
-  // Use refs so togglePlay/stop always have current values (no stale closures)
-  const readyRef = useRef(false);
+  const readyRef = useRef(sdkReady);
   const playingRef = useRef(false);
   const currentUriRef = useRef(null);
   const roomCodeRef = useRef(roomCode);
-
   const isHost = !!localStorage.getItem("token");
 
   useEffect(() => { roomCodeRef.current = roomCode; }, [roomCode]);
 
-  // Keep refs in sync with state
-  useEffect(() => { readyRef.current = ready; }, [ready]);
-  useEffect(() => { playingRef.current = playing; }, [playing]);
-
   useEffect(() => {
     if (!isHost) return;
-    initSDK(localStorage.getItem("token"), () => {
+
+    // If SDK already ready (e.g. remount), mark immediately
+    if (sdkReady) {
       setReady(true);
       readyRef.current = true;
-    });
+    } else {
+      initSDK(localStorage.getItem("token"), () => {
+        setReady(true);
+        readyRef.current = true;
+      });
+    }
 
     const poll = setInterval(async () => {
       if (!sdkPlayer) return;
@@ -106,13 +118,9 @@ export function useSpotifyPlayer(roomCode) {
     return () => clearInterval(poll);
   }, [isHost]);
 
-  // Guests get state via socket
   useEffect(() => {
     if (isHost) return;
-    const handler = ({ playing: p }) => {
-      playingRef.current = p;
-      setPlaying(p);
-    };
+    const handler = ({ playing: p }) => { playingRef.current = p; setPlaying(p); };
     socket.on("player_state", handler);
     return () => socket.off("player_state", handler);
   }, [isHost]);
@@ -120,7 +128,6 @@ export function useSpotifyPlayer(roomCode) {
   const togglePlay = async (uri) => {
     if (!isHost || !readyRef.current) return;
     if (playingRef.current) {
-      // Optimistically update before await
       playingRef.current = false;
       setPlaying(false);
       socket.emit("player_state", { code: roomCodeRef.current, playing: false });
@@ -152,22 +159,23 @@ export function useSpotifyPlayer(roomCode) {
 
 // ── SINGLEPLAYER hook ──
 export function useSpotifyDirect() {
-  const [ready, setReady] = useState(false);
+  const [ready, setReady] = useState(sdkReady); // initialise from global
   const [playing, setPlaying] = useState(false);
 
-  const readyRef = useRef(false);
+  const readyRef = useRef(sdkReady);
   const playingRef = useRef(false);
   const currentUriRef = useRef(null);
   const pollRef = useRef(null);
 
-  const hasToken = !!localStorage.getItem("token");
-
-  useEffect(() => { readyRef.current = ready; }, [ready]);
-  useEffect(() => { playingRef.current = playing; }, [playing]);
+  // Read token fresh each render — not just at mount
+  const token = localStorage.getItem("token");
+  const hasToken = !!token;
 
   useEffect(() => {
     if (!hasToken) return;
-    initSDK(localStorage.getItem("token"), () => {
+
+    if (sdkReady) {
+      // SDK already up (e.g. navigated away and back) — mark ready immediately
       setReady(true);
       readyRef.current = true;
       pollRef.current = setInterval(async () => {
@@ -179,7 +187,22 @@ export function useSpotifyDirect() {
           setPlaying(isPlaying);
         }
       }, 500);
-    });
+    } else {
+      initSDK(token, () => {
+        setReady(true);
+        readyRef.current = true;
+        pollRef.current = setInterval(async () => {
+          if (!sdkPlayer) return;
+          const state = await sdkPlayer.getCurrentState();
+          const isPlaying = state ? !state.paused : false;
+          if (playingRef.current !== isPlaying) {
+            playingRef.current = isPlaying;
+            setPlaying(isPlaying);
+          }
+        }, 500);
+      });
+    }
+
     return () => clearInterval(pollRef.current);
   }, [hasToken]);
 

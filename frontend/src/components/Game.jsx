@@ -251,30 +251,40 @@ function Game({
   // 👆 DRAG — card stays exactly with finger
   // ============================================================
 
-  const dragCardRef = useRef(null); // direct ref to the dragged card DOM element
+  const dragCardRef = useRef(null);
+  const startXRef = useRef(0);
 
   const handleDragStart = useCallback((e) => {
     if (revealedRef.current || !isMyTurnRef.current) return;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     startYRef.current = clientY;
+    startXRef.current = clientX;
     draggingRef.current = false;
   }, []);
 
   const handleDragMove = useCallback((e) => {
+    if (startYRef.current === 0) return;
+
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    const delta = clientY - startYRef.current;
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const deltaY = clientY - startYRef.current;
+    const deltaX = clientX - startXRef.current;
 
     if (!draggingRef.current) {
-      if (Math.abs(delta) < 8) return;
+      if (Math.abs(deltaY) < 8) return;
+      if (Math.abs(deltaX) > Math.abs(deltaY)) { startYRef.current = 0; return; } // horizontal swipe — abort
       draggingRef.current = true;
       setDragging(true);
     }
 
-    e.preventDefault();
-    dragYRef.current = delta;
+    // Only block scroll AFTER drag is confirmed vertical
+    if (e.cancelable) e.preventDefault();
+
+    dragYRef.current = deltaY;
 
     if (dragCardRef.current) {
-      dragCardRef.current.style.transform = `translateY(${delta}px) scale(1.04)`;
+      dragCardRef.current.style.transform = `translateY(${deltaY}px) scale(1.04)`;
       dragCardRef.current.style.boxShadow = "0 28px 70px rgba(29,185,84,0.55)";
       dragCardRef.current.style.zIndex = "1000";
     }
@@ -359,7 +369,11 @@ function Game({
   const insertIndexRef = useRef(null);
 
   const handleDragEnd = useCallback(() => {
-    if (!draggingRef.current) { startYRef.current = 0; return; }
+    if (startYRef.current === 0) return;
+    startYRef.current = 0;
+    startXRef.current = 0;
+
+    if (!draggingRef.current) return;
     draggingRef.current = false;
     clearInterval(scrollIntervalRef.current);
 
@@ -387,7 +401,6 @@ function Game({
     setDragY(0);
     setInsertIndex(null);
     insertIndexRef.current = null;
-    startYRef.current = 0;
   }, []);
 
   useEffect(() => {
@@ -395,11 +408,13 @@ function Game({
     window.addEventListener("touchmove", handleDragMove, { passive: false });
     window.addEventListener("mouseup", handleDragEnd);
     window.addEventListener("touchend", handleDragEnd);
+    window.addEventListener("touchcancel", handleDragEnd);
     return () => {
       window.removeEventListener("mousemove", handleDragMove);
       window.removeEventListener("touchmove", handleDragMove);
       window.removeEventListener("mouseup", handleDragEnd);
       window.removeEventListener("touchend", handleDragEnd);
+      window.removeEventListener("touchcancel", handleDragEnd);
     };
   }, [handleDragMove, handleDragEnd]);
 
