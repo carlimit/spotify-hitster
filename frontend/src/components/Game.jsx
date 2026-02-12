@@ -70,13 +70,18 @@ function Game({
   // ============================================================
 
   useEffect(() => {
-    socket.on("turn_changed", ({ players: newPlayers, currentPlayerIndex: newIndex }) => {
+    socket.on("turn_changed", ({ players: newPlayers, currentPlayerIndex: newIndex, selectedGenres: genres, minYear: min, maxYear: max }) => {
       console.log("🔄 turn_changed received", { newPlayers, newIndex, myId: socket.id });
 
       if (!newPlayers || newIndex === undefined) {
         console.error("❌ turn_changed missing data!");
         return;
       }
+
+      // Update genres/years from server so all clients are in sync
+      if (genres && genres.length) selectedGenresRef.current = genres;
+      if (min) minYearRef.current = Number(min);
+      if (max) maxYearRef.current = Number(max);
 
       updatePlayers(newPlayers);
       setCurrentPlayerIndex(newIndex);

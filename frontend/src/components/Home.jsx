@@ -42,9 +42,12 @@ function Home({
       setHasJoined(true);
     });
 
-    socket.on("game_started", ({ players }) => {
+    socket.on("game_started", ({ players, selectedGenres: genres, minYear: min, maxYear: max }) => {
       setPlayers(players);
-      setScreen("playing"); // ✅ uses setScreen now
+      if (genres && genres.length) setSelectedGenres(genres);
+      if (min) setMinYear(Number(min));
+      if (max) setMaxYear(Number(max));
+      setScreen("playing");
     });
 
     return () => {
@@ -71,7 +74,7 @@ function Home({
 
   const startGame = () => {
     if (!localRoomCode) return;
-    socket.emit("start_game", { code: localRoomCode, minYear, maxYear });
+    socket.emit("start_game", { code: localRoomCode, minYear, maxYear, selectedGenres });
   };
 
   const toggleGenre = genre => {

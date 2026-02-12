@@ -132,13 +132,14 @@ io.on("connection", (socket) => {
   });
 
   /* START GAME */
-  socket.on("start_game", ({ code, minYear, maxYear }) => {
+  socket.on("start_game", ({ code, minYear, maxYear, selectedGenres }) => {
     const game = games[code];
     if (!game) return;
 
     game.started = true;
     game.minYear = parseInt(minYear);
     game.maxYear = parseInt(maxYear);
+    game.selectedGenres = selectedGenres || [];
     game.currentPlayerIndex = 0;
 
     // Give every player a random start card
@@ -154,9 +155,13 @@ io.on("connection", (socket) => {
 
     io.to(code).emit("game_started", {
       players: game.players,
-      currentPlayerIndex: game.currentPlayerIndex
+      currentPlayerIndex: game.currentPlayerIndex,
+      selectedGenres: game.selectedGenres,
+      minYear: game.minYear,
+      maxYear: game.maxYear
     });
   });
+
 
   /* NEXT TURN */
   socket.on("next_turn", ({ code }) => {
@@ -166,10 +171,12 @@ io.on("connection", (socket) => {
     game.currentPlayerIndex =
       (game.currentPlayerIndex + 1) % game.players.length;
 
-    // ✅ Always send players along with currentPlayerIndex
     io.to(code).emit("turn_changed", {
       players: game.players,
-      currentPlayerIndex: game.currentPlayerIndex
+      currentPlayerIndex: game.currentPlayerIndex,
+      selectedGenres: game.selectedGenres,
+      minYear: game.minYear,
+      maxYear: game.maxYear
     });
   });
 
