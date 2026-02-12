@@ -8,7 +8,7 @@ export function useSpotifyPlayer(roomCode) {
   const [playing, setPlaying] = useState(false);
   const isHost = !!localStorage.getItem("token");
 
-  // ── HOST: initialise SDK and listen for play_track from server ──
+  // ── HOST ONLY: init SDK + listen for commands from server ──
   useEffect(() => {
     if (!isHost) return;
 
@@ -31,7 +31,8 @@ export function useSpotifyPlayer(roomCode) {
 
       player.addListener("player_state_changed", state => {
         if (!state) return;
-        setPlaying(!state.paused);
+        // Broadcast play state to all clients via server
+        socket.emit("player_state", { code: roomCode, playing: !state.paused });
       });
 
       player.addListener("initialization_error", ({ message }) =>
@@ -51,58 +52,50 @@ export function useSpotifyPlayer(roomCode) {
       window.onSpotifyWebPlaybackSDKReady = initPlayer;
     }
 
-    // Host listens for play requests from guests
+    // Host receives play/pause commands from server (sent by any player)
     socket.on("play_track", async ({ uri }) => {
-      await startTrack(uri);
+      const deviceId = deviceIdRef.current;
+      if (!deviceId) return;
+      await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ uris: [uri] })
+      });
+    });
+
+    socket.on("pause_track", async () => {
+      await playerRef.current?.pause();
     });
 
     return () => {
       playerRef.current?.disconnect();
       socket.off("play_track");
+      socket.off("pause_track");
     };
   }, [isHost]);
 
-  // ── Play a URI on the host device via Spotify API ──
-  const startTrack = async (uri) => {
-    const token = localStorage.getItem("token");
-    const deviceId = deviceIdRef.current;
-    if (!token || !deviceId) return;
-
-    await fetch(
-      `https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`,
-      {
-        method: "PUT",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ uris: [uri] })
-      }
-    );
-  };
+  // ── ALL CLIENTS: listen for play state broadcast from host ──
+  useEffect(() => {
+    socket.on("player_state", ({ playing: isPlaying }) => {
+      setPlaying(isPlaying);
+    });
+    return () => socket.off("player_state");
+  }, []);
 
   // ── Called by anyone pressing the button ──
-  const togglePlay = async (uri) => {
-    if (isHost) {
-      // Host controls directly
-      const player = playerRef.current;
-      if (!player) return;
-      const state = await player.getCurrentState();
-      if (!state) {
-        await startTrack(uri);
-      } else {
-        await player.togglePlay();
-      }
+  // Always goes via socket → server → host, even for the host itself
+  // This keeps the logic identical for everyone and ensures
+  // play state broadcasts back to all players
+  const togglePlay = (uri) => {
+    if (playing) {
+      socket.emit("pause_track", { code: roomCode });
     } else {
-      // Guest: send signal to server → host plays it
       socket.emit("play_track", { code: roomCode, uri });
     }
   };
 
-  const stop = async () => {
-    if (!isHost) return;
-    await playerRef.current?.pause();
-    setPlaying(false);
+  const stop = () => {
+    socket.emit("pause_track", { code: roomCode });
   };
 
   return { ready: isHost ? ready : true, playing, togglePlay, stop };

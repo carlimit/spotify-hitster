@@ -273,8 +273,22 @@ io.on("connection", (socket) => {
   socket.on("play_track", ({ code, uri }) => {
     const game = games[code];
     if (!game) return;
-    // Forward to host only
     io.to(game.host).emit("play_track", { uri });
+  });
+
+  /* PAUSE TRACK — any player can trigger */
+  socket.on("pause_track", ({ code }) => {
+    const game = games[code];
+    if (!game) return;
+    io.to(game.host).emit("pause_track");
+  });
+
+  /* PLAYER STATE — host broadcasts play/pause state to all */
+  socket.on("player_state", ({ code, playing }) => {
+    const game = games[code];
+    if (!game) return;
+    // Broadcast to everyone in the room except the host
+    socket.to(code).emit("player_state", { playing });
   });
 
   /* MARK TRACK USED — called when a card is dealt to prevent repeats */
