@@ -216,14 +216,32 @@ function SinglePlayerGame({ t,
         dragCardRef.current.style.zIndex = "1000";
       }
 
-      // Auto-scroll when near screen edges
-      const SCROLL_ZONE = 100;
-      const SCROLL_SPEED = 8;
+      // Auto-scroll: only when timeline overflows AND finger is at edge
+      const SCROLL_ZONE = 80;
+      const SCROLL_SPEED = 6;
       clearInterval(scrollIntervalRef.current);
-      if (clientY < SCROLL_ZONE) {
-        scrollIntervalRef.current = setInterval(() => window.scrollBy(0, -SCROLL_SPEED), 16);
-      } else if (clientY > window.innerHeight - SCROLL_ZONE) {
-        scrollIntervalRef.current = setInterval(() => window.scrollBy(0, SCROLL_SPEED), 16);
+
+      const timeline = timelineRef.current;
+      if (timeline) {
+        const tlRect = timeline.getBoundingClientRect();
+        const timelineOverflowsTop = tlRect.top < 0;
+        const timelineOverflowsBottom = tlRect.bottom > window.innerHeight;
+
+        if (clientY < SCROLL_ZONE && timelineOverflowsTop) {
+          scrollIntervalRef.current = setInterval(() => {
+            window.scrollBy(0, -SCROLL_SPEED);
+            if (timelineRef.current?.getBoundingClientRect().top >= 0) {
+              clearInterval(scrollIntervalRef.current);
+            }
+          }, 16);
+        } else if (clientY > window.innerHeight - SCROLL_ZONE && timelineOverflowsBottom) {
+          scrollIntervalRef.current = setInterval(() => {
+            window.scrollBy(0, SCROLL_SPEED);
+            if (timelineRef.current?.getBoundingClientRect().bottom <= window.innerHeight) {
+              clearInterval(scrollIntervalRef.current);
+            }
+          }, 16);
+        }
       }
 
       const currentCards = cardsRef.current;

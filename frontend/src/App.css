@@ -273,7 +273,13 @@ button:active {
 /* When expanded, card-inner should grow with card-back content */
 .card-expanded .card-inner {
   height: auto;
-  min-height: 380px;
+  min-height: 460px;
+}
+
+@media (max-width: 480px) {
+  .card-expanded .card-inner {
+    min-height: 400px;
+  }
 }
 
 .card-inner.flipped {
@@ -396,14 +402,14 @@ button:active {
 }
 
 .cover-large {
-  width: 100%;
-  max-height: 180px;
+  width: min(100%, 200px);
   aspect-ratio: 1;
   object-fit: cover;
   border-radius: 10px;
   margin-bottom: 6px;
   box-shadow: 0 6px 20px rgba(0,0,0,0.5);
   flex-shrink: 0;
+  align-self: center;
 }
 
 .revealed-year {
