@@ -245,21 +245,29 @@ function Game({
 
   const handleDragStart = useCallback((e) => {
     if (revealedRef.current || !isMyTurnRef.current) return;
-    e.preventDefault();
+    // Don't preventDefault here — wait until we confirm it's a drag (moved enough)
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     startYRef.current = clientY;
-    draggingRef.current = true;
-    setDragging(true);
+    draggingRef.current = false; // not dragging yet, waiting for movement
     setDragY(0);
     setInsertIndex(cardsRef.current.findIndex(c => c.type === "new"));
   }, []);
 
   const handleDragMove = useCallback((e) => {
-    if (!draggingRef.current) return;
-    e.preventDefault();
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     const delta = clientY - startYRef.current;
+
+    // Only start dragging once finger moves > 8px vertically
+    if (!draggingRef.current) {
+      if (Math.abs(delta) < 8) return;
+      draggingRef.current = true;
+      setDragging(true);
+    }
+
+    // Now we're dragging — prevent scroll
+    e.preventDefault();
     setDragY(delta);
+    dragYRef.current = delta;
 
     const currentCards = cardsRef.current;
     const newIdx = currentCards.findIndex(c => c.type === "new");
@@ -272,7 +280,11 @@ function Game({
   }, []);
 
   const handleDragEnd = useCallback(() => {
-    if (!draggingRef.current) return;
+    if (!draggingRef.current) {
+      // Never started dragging — clean up start state
+      startYRef.current = 0;
+      return;
+    }
     draggingRef.current = false;
     setDragging(false);
 
@@ -293,19 +305,18 @@ function Game({
   }, []);
 
   useEffect(() => {
-    if (dragging) {
-      window.addEventListener("mousemove", handleDragMove, { passive: false });
-      window.addEventListener("touchmove", handleDragMove, { passive: false });
-      window.addEventListener("mouseup", handleDragEnd);
-      window.addEventListener("touchend", handleDragEnd);
-    }
+    // Always listen for move/end so we can track potential drags
+    window.addEventListener("mousemove", handleDragMove, { passive: false });
+    window.addEventListener("touchmove", handleDragMove, { passive: false });
+    window.addEventListener("mouseup", handleDragEnd);
+    window.addEventListener("touchend", handleDragEnd);
     return () => {
       window.removeEventListener("mousemove", handleDragMove);
       window.removeEventListener("touchmove", handleDragMove);
       window.removeEventListener("mouseup", handleDragEnd);
       window.removeEventListener("touchend", handleDragEnd);
     };
-  }, [dragging, handleDragMove, handleDragEnd]);
+  }, [handleDragMove, handleDragEnd]);
 
   // ============================================================
   // 🧠 REVEAL
@@ -515,7 +526,7 @@ function Game({
                   cursor: isNewCard && !revealed && isMyTurn
                     ? (dragging ? "grabbing" : "grab")
                     : "default",
-                  touchAction: "none",
+                  touchAction: isNewCard && !revealed && isMyTurn ? "none" : "auto",
                   userSelect: "none",
                 }}
                 onMouseDown={isNewCard && !revealed && isMyTurn ? handleDragStart : undefined}

@@ -56,18 +56,28 @@ function SinglePlayerGame({ t,
       return { id: Date.now(), year: parseInt(track.year), name: track.name, artist: track.artist, uri: track.uri, cover: track.cover, type: "new" };
     }
 
+    // Genre mode — keep trying until we get an unused URI (max 5 attempts)
     const genres = genresRef.current;
     const genre = genres.length > 0 ? genres[Math.floor(Math.random() * genres.length)] : "";
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const res = await axios.get(`/api/track?genre=${genre}&minYear=${minYearRef.current}&maxYear=${maxYearRef.current}`);
+      const uri = res.data.uri;
+      if (!usedUrisRef.current.has(uri)) {
+        usedUrisRef.current.add(uri);
+        return {
+          id: Date.now(),
+          year: parseInt(res.data.year),
+          name: res.data.name,
+          artist: res.data.artist,
+          uri,
+          cover: res.data.cover,
+          type: "new"
+        };
+      }
+    }
+    // Fallback: just return whatever we got last even if duplicate
     const res = await axios.get(`/api/track?genre=${genre}&minYear=${minYearRef.current}&maxYear=${maxYearRef.current}`);
-    return {
-      id: Date.now(),
-      year: parseInt(res.data.year),
-      name: res.data.name,
-      artist: res.data.artist,
-      uri: res.data.uri,
-      cover: res.data.cover,
-      type: "new"
-    };
+    return { id: Date.now(), year: parseInt(res.data.year), name: res.data.name, artist: res.data.artist, uri: res.data.uri, cover: res.data.cover, type: "new" };
   };
 
   // ── Load first card on mount ──
@@ -167,21 +177,30 @@ function SinglePlayerGame({ t,
     loadCard(newTimeline);
   };
 
-  // ── Drag (same logic as multiplayer) ──
+  // ── Drag ──
   const handleDragStart = useCallback((e) => {
     if (revealedRef.current) return;
-    e.preventDefault();
+    // Don't preventDefault yet — wait until we confirm it's a drag
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     startYRef.current = clientY;
-    draggingRef.current = true;
-    setDragging(true);
+    draggingRef.current = false;
+  }, []);
 
-    const onMove = (ev) => {
-      if (!draggingRef.current) return;
-      const y = ev.touches ? ev.touches[0].clientY : ev.clientY;
-      const dy = y - startYRef.current;
-      dragYRef.current = dy;
-      setDragY(dy);
+  useEffect(() => {
+    const onMove = (e) => {
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      const delta = clientY - startYRef.current;
+
+      if (!draggingRef.current) {
+        if (Math.abs(delta) < 8 || startYRef.current === 0) return;
+        // Check the touch started on the new card
+        draggingRef.current = true;
+        setDragging(true);
+      }
+
+      e.preventDefault();
+      dragYRef.current = delta;
+      setDragY(delta);
 
       const cards = cardsRef.current;
       const container = timelineRef.current;
@@ -190,16 +209,18 @@ function SinglePlayerGame({ t,
       let newInsert = cards.findIndex(c => c.type === "new");
       for (let i = 0; i < cardEls.length; i++) {
         const rect = cardEls[i].getBoundingClientRect();
-        if (y < rect.top + rect.height / 2) { newInsert = i; break; }
+        if (clientY < rect.top + rect.height / 2) { newInsert = i; break; }
         if (i === cardEls.length - 1) newInsert = i + 1;
       }
       setInsertIndex(newInsert);
     };
 
     const onEnd = () => {
+      if (!draggingRef.current) { startYRef.current = 0; return; }
       draggingRef.current = false;
       setDragging(false);
       setDragY(0);
+      startYRef.current = 0;
 
       const currentCards = cardsRef.current;
       const origIdx = currentCards.findIndex(c => c.type === "new");
@@ -214,17 +235,18 @@ function SinglePlayerGame({ t,
         }
         return null;
       });
-
-      document.removeEventListener("mousemove", onMove);
-      document.removeEventListener("mouseup", onEnd);
-      document.removeEventListener("touchmove", onMove);
-      document.removeEventListener("touchend", onEnd);
     };
 
-    document.addEventListener("mousemove", onMove);
-    document.addEventListener("mouseup", onEnd);
-    document.addEventListener("touchmove", onMove, { passive: false });
-    document.addEventListener("touchend", onEnd);
+    window.addEventListener("mousemove", onMove, { passive: false });
+    window.addEventListener("touchmove", onMove, { passive: false });
+    window.addEventListener("mouseup", onEnd);
+    window.addEventListener("touchend", onEnd);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("touchmove", onMove);
+      window.removeEventListener("mouseup", onEnd);
+      window.removeEventListener("touchend", onEnd);
+    };
   }, []);
 
   // ── Share score ──
@@ -272,7 +294,7 @@ function SinglePlayerGame({ t,
         </div>
       </div>
 
-      {loading && <div className="loading-card">t?.loadingSong || "Loading song..."</div>}
+      {loading && <div className="loading-card">{t?.loadingSong || "Loading song..."}</div>}
 
       {timeLeft !== null && (
         <div className={`timer-display ${timeLeft <= 5 ? "timer-urgent" : ""}`}>{timeLeft}s</div>
@@ -304,7 +326,7 @@ function SinglePlayerGame({ t,
                     boxShadow: isDragged ? "0 28px 70px rgba(29,185,84,0.55)" : undefined,
                     transition: isDragged ? "box-shadow 0.15s" : "transform 0.18s ease",
                     cursor: isNewCard && !revealed ? (dragging ? "grabbing" : "grab") : "default",
-                    touchAction: "none",
+                    touchAction: isNewCard && !revealed ? "none" : "auto",
                     userSelect: "none"
                   }}
                   onMouseDown={isNewCard && !revealed ? handleDragStart : undefined}
