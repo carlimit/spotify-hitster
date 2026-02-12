@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Reorder } from "framer-motion";
+import { motion, Reorder } from "framer-motion";
 import axios from "axios";
 
 function Game({
@@ -17,6 +17,7 @@ function Game({
   const [loading, setLoading] = useState(true);
   const [showNextButton, setShowNextButton] = useState(false);
   const [revealed, setRevealed] = useState(false);
+  const [draggedCardIndex, setDraggedCardIndex] = useState(null);
 
   // Spotify
   const [player, setPlayer] = useState(null);
@@ -116,6 +117,43 @@ function Game({
   }, [currentPlayerIndex]);
 
   // -----------------------------
+  // 🎯 Handle Drag End - Reorder cards
+  // -----------------------------
+  const handleDragEnd = (event, info) => {
+    const newCardIndex = cards.findIndex(c => c.type === "new");
+    const draggedCard = cards[newCardIndex];
+    
+    // Get positions of all cards
+    const cardElements = document.querySelectorAll('.card');
+    const positions = Array.from(cardElements).map(el => {
+      const rect = el.getBoundingClientRect();
+      return rect.top + rect.height / 2;
+    });
+    
+    // Find where to insert based on drag position
+    const dragY = event.clientY || (event.touches && event.touches[0].clientY);
+    let insertIndex = 0;
+    
+    for (let i = 0; i < positions.length; i++) {
+      if (dragY > positions[i]) {
+        insertIndex = i + 1;
+      }
+    }
+    
+    // Don't count the dragged card itself
+    if (insertIndex > newCardIndex) {
+      insertIndex--;
+    }
+    
+    // Reorder
+    const newCards = [...cards];
+    newCards.splice(newCardIndex, 1);
+    newCards.splice(insertIndex, 0, draggedCard);
+    setCards(newCards);
+    setDraggedCardIndex(null);
+  };
+
+  // -----------------------------
   // 🧠 Reveal Logic
   // -----------------------------
   const handleReveal = () => {
@@ -184,23 +222,25 @@ function Game({
     <h2>{currentPlayer.name}'s Turn</h2>
     <h3>Score: {currentPlayer.score}</h3>
 
-    <Reorder.Group
-      axis="y"
-      values={cards}
-      onReorder={setCards}
-      className="timeline"
-    >
-      {cards.map(card => (
-        <Reorder.Item
+    <div className="timeline">
+      {cards.map((card, index) => (
+        <motion.div
           key={card.id}
-          value={card}
-          drag={!revealed}
-          dragListener={card.type === "new"}
-          dragElastic={0}
-          dragMomentum={false}
           className={`card ${
             card.type === "new" && revealed ? "card-expanded" : ""
           }`}
+          drag={!revealed && card.type === "new" ? "y" : false}
+          dragConstraints={{ top: 0, bottom: 0 }}
+          dragElastic={0}
+          dragMomentum={false}
+          onDragStart={() => setDraggedCardIndex(index)}
+          onDragEnd={handleDragEnd}
+          style={{
+            zIndex: draggedCardIndex === index ? 1000 : (card.type === "new" && revealed ? 100 : 1),
+            cursor: card.type === "new" && !revealed ? "grab" : "default"
+          }}
+          animate={draggedCardIndex !== index ? { y: 0 } : {}}
+          transition={{ type: "spring", stiffness: 500, damping: 30 }}
         >
           {card.type === "new" ? (
             <div
@@ -232,9 +272,9 @@ function Game({
               <div>{card.year}</div>
             </div>
           )}
-        </Reorder.Item>
+        </motion.div>
       ))}
-    </Reorder.Group>
+    </div>
 
     <div className="action-container">
   {!revealed && (
