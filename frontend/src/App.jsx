@@ -109,7 +109,6 @@ function App() {
       {gamePhase === "home" && (
         <Home
           setGamePhase={setGamePhase}
-          players={players}
           setPlayers={setPlayers}
           selectedGenres={selectedGenres}
           setSelectedGenres={setSelectedGenres}
@@ -119,6 +118,7 @@ function App() {
           setMaxYear={setMaxYear}
           isHost={isHost}
         />
+
       )}
 
       {gamePhase === "playing" && (

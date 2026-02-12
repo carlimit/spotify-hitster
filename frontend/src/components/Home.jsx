@@ -5,34 +5,30 @@ import { socket } from "../socket";
 
 function Home({
   setGamePhase,
-  players,
   setPlayers,
   selectedGenres,
   setSelectedGenres,
   minYear,
   setMinYear,
   maxYear,
-  setMaxYear
+  setMaxYear,
+  isHost
 }) {
   const [playerName, setPlayerName] = useState("");
-  const [mode, setMode] = useState("host"); // host | join
   const [gameCode, setGameCode] = useState("");
   const [lobbyPlayers, setLobbyPlayers] = useState([]);
-  const [isHost, setIsHost] = useState(false);
   const [hasJoined, setHasJoined] = useState(false);
 
-  // ===============================
-  // 🎮 SOCKET LISTENERS
-  // ===============================
+  // -----------------------------
+  // SOCKET LISTENERS
+  // -----------------------------
   useEffect(() => {
-
-    socket.on("player_list", (players) => {
+    socket.on("player_list", players => {
       setLobbyPlayers(players);
     });
 
     socket.on("game_created", ({ code }) => {
       setGameCode(code);
-      setIsHost(true);
       setHasJoined(true);
     });
 
@@ -46,45 +42,32 @@ function Home({
       socket.off("game_created");
       socket.off("game_started");
     };
-
   }, []);
 
-  // ===============================
-  // 🎮 CREATE GAME
-  // ===============================
+  // -----------------------------
+  // CREATE GAME (HOST ONLY)
+  // -----------------------------
   const createGame = () => {
     if (!playerName.trim()) return;
-    if (hasJoined) return;
-
     socket.emit("create_game", { name: playerName });
   };
 
-  // ===============================
-  // 🎮 JOIN GAME
-  // ===============================
+  // -----------------------------
+  // JOIN GAME
+  // -----------------------------
   const joinGame = () => {
     if (!playerName.trim() || !gameCode.trim()) return;
-    if (hasJoined) return;
-
-    socket.emit("join_game", {
-      code: gameCode,
-      name: playerName
-    });
-
+    socket.emit("join_game", { code: gameCode, name: playerName });
     setHasJoined(true);
   };
 
-  // ===============================
-  // 🎮 START GAME
-  // ===============================
+  // -----------------------------
+  // START GAME (HOST ONLY)
+  // -----------------------------
   const startGame = () => {
-    if (!isHost) return;
     socket.emit("start_game", { code: gameCode });
   };
 
-  // ===============================
-  // 🎛 GENRE TOGGLE
-  // ===============================
   const toggleGenre = genre => {
     if (selectedGenres.includes(genre)) {
       setSelectedGenres(selectedGenres.filter(g => g !== genre));
@@ -93,53 +76,25 @@ function Home({
     }
   };
 
-  // ===============================
-  // 🎨 UI
-  // ===============================
   return (
     <div className="container">
-      <h1>Hitster Game</h1>
+      <h1>Lobby</h1>
 
-      {/* MODE SWITCH */}
+      {/* NAME INPUT */}
       {!hasJoined && (
-        <div className="home-section">
-          <h2>Mode</h2>
+        <>
+          <input
+            type="text"
+            placeholder="Your name"
+            value={playerName}
+            onChange={e => setPlayerName(e.target.value)}
+          />
 
-          <button
-            onClick={() => setMode("host")}
-            style={{
-              background: mode === "host" ? "#1DB954" : "#444",
-              marginRight: "10px"
-            }}
-          >
-            Host
-          </button>
-
-          <button
-            onClick={() => setMode("join")}
-            style={{
-              background: mode === "join" ? "#1DB954" : "#444"
-            }}
-          >
-            Join
-          </button>
-
-          <div style={{ marginTop: "15px" }}>
-            <input
-              type="text"
-              placeholder="Your name"
-              value={playerName}
-              onChange={e => setPlayerName(e.target.value)}
-            />
-          </div>
-
-          {mode === "host" && (
+          {isHost ? (
             <button onClick={createGame}>
               Create Game
             </button>
-          )}
-
-          {mode === "join" && (
+          ) : (
             <>
               <input
                 type="text"
@@ -148,21 +103,19 @@ function Home({
                 onChange={e =>
                   setGameCode(e.target.value.toUpperCase())
                 }
-                style={{ marginTop: "10px" }}
               />
               <button onClick={joinGame}>
                 Join Game
               </button>
             </>
           )}
-        </div>
+        </>
       )}
 
       {/* LOBBY */}
       {hasJoined && (
-        <div className="home-section">
-
-          <h3>Game Code: {gameCode}</h3>
+        <>
+          <h2>Game Code: {gameCode}</h2>
 
           <div className="player-list">
             {lobbyPlayers.map((p, i) => (
@@ -171,60 +124,50 @@ function Home({
           </div>
 
           {isHost && (
-            <button onClick={startGame}>
-              Start Game
-            </button>
+            <>
+              <h2>Settings</h2>
+
+              <div className="genre-buttons">
+                {["pop", "rock", "hiphop", "edm", "jazz", "metal", "house"].map(
+                  genre => (
+                    <button
+                      key={genre}
+                      onClick={() => toggleGenre(genre)}
+                      style={{
+                        background: selectedGenres.includes(genre)
+                          ? "#1DB954"
+                          : "#444",
+                        margin: "5px"
+                      }}
+                    >
+                      {genre}
+                    </button>
+                  )
+                )}
+              </div>
+
+              <Slider
+                range
+                min={1960}
+                max={2024}
+                value={[minYear, maxYear]}
+                onChange={value => {
+                  setMinYear(value[0]);
+                  setMaxYear(value[1]);
+                }}
+              />
+
+              <div style={{ marginTop: "10px", fontWeight: "bold" }}>
+                {minYear} – {maxYear}
+              </div>
+
+              <button onClick={startGame}>
+                Start Game
+              </button>
+            </>
           )}
-
-        </div>
-      )}
-
-      {/* SETTINGS NUR HOST */}
-      {isHost && hasJoined && (
-        <>
-          <div className="home-section">
-            <h2>Genres</h2>
-            <div className="genre-buttons">
-              {["pop", "rock", "hiphop", "edm", "jazz", "metal", "house"].map(
-                genre => (
-                  <button
-                    key={genre}
-                    onClick={() => toggleGenre(genre)}
-                    style={{
-                      background: selectedGenres.includes(genre)
-                        ? "#1DB954"
-                        : "#444",
-                      margin: "5px"
-                    }}
-                  >
-                    {genre}
-                  </button>
-                )
-              )}
-            </div>
-          </div>
-
-          <div className="home-section">
-            <h2>Year Range</h2>
-
-            <Slider
-              range
-              min={1960}
-              max={2024}
-              value={[minYear, maxYear]}
-              onChange={value => {
-                setMinYear(value[0]);
-                setMaxYear(value[1]);
-              }}
-            />
-
-            <div style={{ marginTop: "10px", fontWeight: "bold" }}>
-              {minYear} – {maxYear}
-            </div>
-          </div>
         </>
       )}
-
     </div>
   );
 }
