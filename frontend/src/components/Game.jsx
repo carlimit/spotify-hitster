@@ -208,17 +208,25 @@ function Game({
     };
   };
 
+  const scrollIntervalRef = useRef(null);
+
   const loadNewCard = async (player) => {
     setLoading(true);
     clearInterval(timerRef.current);
     setTimeLeft(null);
     try {
       const newCard = await generateCard();
-      const newCards = [newCard, ...player.timeline];
+      // Insert in middle of timeline so less dragging needed on average
+      const timeline = player.timeline;
+      const midIdx = Math.floor(timeline.length / 2);
+      const newCards = [
+        ...timeline.slice(0, midIdx),
+        newCard,
+        ...timeline.slice(midIdx)
+      ];
       setCards(newCards);
       cardsRef.current = newCards;
 
-      // Start countdown if timer enabled and it's my turn
       if (timerSeconds > 0 && isMyTurnRef.current) {
         setTimeLeft(timerSeconds);
         timerRef.current = setInterval(() => {
@@ -272,6 +280,16 @@ function Game({
       dragCardRef.current.style.zIndex = "1000";
     }
 
+    // Auto-scroll when near screen edges
+    const SCROLL_ZONE = 100;
+    const SCROLL_SPEED = 8;
+    clearInterval(scrollIntervalRef.current);
+    if (clientY < SCROLL_ZONE) {
+      scrollIntervalRef.current = setInterval(() => window.scrollBy(0, -SCROLL_SPEED), 16);
+    } else if (clientY > window.innerHeight - SCROLL_ZONE) {
+      scrollIntervalRef.current = setInterval(() => window.scrollBy(0, SCROLL_SPEED), 16);
+    }
+
     // Compute insert index using actual screen position of dragged card center
     const currentCards = cardsRef.current;
     const newIdx = currentCards.findIndex(c => c.type === "new");
@@ -307,6 +325,7 @@ function Game({
   const handleDragEnd = useCallback(() => {
     if (!draggingRef.current) { startYRef.current = 0; return; }
     draggingRef.current = false;
+    clearInterval(scrollIntervalRef.current);
 
     // Reset card DOM style before React takes over
     if (dragCardRef.current) {

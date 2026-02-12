@@ -86,6 +86,8 @@ function SinglePlayerGame({ t,
     return () => clearInterval(timerRef.current);
   }, []);
 
+  const scrollIntervalRef = useRef(null);
+
   const loadCard = async (existingTimeline) => {
     setLoading(true);
     clearInterval(timerRef.current);
@@ -100,7 +102,13 @@ function SinglePlayerGame({ t,
 
     try {
       const card = await generateCard();
-      const newCards = [card, ...existingTimeline];
+      // Insert in middle so less dragging needed
+      const midIdx = Math.floor(existingTimeline.length / 2);
+      const newCards = [
+        ...existingTimeline.slice(0, midIdx),
+        card,
+        ...existingTimeline.slice(midIdx)
+      ];
       setCards(newCards);
       cardsRef.current = newCards;
 
@@ -208,6 +216,16 @@ function SinglePlayerGame({ t,
         dragCardRef.current.style.zIndex = "1000";
       }
 
+      // Auto-scroll when near screen edges
+      const SCROLL_ZONE = 100;
+      const SCROLL_SPEED = 8;
+      clearInterval(scrollIntervalRef.current);
+      if (clientY < SCROLL_ZONE) {
+        scrollIntervalRef.current = setInterval(() => window.scrollBy(0, -SCROLL_SPEED), 16);
+      } else if (clientY > window.innerHeight - SCROLL_ZONE) {
+        scrollIntervalRef.current = setInterval(() => window.scrollBy(0, SCROLL_SPEED), 16);
+      }
+
       // Use actual screen position of dragged card center
       const cards = cardsRef.current;
       const newIdx = cards.findIndex(c => c.type === "new");
@@ -237,6 +255,7 @@ function SinglePlayerGame({ t,
     const onEnd = () => {
       if (!draggingRef.current) { startYRef.current = 0; return; }
       draggingRef.current = false;
+      clearInterval(scrollIntervalRef.current);
 
       if (dragCardRef.current) {
         dragCardRef.current.style.transform = "";
