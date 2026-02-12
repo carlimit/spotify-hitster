@@ -114,12 +114,13 @@ io.on("connection", (socket) => {
           name,
           score: 0,
           timeline: [
-            {
-                id: Date.now(),
-                year: Math.floor(Math.random() * (2024 - 1960 + 1)) + 1960,
-                type: "fixed"
-            }
-            ]
+  {
+    id: Date.now(),
+    year: Math.floor(Math.random() * 30) + 1990, // temporär
+    type: "fixed"
+  }
+]
+
 
         }
       ],
@@ -146,7 +147,17 @@ io.on("connection", (socket) => {
     id: socket.id,
     name,
     score: 0,
-    timeline: []
+    timeline: [
+      {
+        id: Date.now() + Math.random(),
+        year:
+          Math.floor(
+            Math.random() * (game.maxYear - game.minYear + 1)
+          ) + game.minYear,
+        type: "fixed"
+      }
+    ]
+
   });
 
   socket.join(code);
