@@ -243,32 +243,36 @@ function Game({
   // 👆 DRAG — card stays exactly with finger
   // ============================================================
 
+  const dragCardRef = useRef(null); // direct ref to the dragged card DOM element
+
   const handleDragStart = useCallback((e) => {
     if (revealedRef.current || !isMyTurnRef.current) return;
-    // Don't preventDefault here — wait until we confirm it's a drag (moved enough)
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     startYRef.current = clientY;
-    draggingRef.current = false; // not dragging yet, waiting for movement
-    setDragY(0);
-    setInsertIndex(cardsRef.current.findIndex(c => c.type === "new"));
+    draggingRef.current = false;
   }, []);
 
   const handleDragMove = useCallback((e) => {
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     const delta = clientY - startYRef.current;
 
-    // Only start dragging once finger moves > 8px vertically
     if (!draggingRef.current) {
       if (Math.abs(delta) < 8) return;
       draggingRef.current = true;
       setDragging(true);
     }
 
-    // Now we're dragging — prevent scroll
     e.preventDefault();
-    setDragY(delta);
     dragYRef.current = delta;
 
+    // Move card directly via DOM — zero re-renders during drag
+    if (dragCardRef.current) {
+      dragCardRef.current.style.transform = `translateY(${delta}px) scale(1.04)`;
+      dragCardRef.current.style.boxShadow = "0 28px 70px rgba(29,185,84,0.55)";
+      dragCardRef.current.style.zIndex = "1000";
+    }
+
+    // Compute insert index and only re-render if it changed
     const currentCards = cardsRef.current;
     const newIdx = currentCards.findIndex(c => c.type === "new");
     const cardEls = timelineRef.current?.querySelectorAll(".card");
@@ -276,17 +280,19 @@ function Game({
     const cardH = cardEls[0].getBoundingClientRect().height + 16;
     const slotsMoved = Math.round(delta / cardH);
     const target = Math.max(0, Math.min(currentCards.length - 1, newIdx + slotsMoved));
-    setInsertIndex(target);
+    setInsertIndex(prev => prev === target ? prev : target);
   }, []);
 
   const handleDragEnd = useCallback(() => {
-    if (!draggingRef.current) {
-      // Never started dragging — clean up start state
-      startYRef.current = 0;
-      return;
-    }
+    if (!draggingRef.current) { startYRef.current = 0; return; }
     draggingRef.current = false;
-    setDragging(false);
+
+    // Reset card DOM style before React takes over
+    if (dragCardRef.current) {
+      dragCardRef.current.style.transform = "";
+      dragCardRef.current.style.boxShadow = "";
+      dragCardRef.current.style.zIndex = "";
+    }
 
     const currentCards = cardsRef.current;
     const newIdx = currentCards.findIndex(c => c.type === "new");
@@ -300,12 +306,13 @@ function Game({
     reordered.splice(target, 0, moved);
     cardsRef.current = reordered;
     setCards(reordered);
+    setDragging(false);
     setDragY(0);
     setInsertIndex(null);
+    startYRef.current = 0;
   }, []);
 
   useEffect(() => {
-    // Always listen for move/end so we can track potential drags
     window.addEventListener("mousemove", handleDragMove, { passive: false });
     window.addEventListener("touchmove", handleDragMove, { passive: false });
     window.addEventListener("mouseup", handleDragEnd);
@@ -510,19 +517,13 @@ function Game({
                 )}
 
                 <div
+                  ref={isNewCard ? dragCardRef : null}
                   className={`card ${isNewCard && revealed ? "card-expanded" : ""}`}
                 style={{
                   position: "relative",
                   zIndex: isDragged ? 1000 : 1,
-                  transform: isDragged
-                    ? `translateY(${dragY}px) scale(1.04)`
-                    : `translateY(${shiftY}px) scale(1)`,
-                  boxShadow: isDragged
-                    ? "0 28px 70px rgba(29,185,84,0.55)"
-                    : undefined,
-                  transition: isDragged
-                    ? "box-shadow 0.15s"
-                    : "transform 0.18s ease",
+                  transform: isDragged ? undefined : `translateY(${shiftY}px) scale(1)`,
+                  transition: isDragged ? "none" : "transform 0.18s ease",
                   cursor: isNewCard && !revealed && isMyTurn
                     ? (dragging ? "grabbing" : "grab")
                     : "default",

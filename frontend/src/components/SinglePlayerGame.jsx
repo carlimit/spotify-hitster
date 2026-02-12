@@ -177,10 +177,11 @@ function SinglePlayerGame({ t,
     loadCard(newTimeline);
   };
 
+  const dragCardRef = useRef(null);
+
   // ── Drag ──
   const handleDragStart = useCallback((e) => {
     if (revealedRef.current) return;
-    // Don't preventDefault yet — wait until we confirm it's a drag
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     startYRef.current = clientY;
     draggingRef.current = false;
@@ -193,14 +194,19 @@ function SinglePlayerGame({ t,
 
       if (!draggingRef.current) {
         if (Math.abs(delta) < 8 || startYRef.current === 0) return;
-        // Check the touch started on the new card
         draggingRef.current = true;
         setDragging(true);
       }
 
       e.preventDefault();
       dragYRef.current = delta;
-      setDragY(delta);
+
+      // Move card directly via DOM — no React re-render during drag
+      if (dragCardRef.current) {
+        dragCardRef.current.style.transform = `translateY(${delta}px) scale(1.04)`;
+        dragCardRef.current.style.boxShadow = "0 28px 70px rgba(29,185,84,0.55)";
+        dragCardRef.current.style.zIndex = "1000";
+      }
 
       const cards = cardsRef.current;
       const container = timelineRef.current;
@@ -212,12 +218,19 @@ function SinglePlayerGame({ t,
         if (clientY < rect.top + rect.height / 2) { newInsert = i; break; }
         if (i === cardEls.length - 1) newInsert = i + 1;
       }
-      setInsertIndex(newInsert);
+      setInsertIndex(prev => prev === newInsert ? prev : newInsert);
     };
 
     const onEnd = () => {
       if (!draggingRef.current) { startYRef.current = 0; return; }
       draggingRef.current = false;
+
+      if (dragCardRef.current) {
+        dragCardRef.current.style.transform = "";
+        dragCardRef.current.style.boxShadow = "";
+        dragCardRef.current.style.zIndex = "";
+      }
+
       setDragging(false);
       setDragY(0);
       startYRef.current = 0;
@@ -318,13 +331,13 @@ function SinglePlayerGame({ t,
             return (
               <div key={card.id} style={{ width: "100%", maxWidth: 480 }}>
                 <div
+                  ref={isNewCard ? dragCardRef : null}
                   className={`card ${isNewCard && revealed ? "card-expanded" : ""}`}
                   style={{
                     position: "relative",
                     zIndex: isDragged ? 1000 : 1,
-                    transform: isDragged ? `translateY(${dragY}px) scale(1.04)` : `translateY(${shiftY}px) scale(1)`,
-                    boxShadow: isDragged ? "0 28px 70px rgba(29,185,84,0.55)" : undefined,
-                    transition: isDragged ? "box-shadow 0.15s" : "transform 0.18s ease",
+                    transform: isDragged ? undefined : `translateY(${shiftY}px) scale(1)`,
+                    transition: isDragged ? "none" : "transform 0.18s ease",
                     cursor: isNewCard && !revealed ? (dragging ? "grabbing" : "grab") : "default",
                     touchAction: isNewCard && !revealed ? "none" : "auto",
                     userSelect: "none"
