@@ -78,10 +78,11 @@ function Game({
   };
 
   // ============================================================
-  // 🎮 SOCKET EVENTS
+  // 🎮 SOCKET EVENTS (ONLY REGISTER ONCE)
   // ============================================================
 
   useEffect(() => {
+
     socket.on("game_started", ({ players, currentPlayerIndex }) => {
       setPlayers(players);
       setCurrentPlayerIndex(currentPlayerIndex);
@@ -91,15 +92,16 @@ function Game({
     socket.on("turn_changed", ({ players, currentPlayerIndex }) => {
       setPlayers(players);
       setCurrentPlayerIndex(currentPlayerIndex);
+      setCards(players[currentPlayerIndex].timeline);
       setIsMyTurn(false);
       setRevealed(false);
       setShowNextButton(false);
       setResult(null);
-      setCards(players[currentPlayerIndex].timeline);
     });
 
-    socket.on("your_turn", async ({ players }) => {
+    socket.on("your_turn", async ({ players, currentPlayerIndex }) => {
       setPlayers(players);
+      setCurrentPlayerIndex(currentPlayerIndex);
       setIsMyTurn(true);
       setLoading(true);
 
@@ -119,10 +121,11 @@ function Game({
       socket.off("turn_changed");
       socket.off("your_turn");
     };
-  }, [currentPlayerIndex]);
+
+  }, []);
 
   // ============================================================
-  // 🎲 GENERATE CARD (CLIENT SIDE)
+  // 🎲 GENERATE CARD
   // ============================================================
 
   const generateCard = async () => {
@@ -174,7 +177,7 @@ function Game({
   };
 
   const nextTurn = () => {
-    socket.emit("next_turn");
+    socket.emit("next_turn"); // Server muss Code selbst speichern
   };
 
   // ============================================================
@@ -189,6 +192,8 @@ function Game({
     <div className="container">
       <h2>{currentPlayer.name}'s Turn</h2>
       <h3>Score: {currentPlayer.score}</h3>
+
+      {loading && <p>Loading song...</p>}
 
       <Reorder.Group
         axis="y"

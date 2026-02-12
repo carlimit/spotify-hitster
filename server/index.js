@@ -154,19 +154,18 @@ io.on("connection", (socket) => {
   const game = games[code];
   if (!game) return;
 
-  if (socket.id !== game.host) return;
-  if (game.players.length < 1) return;
-
   game.started = true;
 
   io.to(code).emit("game_started", {
     players: game.players,
-    currentPlayerIndex: 0
+    currentPlayerIndex: game.currentPlayerIndex
   });
 
-  const activePlayer = game.players[0];
+  const activePlayer = game.players[game.currentPlayerIndex];
+
   io.to(activePlayer.id).emit("your_turn");
 });
+
 
 
   /* NEXT TURN */

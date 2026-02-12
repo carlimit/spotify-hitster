@@ -32,6 +32,7 @@ function Home({
       setHasJoined(true);
     });
 
+
     socket.on("game_started", ({ players }) => {
       setPlayers(players);
       setGamePhase("playing");
@@ -65,8 +66,10 @@ function Home({
   // START GAME (HOST ONLY)
   // -----------------------------
   const startGame = () => {
-    socket.emit("start_game", { code: gameCode });
-  };
+  if (!gameCode) return;
+  socket.emit("start_game", { code: gameCode });
+};
+
 
   const toggleGenre = genre => {
     if (selectedGenres.includes(genre)) {
