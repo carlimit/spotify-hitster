@@ -243,11 +243,11 @@ button:active {
   perspective: 1200px;
 }
 
-/* When revealed, drop the aspect-ratio and size to content */
+/* When revealed, fixed height so everything fills properly */
 .card-expanded {
   aspect-ratio: unset !important;
-  height: auto !important;
-  min-height: 0 !important;
+  height: 480px !important;
+  min-height: 480px !important;
 }
 
 @media (max-width: 480px) {
@@ -256,11 +256,14 @@ button:active {
     min-height: 160px;
     border-radius: 16px;
   }
+  .card-expanded {
+    height: 420px !important;
+    min-height: 420px !important;
+  }
 }
 
 /* ---------- Card Inner (flip container) ---------- */
 
-/* Use grid so card-inner naturally takes the height of whichever face is taller */
 .card-inner {
   width: 100%;
   height: 100%;
@@ -268,18 +271,6 @@ button:active {
   position: relative;
   transform-style: preserve-3d;
   transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-/* When expanded, card-inner should grow with card-back content */
-.card-expanded .card-inner {
-  height: auto;
-  min-height: 460px;
-}
-
-@media (max-width: 480px) {
-  .card-expanded .card-inner {
-    min-height: 400px;
-  }
 }
 
 .card-inner.flipped {
@@ -402,18 +393,24 @@ button:active {
 }
 
 .cover-large {
-  width: min(100%, 200px);
+  width: 100%;
+  max-width: 280px;    /* cap so text always fits below */
   aspect-ratio: 1;
   object-fit: cover;
   border-radius: 10px;
-  margin-bottom: 6px;
+  margin-bottom: 10px;
   box-shadow: 0 6px 20px rgba(0,0,0,0.5);
   flex-shrink: 0;
-  align-self: center;
+}
+
+@media (max-width: 480px) {
+  .cover-large {
+    max-width: 240px;
+  }
 }
 
 .revealed-year {
-  font-size: clamp(34px, 8vw, 52px);
+  font-size: clamp(38px, 9vw, 56px);
   font-weight: 900;
   letter-spacing: -2px;
   background: linear-gradient(135deg, #1DB954, #1ed760);
@@ -421,12 +418,12 @@ button:active {
   -webkit-text-fill-color: transparent;
   background-clip: text;
   line-height: 1;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
   flex-shrink: 0;
 }
 
 .card-back strong {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 700;
   text-align: center;
   color: white;
@@ -436,7 +433,7 @@ button:active {
 }
 
 .song-title {
-  font-size: 13px;
+  font-size: 14px;
   color: #aaa;
   text-align: center;
   line-height: 1.4;
