@@ -7,10 +7,17 @@ import SinglePlayerGame from "./components/SinglePlayerGame";
 import "./App.css";
 import { getLoginUrl } from "./spotify";
 import { socket } from "./socket";
+import translations from "./translations";
 
 function App() {
 
-  const [isHost, setIsHost] = useState(false);
+  const [lang, setLang] = useState(() => localStorage.getItem("lang") || "en");
+  const t = translations[lang];
+
+  const switchLang = (l) => {
+    setLang(l);
+    localStorage.setItem("lang", l);
+  };
   const [token, setToken] = useState(null);
   const [screen, setScreen] = useState("start");
   const [players, setPlayers] = useState([]);
@@ -62,27 +69,19 @@ function App() {
   if (screen === "start") {
     return (
       <div className="container">
-        <h1>Spotify Hitster</h1>
-        <button onClick={() => {
-          setIsHost(true);
-          setScreen("host-login");
-        }}>
-          Host Game
+        <div className="lang-toggle">
+          <button onClick={() => switchLang("en")} className={lang === "en" ? "lang-active" : ""}>🇬🇧 EN</button>
+          <button onClick={() => switchLang("de")} className={lang === "de" ? "lang-active" : ""}>🇩🇪 DE</button>
+        </div>
+        <h1>{t.appName}</h1>
+        <button onClick={() => { setIsHost(true); setScreen("host-login"); }}>
+          {t.hostGame}
         </button>
-        <button
-          style={{ marginTop: "15px", background: "#444" }}
-          onClick={() => {
-            setIsHost(false);
-            setScreen("lobby");
-          }}
-        >
-          Join Game
+        <button style={{ marginTop: "15px", background: "#444" }} onClick={() => { setIsHost(false); setScreen("lobby"); }}>
+          {t.joinGame}
         </button>
-        <button
-          style={{ marginTop: "15px", background: "#1a472a" }}
-          onClick={() => setScreen("singleplayer-setup")}
-        >
-          🎮 Solo Mode
+        <button style={{ marginTop: "15px", background: "#1a472a" }} onClick={() => setScreen("singleplayer-setup")}>
+          {t.soloMode}
         </button>
       </div>
     );
@@ -95,13 +94,10 @@ function App() {
   if (screen === "host-login") {
     return (
       <div className="container">
-        <h1>Spotify Hitster</h1>
-        <h2>Login to host</h2>
-        <button onClick={async () => {
-          const url = await getLoginUrl();
-          window.location.href = url;
-        }}>
-          Login with Spotify
+        <h1>{t.appName}</h1>
+        <h2>{t.loginToHost}</h2>
+        <button onClick={async () => { const url = await getLoginUrl(); window.location.href = url; }}>
+          {t.loginWithSpotify}
         </button>
       </div>
     );
@@ -113,69 +109,51 @@ function App() {
 
   if (screen === "lobby") {
     return (
-      <Home
-        setScreen={setScreen}
-        setPlayers={setPlayers}
-        selectedGenres={selectedGenres}
-        setSelectedGenres={setSelectedGenres}
-        minYear={minYear}
-        setMinYear={setMinYear}
-        maxYear={maxYear}
-        setMaxYear={setMaxYear}
-        isHost={isHost}
-        setRoomCode={setRoomCode}
+      <Home t={t} lang={lang}
+        setScreen={setScreen} setPlayers={setPlayers}
+        selectedGenres={selectedGenres} setSelectedGenres={setSelectedGenres}
+        minYear={minYear} setMinYear={setMinYear}
+        maxYear={maxYear} setMaxYear={setMaxYear}
+        isHost={isHost} setRoomCode={setRoomCode}
         setPlaylistTracks={setPlaylistTracks}
-        winGoal={winGoal}
-        setWinGoal={setWinGoal}
-        timerSeconds={timerSeconds}
-        setTimerSeconds={setTimerSeconds}
+        winGoal={winGoal} setWinGoal={setWinGoal}
+        timerSeconds={timerSeconds} setTimerSeconds={setTimerSeconds}
       />
     );
   }
 
   if (screen === "playing") {
     return (
-      <Game
-        players={players}
-        setPlayers={setPlayers}
+      <Game t={t}
+        players={players} setPlayers={setPlayers}
         selectedGenres={selectedGenres}
-        minYear={minYear}
-        maxYear={maxYear}
-        roomCode={roomCode}
-        setScreen={setScreen}
-        setWinner={setWinner}
+        minYear={minYear} maxYear={maxYear}
+        roomCode={roomCode} setScreen={setScreen} setWinner={setWinner}
         playlistTracks={playlistTracks}
-        winGoal={winGoal}
-        timerSeconds={timerSeconds}
+        winGoal={winGoal} timerSeconds={timerSeconds}
       />
     );
   }
 
   if (screen === "singleplayer-setup") {
     return (
-      <SinglePlayerSetup
+      <SinglePlayerSetup t={t}
         setScreen={setScreen}
-        genres={singlePlayerGenres}
-        setGenres={setSinglePlayerGenres}
-        minYear={singlePlayerMinYear}
-        setMinYear={setSinglePlayerMinYear}
-        maxYear={singlePlayerMaxYear}
-        setMaxYear={setSinglePlayerMaxYear}
-        playlist={singlePlayerPlaylist}
-        setPlaylist={setSinglePlayerPlaylist}
-        timerSeconds={timerSeconds}
-        setTimerSeconds={setTimerSeconds}
+        genres={singlePlayerGenres} setGenres={setSinglePlayerGenres}
+        minYear={singlePlayerMinYear} setMinYear={setSinglePlayerMinYear}
+        maxYear={singlePlayerMaxYear} setMaxYear={setSinglePlayerMaxYear}
+        playlist={singlePlayerPlaylist} setPlaylist={setSinglePlayerPlaylist}
+        timerSeconds={timerSeconds} setTimerSeconds={setTimerSeconds}
       />
     );
   }
 
   if (screen === "singleplayer") {
     return (
-      <SinglePlayerGame
+      <SinglePlayerGame t={t}
         setScreen={setScreen}
         selectedGenres={singlePlayerGenres}
-        minYear={singlePlayerMinYear}
-        maxYear={singlePlayerMaxYear}
+        minYear={singlePlayerMinYear} maxYear={singlePlayerMaxYear}
         playlistTracks={singlePlayerPlaylist}
         timerSeconds={timerSeconds}
       />
@@ -184,10 +162,7 @@ function App() {
 
   if (screen === "winner") {
     return (
-      <Winner
-        winner={winner}
-        onBack={() => setScreen("start")}
-      />
+      <Winner t={t} winner={winner} onBack={() => setScreen("start")} />
     );
   }
 

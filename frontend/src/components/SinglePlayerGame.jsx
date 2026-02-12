@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import axios from "axios";
 import { useSpotifyDirect } from "./useSpotifyPlayer";
 
-function SinglePlayerGame({
+function SinglePlayerGame({ t,
   setScreen,
   selectedGenres,
   minYear,
@@ -229,12 +229,14 @@ function SinglePlayerGame({
 
   // ── Share score ──
   const shareScore = () => {
-    const text = `🎵 Spotify Hitster Solo\n✅ ${score} correct\n🔥 Best streak: ${bestStreak}\n🎯 ${Math.round((score / Math.max(totalPlayed, 1)) * 100)}% accuracy`;
+    const acc = Math.round((score / Math.max(totalPlayed, 1)) * 100);
+    const text = t?.shareText(score, bestStreak, acc) ||
+      `🎵 Spotify Hitster Solo\n✅ ${score} correct\n🔥 Best streak: ${bestStreak}\n🎯 ${acc}% accuracy`;
     if (navigator.share) {
       navigator.share({ title: "Hitster Score", text });
     } else {
       navigator.clipboard.writeText(text);
-      alert("Score copied to clipboard!");
+      alert(t?.scoreCopied || "Score copied to clipboard!");
     }
   };
 
@@ -242,15 +244,15 @@ function SinglePlayerGame({
   if (gameOver) {
     return (
       <div className="container">
-        <h1>Game Over!</h1>
+        <h1>{ t?.gameOver || "Game Over!" }</h1>
         <div className="sp-stats">
-          <div className="sp-stat"><div className="sp-stat-num">{score}</div><div className="sp-stat-label">Correct</div></div>
-          <div className="sp-stat"><div className="sp-stat-num">{bestStreak}</div><div className="sp-stat-label">Best Streak</div></div>
-          <div className="sp-stat"><div className="sp-stat-num">{Math.round((score / Math.max(totalPlayed, 1)) * 100)}%</div><div className="sp-stat-label">Accuracy</div></div>
+          <div className="sp-stat"><div className="sp-stat-num">{score}</div><div className="sp-stat-label">{t?.correct || 'Correct'}</div></div>
+          <div className="sp-stat"><div className="sp-stat-num">{bestStreak}</div><div className="sp-stat-label">{t?.bestStreak || 'Best Streak'}</div></div>
+          <div className="sp-stat"><div className="sp-stat-num">{Math.round((score / Math.max(totalPlayed, 1)) * 100)}%</div><div className="sp-stat-label">{t?.accuracy || 'Accuracy'}</div></div>
         </div>
-        <button onClick={shareScore} style={{ background: "#1DB954", marginBottom: 12 }}>📤 Share Score</button>
-        <button onClick={() => setScreen("singleplayer-setup")} style={{ background: "#444" }}>Play Again</button>
-        <button onClick={() => setScreen("start")} style={{ background: "transparent", color: "#b3b3b3", marginTop: 8 }}>← Home</button>
+        <button onClick={shareScore} style={{ background: "#1DB954", marginBottom: 12 }}>{ t?.shareScore || "📤 Share Score" }</button>
+        <button onClick={() => setScreen("singleplayer-setup")} style={{ background: "#444" }}>{ t?.playAgain || "Play Again" }</button>
+        <button onClick={() => setScreen("start")} style={{ background: "transparent", color: "#b3b3b3", marginTop: 8 }}>{ t?.back || "← Home" }</button>
       </div>
     );
   }
@@ -261,16 +263,16 @@ function SinglePlayerGame({
     <div className="container">
       <div className="game-header">
         <div>
-          <h2>Solo Mode</h2>
-          <h3>Score: {score}</h3>
+          <h2>{ t?.soloMode_label || "Solo Mode" }</h2>
+          <h3>{ t?.score || "Score" }: {score}</h3>
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
           {streak >= 2 && <div className="streak-badge">🔥 {streak}</div>}
-          <button onClick={() => setGameOver(true)} style={{ background: "#444", fontSize: 13, padding: "6px 12px", minWidth: "auto" }}>End</button>
+          <button onClick={() => setGameOver(true)} style={{ background: "#444", fontSize: 13, padding: "6px 12px", minWidth: "auto" }}>{ t?.end || "End" }</button>
         </div>
       </div>
 
-      {loading && <div className="loading-card">Loading song...</div>}
+      {loading && <div className="loading-card">t?.loadingSong || "Loading song..."</div>}
 
       {timeLeft !== null && (
         <div className={`timer-display ${timeLeft <= 5 ? "timer-urgent" : ""}`}>{timeLeft}s</div>
@@ -346,11 +348,11 @@ function SinglePlayerGame({
 
       <div className="action-container">
         {!revealed && !loading && (
-          <button onClick={handleReveal}>Reveal</button>
+          <button onClick={handleReveal}>{ t?.reveal || "Reveal" }</button>
         )}
         {revealed && (
           <button onClick={nextCard}>
-            {result === "correct" ? "✅ Next Song" : "❌ Next Song"}
+            {t?.nextSong(result === 'correct') || (result === 'correct' ? '✅ Next Song' : '❌ Next Song')}
           </button>
         )}
       </div>

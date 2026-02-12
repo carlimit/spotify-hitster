@@ -3,7 +3,7 @@ import Slider from "rc-slider";
 import "rc-slider/assets/index.css";
 import axios from "axios";
 
-function SinglePlayerSetup({
+function SinglePlayerSetup({ t,
   setScreen,
   genres, setGenres,
   minYear, setMinYear,
@@ -36,13 +36,13 @@ function SinglePlayerSetup({
 
   return (
     <div className="container">
-      <h1>Solo Mode</h1>
+      <h1>{ t?.soloTitle || "Solo Mode" }</h1>
       <p style={{ color: "#b3b3b3", textAlign: "center", marginBottom: 16 }}>
-        Place as many songs as you can correctly. See how long your streak goes!
+        {t?.soloDesc || "Place as many songs as you can correctly. See how long your streak goes!"}
       </p>
 
       <div className="home-section">
-        <h2>Genres</h2>
+        <h2>{ t?.genres || "Genres" }</h2>
         <div className="genre-buttons">
           {["pop", "rock", "hiphop", "edm", "jazz", "metal", "house"].map(g => (
             <button
@@ -57,18 +57,18 @@ function SinglePlayerSetup({
       </div>
 
       <div className="home-section">
-        <h2>Or use a Playlist</h2>
+        <h2>{ t?.orUsePlaylist || "Or use a Playlist" }</h2>
         {!playlist ? (
           <>
             <input
               type="text"
-              placeholder="Paste Spotify playlist link..."
+              placeholder={t?.pastePlaceholder || 'Paste Spotify playlist link...'}
               value={playlistUrl}
               onChange={e => setPlaylistUrl(e.target.value)}
               onKeyPress={e => e.key === "Enter" && loadPlaylist()}
             />
             <button onClick={loadPlaylist} disabled={playlistLoading || !playlistUrl.trim()} style={{ background: "#444" }}>
-              {playlistLoading ? "Loading..." : "Load Playlist"}
+              {playlistLoading ? (t?.loading || "Loading...") : (t?.loadPlaylist || "Load Playlist")}
             </button>
             {playlistError && <p style={{ color: "#ff5555", fontSize: "13px", marginTop: 8 }}>{playlistError}</p>}
           </>
@@ -76,13 +76,13 @@ function SinglePlayerSetup({
           <div className="playlist-info">
             <div className="playlist-name">🎵 {playlist.name}</div>
             <div className="playlist-count">{playlist.trackCount} tracks</div>
-            <button onClick={() => setPlaylist(null)} style={{ background: "#444", marginTop: 8 }}>Remove</button>
+            <button onClick={() => setPlaylist(null)} style={{ background: "#444", marginTop: 8 }}>{ t?.remove || "Remove" }</button>
           </div>
         )}
       </div>
 
       <div className="home-section">
-        <h2>Year Range</h2>
+        <h2>{ t?.yearRange || "Year Range" }</h2>
         <Slider
           range
           min={1960}
@@ -94,7 +94,7 @@ function SinglePlayerSetup({
       </div>
 
       <div className="home-section">
-        <h2>Timer</h2>
+        <h2>{ t?.timer || "Timer" }</h2>
         <div className="timer-options">
           {[0, 15, 30, 45, 60].map(s => (
             <button
@@ -102,7 +102,7 @@ function SinglePlayerSetup({
               onClick={() => setTimerSeconds(s)}
               style={{ background: timerSeconds === s ? "#1DB954" : "#444" }}
             >
-              {s === 0 ? "Off" : `${s}s`}
+              {s === 0 ? (t?.timerOff || "Off") : `${s}s`}
             </button>
           ))}
         </div>

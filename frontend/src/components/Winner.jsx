@@ -1,9 +1,10 @@
-function Winner({ winner, onBack }) {
+function Winner({ winner, onBack, t }) {
   return (
     <div className="container">
-      <h1>🎉 {winner?.name} Wins!</h1>
+      <h1>{t?.winner || "🎉 Winner!"}</h1>
+      <h2>{t?.wins(winner?.name) || `${winner?.name} wins!`}</h2>
       <button onClick={onBack}>
-        Back to Home
+        {t?.backToStart || "← Back to Start"}
       </button>
     </div>
   );

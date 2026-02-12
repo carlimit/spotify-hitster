@@ -14,7 +14,8 @@ function Game({
   setWinner,
   playlistTracks: initialPlaylistTracks,
   winGoal = 10,
-  timerSeconds = 0
+  timerSeconds = 0,
+  t
 }) {
   const [players, setLocalPlayers] = useState(initialPlayers);
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0);
@@ -435,7 +436,7 @@ function Game({
       <div className="game-header">
         <div>
           <h2>{currentPlayer.name}'s Turn</h2>
-          <h3>{isMyTurn ? "Your turn!" : `Waiting for ${currentPlayer.name}...`}</h3>
+          <h3>{isMyTurn ? t?.yourTurn || "Your turn!" : t?.waitingFor(currentPlayer.name) || `Waiting for ${currentPlayer.name}...`}</h3>
         </div>
         {!isMyTurn && (
           <div className="coin-display">
@@ -444,7 +445,7 @@ function Game({
         )}
       </div>
 
-      {loading && <div className="loading-card">Loading song...</div>}
+      {loading && <div className="loading-card">`${t?.loadingSong || "Loading song..."}`</div>}
 
       {timeLeft !== null && isMyTurn && (
         <div className={`timer-display ${timeLeft <= 5 ? "timer-urgent" : ""}`}>
@@ -544,7 +545,7 @@ function Game({
                           {playing ? "⏸" : "▶"}
                         </button>
                       <div className="drag-hint">
-                        {isMyTurn ? "Drag to place" : `${currentPlayer.name} is playing...`}
+                        {isMyTurn ? (t?.dragToPlace || "Drag to place") : (t?.isPlaying(currentPlayer.name) || `${currentPlayer.name} is playing...`)}
                       </div>
                     </div>
 
@@ -592,19 +593,19 @@ function Game({
 
       <div className="action-container">
         {isMyTurn && !revealed && !loading && (
-          <button onClick={handleReveal}>Reveal</button>
+          <button onClick={handleReveal}>{ t?.reveal || "Reveal" }</button>
         )}
         {isMyTurn && showNextButton && (
-          <button onClick={nextTurn}>Next Player</button>
+          <button onClick={nextTurn}>{ t?.nextPlayer || "Next Player" }</button>
         )}
         {isNextPlayer && !revealed && !loading && (
           <button className="give-coin-btn" onClick={giveCoin}>
-            🎤 Give coin to {currentPlayer.name}
+            { t?.giveCoin(currentPlayer.name) || `🎤 Give coin to ${currentPlayer.name}` }
           </button>
         )}
         {!isMyTurn && showRecognition && (
           <button className="recognition-btn" onClick={claimRecognition}>
-            🎵 I know this song! +1🪙
+            { t?.iKnowThisSong || "🎵 I know this song! +1🪙" }
           </button>
         )}
       </div>
