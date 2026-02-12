@@ -4,7 +4,7 @@ import "rc-slider/assets/index.css";
 import { socket } from "../socket";
 
 function Home({
-  setGamePhase,
+  setScreen,
   setPlayers,
   selectedGenres,
   setSelectedGenres,
@@ -13,7 +13,7 @@ function Home({
   maxYear,
   setMaxYear,
   isHost,
-  setRoomCode // 🔥 NEW - passed from App
+  setRoomCode
 }) {
   const [playerName, setPlayerName] = useState("");
   const [inputCode, setInputCode] = useState("");
@@ -32,19 +32,19 @@ function Home({
 
     socket.on("game_created", ({ code }) => {
       setLocalRoomCode(code);
-      setRoomCode(code); // 🔥 Save to App
+      setRoomCode(code);
       setHasJoined(true);
     });
 
     socket.on("joined_success", ({ code }) => {
       setLocalRoomCode(code);
-      setRoomCode(code); // 🔥 Save to App
+      setRoomCode(code);
       setHasJoined(true);
     });
 
     socket.on("game_started", ({ players }) => {
       setPlayers(players);
-      setGamePhase("playing");
+      setScreen("playing"); // ✅ uses setScreen now
     });
 
     return () => {
@@ -56,7 +56,7 @@ function Home({
   }, []);
 
   // ============================================================
-  // CREATE GAME (HOST)
+  // ACTIONS
   // ============================================================
 
   const createGame = () => {
@@ -64,27 +64,15 @@ function Home({
     socket.emit("create_game", { name: playerName });
   };
 
-  // ============================================================
-  // JOIN GAME
-  // ============================================================
-
   const joinGame = () => {
     if (!playerName.trim() || !inputCode.trim()) return;
-    socket.emit("join_game", { code: inputCode, name: playerName });
+    socket.emit("join_game", { code: inputCode.toUpperCase(), name: playerName });
   };
-
-  // ============================================================
-  // START GAME (HOST ONLY)
-  // ============================================================
 
   const startGame = () => {
     if (!localRoomCode) return;
     socket.emit("start_game", { code: localRoomCode, minYear, maxYear });
   };
-
-  // ============================================================
-  // GENRE TOGGLE
-  // ============================================================
 
   const toggleGenre = genre => {
     if (selectedGenres.includes(genre)) {
@@ -102,8 +90,6 @@ function Home({
     <div className="container">
       <h1>Lobby</h1>
 
-      {/* ===================== JOIN / CREATE ===================== */}
-
       {!hasJoined && (
         <div className="home-section">
           <input
@@ -113,7 +99,6 @@ function Home({
             onChange={e => setPlayerName(e.target.value)}
             onKeyPress={e => e.key === "Enter" && (isHost ? createGame() : joinGame())}
           />
-
           {isHost ? (
             <button onClick={createGame}>Create Game</button>
           ) : (
@@ -129,8 +114,6 @@ function Home({
           )}
         </div>
       )}
-
-      {/* ===================== LOBBY ===================== */}
 
       {hasJoined && (
         <>

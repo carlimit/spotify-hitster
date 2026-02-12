@@ -1,9 +1,8 @@
-function Winner({ winner, setGamePhase }) {
+function Winner({ winner, onBack }) {
   return (
     <div className="container">
-      <h1>{winner?.name} Wins!</h1>
-
-      <button onClick={() => setGamePhase("home")}>
+      <h1>🎉 {winner?.name} Wins!</h1>
+      <button onClick={onBack}>
         Back to Home
       </button>
     </div>
