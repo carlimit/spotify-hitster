@@ -125,9 +125,7 @@ function App() {
         <Game
           players={players}
           setPlayers={setPlayers}
-          setGamePhase={setGamePhase}
           selectedGenres={selectedGenres}
-          setWinner={setWinner}
           minYear={minYear}
           maxYear={maxYear}
           isHost={isHost}

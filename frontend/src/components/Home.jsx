@@ -39,8 +39,8 @@ function Home({
       setHasJoined(true);
     });
 
-    socket.on("game_started", ({ players }) => {
-      setPlayers(players);
+    socket.on("game_started", (data) => {
+      setPlayers(data.players);
       setGamePhase("playing");
     });
 

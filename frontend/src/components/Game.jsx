@@ -4,12 +4,14 @@ import axios from "axios";
 import { socket } from "../socket";
 
 function Game({
+  players,
+  setPlayers,
   selectedGenres,
   minYear,
   maxYear,
   isHost
-}) {
-  const [players, setPlayers] = useState([]);
+})
+ {
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0);
   const [cards, setCards] = useState([]);
   const [result, setResult] = useState(null);
