@@ -196,6 +196,7 @@ function Game({
           value={card}
           drag={!revealed}
           dragListener={card.type === "new"}
+          dragTransition={{ bounceStiffness: 600, bounceDamping: 20 }}
           className={`card ${
             card.type === "new" && revealed ? "card-expanded" : ""
           }`}

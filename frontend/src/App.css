@@ -141,27 +141,32 @@ button[style*="background"] {
 .timeline {
   width: 100%;
   max-width: 600px;
-  display: flex;
-  flex-direction: column;
+  display: flex !important;
+  flex-direction: column !important;
   gap: 24px;
-  margin: 24px auto 0 auto;
-  padding: 0 0 20px 0;
-  align-items: center;
+  margin: 24px auto 0 auto !important;
+  padding: 0 !important;
+  align-items: center !important;
   list-style: none;
+  padding-bottom: 20px !important;
 }
 
 /* Force Reorder.Item to center */
+.timeline > li,
 .timeline > * {
-  width: 100%;
-  display: flex;
-  justify-content: center;
+  width: 100% !important;
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  margin: 0 auto !important;
+  padding: 0 !important;
 }
 
 /* ---------- Cards ---------- */
 
 .card {
-  width: 100%;
-  max-width: 500px;
+  width: 100% !important;
+  max-width: 500px !important;
   min-height: 200px;
   aspect-ratio: 5 / 3;
   perspective: 1500px;
@@ -170,6 +175,7 @@ button[style*="background"] {
   touch-action: none;
   position: relative;
   z-index: 1;
+  margin: 0 auto !important;
 }
 
 .card:active {
@@ -505,20 +511,21 @@ button[style*="background"] {
 @media (max-width: 480px) {
   .timeline {
     gap: 20px;
-    max-width: 100%;
-    padding: 0 0 20px 0;
-    margin: 24px 0 0 0;
+    max-width: 100% !important;
+    padding: 0 0 20px 0 !important;
+    margin: 24px auto 0 auto !important;
   }
   
   .card {
     border-radius: 16px;
-    max-width: 95%;
+    max-width: 90% !important;
     min-height: 180px;
+    margin: 0 auto !important;
   }
   
   .card-expanded {
     min-height: 380px;
-    max-width: 95%;
+    max-width: 90% !important;
   }
   
   h1 {
@@ -538,12 +545,12 @@ button[style*="background"] {
 @media (max-width: 360px) {
   .card {
     min-height: 160px;
-    max-width: 100%;
+    max-width: 95% !important;
   }
   
   .card-expanded {
     min-height: 350px;
-    max-width: 100%;
+    max-width: 95% !important;
   }
   
   .play-button {
