@@ -6,7 +6,11 @@ import "./App.css";
 import { getLoginUrl } from "./spotify";
 
 function App() {
+  // ---------- GLOBAL STATE ----------
+  const [view, setView] = useState("start"); 
+  const [isHost, setIsHost] = useState(false);
   const [token, setToken] = useState(null);
+
   const [gamePhase, setGamePhase] = useState("home");
   const [players, setPlayers] = useState([]);
   const [selectedGenres, setSelectedGenres] = useState([]);
@@ -14,7 +18,10 @@ function App() {
   const [minYear, setMinYear] = useState(1990);
   const [maxYear, setMaxYear] = useState(2024);
 
+  // ---------- HANDLE SPOTIFY REDIRECT (ONLY FOR HOST) ----------
   useEffect(() => {
+    if (!isHost) return;
+
     const params = new URLSearchParams(window.location.search);
     const code = params.get("code");
 
@@ -29,17 +36,50 @@ function App() {
           localStorage.setItem("token", data.access_token);
           setToken(data.access_token);
           window.history.replaceState({}, document.title, "/");
+          setView("home");
         });
-    } else {
-      const storedToken = localStorage.getItem("token");
-      if (storedToken) setToken(storedToken);
     }
-  }, []);
+  }, [isHost]);
 
-  if (!token) {
+  // ============================================================
+  // ====================== START SCREEN ========================
+  // ============================================================
+
+  if (view === "start") {
     return (
       <div className="container">
         <h1>Spotify Hitster</h1>
+
+        <button
+          onClick={() => {
+            setIsHost(true);
+            setView("host-login");
+          }}
+        >
+          Host Game
+        </button>
+
+        <button
+          style={{ marginTop: "15px", background: "#444" }}
+          onClick={() => {
+            setIsHost(false);
+            setView("home"); // Join without Spotify
+          }}
+        >
+          Join Game
+        </button>
+      </div>
+    );
+  }
+
+  // ============================================================
+  // ====================== HOST LOGIN ==========================
+  // ============================================================
+
+  if (view === "host-login") {
+    return (
+      <div className="container">
+        <h2>Host Login</h2>
         <button
           onClick={async () => {
             const url = await getLoginUrl();
@@ -51,6 +91,10 @@ function App() {
       </div>
     );
   }
+
+  // ============================================================
+  // ====================== MAIN FLOW ===========================
+  // ============================================================
 
   return (
     <div>
@@ -77,6 +121,7 @@ function App() {
           setWinner={setWinner}
           minYear={minYear}
           maxYear={maxYear}
+          isHost={isHost}   // 🔥 wichtig
         />
       )}
 

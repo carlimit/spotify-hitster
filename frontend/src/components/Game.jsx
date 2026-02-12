@@ -6,7 +6,8 @@ import { socket } from "../socket";
 function Game({
   selectedGenres,
   minYear,
-  maxYear
+  maxYear,
+  isHost
 }) {
   const [players, setPlayers] = useState([]);
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0);
@@ -16,24 +17,26 @@ function Game({
   const [showNextButton, setShowNextButton] = useState(false);
   const [revealed, setRevealed] = useState(false);
   const [isMyTurn, setIsMyTurn] = useState(false);
-  const [gameCode, setGameCode] = useState(null);
 
-  // Spotify
+  // Spotify (nur Host)
   const [player, setPlayer] = useState(null);
   const [deviceId, setDeviceId] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
 
   const currentPlayer = players[currentPlayerIndex];
 
-  // -----------------------------
-  // 🎧 Spotify Setup
-  // -----------------------------
+  // ============================================================
+  // 🎧 SPOTIFY (HOST ONLY)
+  // ============================================================
+
   useEffect(() => {
+    if (!isHost) return;
+
     const token = localStorage.getItem("token");
-    if (!window.Spotify) return;
+    if (!window.Spotify || !token) return;
 
     const spotifyPlayer = new window.Spotify.Player({
-      name: "Spotify Hitster Player",
+      name: "Spotify Hitster Host Player",
       getOAuthToken: cb => cb(token),
       volume: 0.5
     });
@@ -49,9 +52,11 @@ function Game({
 
     spotifyPlayer.connect();
     setPlayer(spotifyPlayer);
-  }, []);
+  }, [isHost]);
 
   const handlePlayPause = async (uri) => {
+    if (!isHost) return;
+
     const token = localStorage.getItem("token");
     if (!deviceId || !player) return;
 
@@ -72,9 +77,10 @@ function Game({
     }
   };
 
-  // -----------------------------
-  // 🎮 Socket Events
-  // -----------------------------
+  // ============================================================
+  // 🎮 SOCKET EVENTS
+  // ============================================================
+
   useEffect(() => {
     socket.on("game_started", ({ players, currentPlayerIndex }) => {
       setPlayers(players);
@@ -82,22 +88,29 @@ function Game({
       setCards(players[currentPlayerIndex].timeline);
     });
 
-    socket.on("turn_changed", ({ currentPlayerIndex }) => {
+    socket.on("turn_changed", ({ players, currentPlayerIndex }) => {
+      setPlayers(players);
       setCurrentPlayerIndex(currentPlayerIndex);
       setIsMyTurn(false);
       setRevealed(false);
       setShowNextButton(false);
       setResult(null);
-      setCards(players[currentPlayerIndex]?.timeline || []);
+      setCards(players[currentPlayerIndex].timeline);
     });
 
-    socket.on("your_turn", async () => {
+    socket.on("your_turn", async ({ players }) => {
+      setPlayers(players);
       setIsMyTurn(true);
       setLoading(true);
 
       const newCard = await generateCard();
 
-      setCards([...currentPlayer.timeline, newCard]);
+      const updatedTimeline = [
+        ...players[currentPlayerIndex].timeline,
+        newCard
+      ];
+
+      setCards(updatedTimeline);
       setLoading(false);
     });
 
@@ -106,11 +119,12 @@ function Game({
       socket.off("turn_changed");
       socket.off("your_turn");
     };
-  }, [players]);
+  }, [currentPlayerIndex]);
 
-  // -----------------------------
-  // 🎲 Generate Card (nur Client sichtbar)
-  // -----------------------------
+  // ============================================================
+  // 🎲 GENERATE CARD (CLIENT SIDE)
+  // ============================================================
+
   const generateCard = async () => {
     const randomGenre =
       selectedGenres[Math.floor(Math.random() * selectedGenres.length)];
@@ -130,9 +144,10 @@ function Game({
     };
   };
 
-  // -----------------------------
-  // 🧠 Reveal Logic (nur lokal)
-  // -----------------------------
+  // ============================================================
+  // 🧠 REVEAL
+  // ============================================================
+
   const handleReveal = () => {
     if (!isMyTurn) return;
 
@@ -150,20 +165,24 @@ function Game({
 
     if (!correct) {
       setResult("wrong");
-      setTimeout(() => setShowNextButton(true), 600);
+      setTimeout(() => setShowNextButton(true), 700);
       return;
     }
 
     setResult("correct");
-    setTimeout(() => setShowNextButton(true), 600);
+    setTimeout(() => setShowNextButton(true), 700);
   };
 
   const nextTurn = () => {
     socket.emit("next_turn");
   };
 
+  // ============================================================
+  // UI
+  // ============================================================
+
   if (!currentPlayer) {
-    return <div className="container">Waiting...</div>;
+    return <div className="container">Waiting for players...</div>;
   }
 
   return (
@@ -181,31 +200,32 @@ function Game({
           <Reorder.Item
             key={card.id}
             value={card}
-            dragListener={card.type === "new" && !revealed && isMyTurn}
+            dragListener={card.type === "new" && isMyTurn && !revealed}
             dragElastic={0}
             dragMomentum={false}
-            whileDrag={{ scale: 1.02 }}
-            transition={{ type: "tween", duration: 0.15 }}
             layout="position"
+            transition={{ duration: 0.15 }}
             className={`card ${
               card.type === "new" && revealed ? "card-expanded" : ""
             }`}
           >
             {card.type === "new" ? (
               <div
-                className={`card-inner 
-                  ${revealed ? "flipped" : ""} 
+                className={`card-inner
+                  ${revealed ? "flipped" : ""}
                   ${result === "correct" ? "result-correct" : ""}
                   ${result === "wrong" ? "result-wrong" : ""}
                 `}
               >
                 <div className="card-front new">
-                  <div
-                    className="play-button"
-                    onClick={() => handlePlayPause(card.uri)}
-                  >
-                    {isPlaying ? "⏸" : "▶"}
-                  </div>
+                  {isHost && (
+                    <div
+                      className="play-button"
+                      onClick={() => handlePlayPause(card.uri)}
+                    >
+                      {isPlaying ? "⏸" : "▶"}
+                    </div>
+                  )}
                   <div>Drag to place</div>
                 </div>
 
