@@ -15,13 +15,13 @@ function Home({
   isHost
 }) {
   const [playerName, setPlayerName] = useState("");
-  const [inputCode, setInputCode] = useState(""); // was user eintippt
-  const [roomCode, setRoomCode] = useState(null); // echtes Game Code
+  const [inputCode, setInputCode] = useState("");
+  const [roomCode, setRoomCode] = useState(null);
   const [lobbyPlayers, setLobbyPlayers] = useState([]);
   const [hasJoined, setHasJoined] = useState(false);
 
   // ============================================================
-  // SOCKET LISTENER
+  // SOCKET LISTENERS
   // ============================================================
 
   useEffect(() => {
@@ -39,8 +39,8 @@ function Home({
       setHasJoined(true);
     });
 
-    socket.on("game_started", (data) => {
-      setPlayers(data.players);
+    socket.on("game_started", ({ players }) => {
+      setPlayers(players);
       setGamePhase("playing");
     });
 
@@ -58,7 +58,10 @@ function Home({
 
   const createGame = () => {
     if (!playerName.trim()) return;
-    socket.emit("create_game", { name: playerName });
+
+    socket.emit("create_game", {
+      name: playerName
+    });
   };
 
   // ============================================================
@@ -75,19 +78,18 @@ function Home({
   };
 
   // ============================================================
-  // START GAME (HOST)
+  // START GAME (HOST ONLY)  🔥 FIXED
   // ============================================================
 
   const startGame = () => {
-      if (!gameCode) return;
+    if (!roomCode) return;
 
-      socket.emit("start_game", {
-        code: gameCode,
-        minYear,
-        maxYear
-      });
-    };
-
+    socket.emit("start_game", {
+      code: roomCode,
+      minYear,
+      maxYear
+    });
+  };
 
   // ============================================================
   // GENRE TOGGLE
