@@ -51,17 +51,10 @@ function Game({
       setResult(null);
     });
 
-    socket.on("your_turn", async () => {
+    socket.on("your_turn", () => {
+  console.log("🔥 I RECEIVED YOUR TURN");
+});
 
-      setIsMyTurn(true);
-      setLoading(true);
-
-      const newCard = await generateCard();
-
-      setCards(prev => [...prev, newCard]);
-
-      setLoading(false);
-    });
 
 
     return () => {
