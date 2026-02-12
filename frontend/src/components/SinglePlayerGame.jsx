@@ -192,7 +192,6 @@ function SinglePlayerGame({ t,
   // ── Drag ──
   const handleDragStart = useCallback((e) => {
     if (revealedRef.current) return;
-    if (e.cancelable) e.preventDefault();
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     startYRef.current = clientY;
@@ -323,14 +322,6 @@ function SinglePlayerGame({ t,
     };
   }, []);
 
-  // Non-passive touchstart on drag card — blocks pull-to-refresh before it starts
-  useEffect(() => {
-    const el = dragCardRef.current;
-    if (!el) return;
-    el.addEventListener("touchstart", handleDragStart, { passive: false });
-    return () => el.removeEventListener("touchstart", handleDragStart);
-  });
-
   // ── Share score ──
   const shareScore = () => {
     const acc = Math.round((score / Math.max(totalPlayed, 1)) * 100);
@@ -415,6 +406,7 @@ function SinglePlayerGame({ t,
                     userSelect: "none"
                   }}
                   onMouseDown={isNewCard && !revealed ? handleDragStart : undefined}
+                  onTouchStart={isNewCard && !revealed ? handleDragStart : undefined}
                 >
                   {isNewCard ? (
                     <div className={`card-inner ${revealed ? "flipped" : ""} ${result === "correct" ? "result-correct" : ""} ${result === "wrong" ? "result-wrong" : ""}`}>
