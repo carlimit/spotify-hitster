@@ -51,21 +51,6 @@ function App() {
   }, [isHost]);
 
   // ============================================================
-  // 🔥 Listen for game_started to switch phase
-  // ============================================================
-
-  useEffect(() => {
-    socket.on("game_started", ({ players }) => {
-      setPlayers(players);
-      setGamePhase("playing");
-    });
-
-    return () => {
-      socket.off("game_started");
-    };
-  }, []);
-
-  // ============================================================
   // 🟢 START SCREEN
   // ============================================================
 

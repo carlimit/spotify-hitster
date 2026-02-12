@@ -9,7 +9,6 @@ function Game({
   selectedGenres,
   minYear,
   maxYear,
-  isHost,
   roomCode
 }) {
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0);
@@ -21,16 +20,10 @@ function Game({
   const [isMyTurn, setIsMyTurn] = useState(false);
   const [draggedCardIndex, setDraggedCardIndex] = useState(null);
 
-  // ============================================================
-  // 🔑 USE REFS to avoid stale closures in socket listeners
-  // These always hold the latest values no matter when the
-  // socket callback fires
-  // ============================================================
-
+  // Always-fresh refs to avoid stale closures
   const selectedGenresRef = useRef(selectedGenres);
   const minYearRef = useRef(minYear);
   const maxYearRef = useRef(maxYear);
-
   useEffect(() => { selectedGenresRef.current = selectedGenres; }, [selectedGenres]);
   useEffect(() => { minYearRef.current = minYear; }, [minYear]);
   useEffect(() => { maxYearRef.current = maxYear; }, [maxYear]);
@@ -38,14 +31,63 @@ function Game({
   const currentPlayer = players[currentPlayerIndex];
 
   // ============================================================
-  // 🎲 GENERATE CARD (uses refs - always fresh values)
+  // 🚀 ON MOUNT — figure out if it's my turn and load card
+  // We can't rely on game_started socket event here because
+  // App.jsx already handled it and switched to this component —
+  // by the time Game mounts, that event is long gone.
+  // ============================================================
+
+  useEffect(() => {
+    const myPlayer = players.find(p => p.id === socket.id);
+    const myIndex = players.findIndex(p => p.id === socket.id);
+    const startIndex = 0; // currentPlayerIndex starts at 0
+
+    const myTurn = players[startIndex]?.id === socket.id;
+    setIsMyTurn(myTurn);
+    setCurrentPlayerIndex(startIndex);
+
+    if (myTurn) {
+      // It's my turn — load a new card on top of my timeline
+      loadNewCard(players[startIndex]);
+    } else {
+      // Not my turn — just show the current player's timeline
+      setCards(players[startIndex]?.timeline || []);
+    }
+  }, []); // runs once on mount
+
+  // ============================================================
+  // 🎮 SOCKET — turn_changed
+  // ============================================================
+
+  useEffect(() => {
+    socket.on("turn_changed", ({ players, currentPlayerIndex }) => {
+      setPlayers(players);
+      setCurrentPlayerIndex(currentPlayerIndex);
+      setRevealed(false);
+      setShowNextButton(false);
+      setResult(null);
+
+      const myTurn = players[currentPlayerIndex]?.id === socket.id;
+      setIsMyTurn(myTurn);
+
+      if (myTurn) {
+        loadNewCard(players[currentPlayerIndex]);
+      } else {
+        setCards(players[currentPlayerIndex]?.timeline || []);
+      }
+    });
+
+    return () => socket.off("turn_changed");
+  }, []);
+
+  // ============================================================
+  // 🎲 GENERATE CARD
   // ============================================================
 
   const generateCard = async () => {
     const genres = selectedGenresRef.current;
     const min = minYearRef.current;
     const max = maxYearRef.current;
-
     const randomGenre = genres[Math.floor(Math.random() * genres.length)];
 
     const res = await axios.get(
@@ -80,56 +122,10 @@ function Game({
   };
 
   // ============================================================
-  // 🎮 SOCKET EVENTS
+  // 🎯 DRAG END
   // ============================================================
 
-  useEffect(() => {
-
-    socket.on("game_started", ({ players, currentPlayerIndex }) => {
-      setPlayers(players);
-      setCurrentPlayerIndex(currentPlayerIndex);
-
-      const isMyTurnNow = players[currentPlayerIndex]?.id === socket.id;
-      setIsMyTurn(isMyTurnNow);
-
-      if (isMyTurnNow) {
-        loadNewCard(players[currentPlayerIndex]);
-      } else {
-        // Not my turn - just show my fixed timeline
-        setCards(players.find(p => p.id === socket.id)?.timeline || []);
-      }
-    });
-
-    socket.on("turn_changed", ({ players, currentPlayerIndex }) => {
-      setPlayers(players);
-      setCurrentPlayerIndex(currentPlayerIndex);
-      setRevealed(false);
-      setShowNextButton(false);
-      setResult(null);
-
-      const isMyTurnNow = players[currentPlayerIndex]?.id === socket.id;
-      setIsMyTurn(isMyTurnNow);
-
-      if (isMyTurnNow) {
-        loadNewCard(players[currentPlayerIndex]);
-      } else {
-        // Show current active player's timeline to everyone
-        setCards(players[currentPlayerIndex]?.timeline || []);
-      }
-    });
-
-    return () => {
-      socket.off("game_started");
-      socket.off("turn_changed");
-    };
-
-  }, []); // eslint-disable-line — intentionally empty, using refs instead
-
-  // ============================================================
-  // 🎯 DRAG END - reorder cards
-  // ============================================================
-
-  const handleDragEnd = (event, info) => {
+  const handleDragEnd = (event) => {
     const newCardIndex = cards.findIndex(c => c.type === "new");
     const draggedCard = cards[newCardIndex];
 
@@ -141,11 +137,9 @@ function Game({
 
     const dragY = event.clientY ?? event.changedTouches?.[0]?.clientY;
     let insertIndex = 0;
-
     for (let i = 0; i < positions.length; i++) {
       if (dragY > positions[i]) insertIndex = i + 1;
     }
-
     if (insertIndex > newCardIndex) insertIndex--;
 
     const newCards = [...cards];
@@ -160,8 +154,6 @@ function Game({
   // ============================================================
 
   const handleReveal = () => {
-    if (!isMyTurn) return;
-
     setRevealed(true);
 
     const newCardIndex = cards.findIndex(c => c.type === "new");
@@ -190,7 +182,6 @@ function Game({
       score: currentPlayer.score + 1
     };
     setPlayers(updatedPlayers);
-
     setTimeout(() => setShowNextButton(true), 700);
   };
 
@@ -213,67 +204,60 @@ function Game({
   return (
     <div className="container">
       <h2>{currentPlayer.name}'s Turn</h2>
-      <h3>
-        {isMyTurn ? "🎵 Your turn!" : `Waiting for ${currentPlayer.name}...`}
-      </h3>
+      <h3>{isMyTurn ? "Your turn!" : `Waiting for ${currentPlayer.name}...`}</h3>
 
-      {loading && (
-        <div className="loading-card">Loading song...</div>
-      )}
+      {loading && <div className="loading-card">Loading song...</div>}
 
-      <div className="timeline">
-        {cards.map((card, index) => (
-          <motion.div
-            key={card.id}
-            className={`card ${
-              card.type === "new" && revealed ? "card-expanded" : ""
-            }`}
-            drag={!revealed && card.type === "new" && isMyTurn ? "y" : false}
-            dragElastic={0}
-            dragMomentum={false}
-            onDragStart={() => setDraggedCardIndex(index)}
-            onDragEnd={handleDragEnd}
-            whileDrag={{
-              scale: 1.05,
-              boxShadow: "0 20px 60px rgba(29, 185, 84, 0.6)",
-              zIndex: 1000
-            }}
-            style={{
-              zIndex: draggedCardIndex === index ? 1000 : (card.type === "new" && revealed ? 100 : 1),
-              cursor: card.type === "new" && !revealed && isMyTurn ? "grab" : "default"
-            }}
-            animate={draggedCardIndex !== index ? { y: 0 } : {}}
-            transition={{ type: "spring", stiffness: 500, damping: 30 }}
-          >
-            {card.type === "new" ? (
-              <div
-                className={`card-inner
-                  ${revealed ? "flipped" : ""}
-                  ${result === "correct" ? "result-correct" : ""}
-                  ${result === "wrong" ? "result-wrong" : ""}
-                `}
-              >
-                <div className="card-front new">
-                  <div>
-                    {isMyTurn ? "Drag to place" : `${currentPlayer.name} is playing...`}
+      {!loading && (
+        <div className="timeline">
+          {cards.map((card, index) => (
+            <motion.div
+              key={card.id}
+              className={`card ${card.type === "new" && revealed ? "card-expanded" : ""}`}
+              drag={!revealed && card.type === "new" && isMyTurn ? "y" : false}
+              dragElastic={0}
+              dragMomentum={false}
+              onDragStart={() => setDraggedCardIndex(index)}
+              onDragEnd={handleDragEnd}
+              whileDrag={{
+                scale: 1.05,
+                boxShadow: "0 20px 60px rgba(29, 185, 84, 0.6)",
+                zIndex: 1000
+              }}
+              style={{
+                zIndex: draggedCardIndex === index ? 1000 : (card.type === "new" && revealed ? 100 : 1),
+                cursor: card.type === "new" && !revealed && isMyTurn ? "grab" : "default"
+              }}
+              animate={draggedCardIndex !== index ? { y: 0 } : {}}
+              transition={{ type: "spring", stiffness: 500, damping: 30 }}
+            >
+              {card.type === "new" ? (
+                <div
+                  className={`card-inner
+                    ${revealed ? "flipped" : ""}
+                    ${result === "correct" ? "result-correct" : ""}
+                    ${result === "wrong" ? "result-wrong" : ""}
+                  `}
+                >
+                  <div className="card-front new">
+                    <div>{isMyTurn ? "Drag to place" : `${currentPlayer.name} is playing...`}</div>
+                  </div>
+                  <div className="card-back">
+                    <img src={card.cover} className="cover-large" alt="" />
+                    <div className="revealed-year">{card.year}</div>
+                    <strong>{card.artist}</strong>
+                    <div className="song-title">{card.name}</div>
                   </div>
                 </div>
-
-                <div className="card-back">
-                  <img src={card.cover} className="cover-large" alt="" />
-                  <div className="revealed-year">{card.year}</div>
-                  <strong>{card.artist}</strong>
-                  <div className="song-title">{card.name}</div>
+              ) : (
+                <div className="card-front fixed">
+                  <div>{card.year}</div>
                 </div>
-              </div>
-            ) : (
-              <div className="card-front fixed">
-                <div>{card.year}</div>
-              </div>
-            )}
-          </motion.div>
-        ))}
-      </div>
+              )}
+            </motion.div>
+          ))}
+        </div>
+      )}
 
       <div className="action-container">
         {isMyTurn && !revealed && !loading && (
