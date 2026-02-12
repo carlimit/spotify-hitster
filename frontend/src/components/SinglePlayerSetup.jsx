@@ -15,7 +15,6 @@ function SinglePlayerSetup({ t,
   const [playlistUrl, setPlaylistUrl] = useState("");
   const [playlistLoading, setPlaylistLoading] = useState(false);
   const [playlistError, setPlaylistError] = useState(null);
-  const hasToken = !!localStorage.getItem("token");
 
   const toggleGenre = (g) => {
     setGenres(prev => prev.includes(g) ? prev.filter(x => x !== g) : [...prev, g]);
@@ -36,6 +35,13 @@ function SinglePlayerSetup({ t,
     }
   };
 
+  const handleLogin = () => {
+    if (!loginUrl) return;
+    const url = loginUrl;
+    refreshLoginUrl?.();
+    window.location.href = url;
+  };
+
   return (
     <div className="container">
       <h1>{ t?.soloTitle || "Solo Mode" }</h1>
@@ -43,29 +49,17 @@ function SinglePlayerSetup({ t,
         {t?.soloDesc || "Place as many songs as you can correctly. See how long your streak goes!"}
       </p>
 
-      {!hasToken && (
-        <div className="spotify-login-banner">
-          <p>{t?.spotifyNeeded || "Login with Spotify to play music while you guess."}</p>
-          <button
-            style={{ background: "#1DB954" }}
-            disabled={!loginUrl}
-            onClick={() => {
-              if (!loginUrl) return;
-              const url = loginUrl;
-              refreshLoginUrl?.();
-              window.location.href = url;
-            }}
-          >
-            {loginUrl ? (t?.loginWithSpotify || "Login with Spotify") : "…"}
-          </button>
-        </div>
-      )}
-
-      {hasToken && (
-        <div className="spotify-connected-banner">
-          🎵 {t?.spotifyConnected || "Spotify connected"}
-        </div>
-      )}
+      {/* Always show login button — ensures a fresh token every time */}
+      <div className="spotify-login-banner">
+        <p>{t?.spotifyNeeded || "Login with Spotify to play music while you guess."}</p>
+        <button
+          style={{ background: "#1DB954" }}
+          disabled={!loginUrl}
+          onClick={handleLogin}
+        >
+          {loginUrl ? (t?.loginWithSpotify || "Login with Spotify") : "…"}
+        </button>
+      </div>
 
       <div className="home-section">
         <h2>{ t?.genres || "Genres" }</h2>

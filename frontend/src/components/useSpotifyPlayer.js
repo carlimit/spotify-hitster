@@ -37,11 +37,7 @@ function initSDK(token, onReady) {
     });
     player.addListener("not_ready", () => { sdkReady = false; sdkDeviceId = null; });
     player.addListener("initialization_error", ({ message }) => console.error("Spotify init:", message));
-    player.addListener("authentication_error", ({ message }) => {
-      console.error("Spotify auth failed — token may be expired or missing scopes");
-      // Clear bad token so user gets prompted to re-login
-      localStorage.removeItem("token");
-    });
+    player.addListener("authentication_error", ({ message }) => console.error("Spotify auth:", message));
     player.addListener("account_error", ({ message }) => console.error("Spotify Premium needed:", message));
     player.connect();
   };
@@ -105,7 +101,7 @@ export function useSpotifyPlayer(roomCode) {
   }, [isHost]);
 
   const togglePlay = async (uri) => {
-    if (!isHost) return;
+    if (!isHost || !sdkReady) return;
     if (playingRef.current) {
       playingRef.current = false;
       setPlaying(false);
@@ -163,7 +159,8 @@ export function useSpotifyDirect() {
   }, [hasToken]);
 
   const togglePlay = async (uri) => {
-    if (!hasToken) return;
+    // Don't allow play until SDK is actually ready
+    if (!hasToken || !sdkReady || !sdkDeviceId) return;
     if (playingRef.current) {
       playingRef.current = false;
       setPlaying(false);
