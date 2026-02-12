@@ -41,8 +41,6 @@ function Game({
   const draggingRef = useRef(false);
   const startYRef = useRef(0);
   const timelineRef = useRef(null);
-  const spotifyPlayerRef = useRef(null);
-  const deviceIdRef = useRef(null);
 
   useEffect(() => { selectedGenresRef.current = selectedGenres; }, [selectedGenres]);
   useEffect(() => { minYearRef.current = minYear; }, [minYear]);
@@ -50,86 +48,9 @@ function Game({
   useEffect(() => { cardsRef.current = cards; }, [cards]);
   useEffect(() => { revealedRef.current = revealed; }, [revealed]);
   useEffect(() => { dragYRef.current = dragY; }, [dragY]);
-  useEffect(() => { spotifyPlayerRef.current = spotifyPlayer; }, [spotifyPlayer]);
-  useEffect(() => { deviceIdRef.current = deviceId; }, [deviceId]);
 
   const updatePlayers = (p) => { setLocalPlayers(p); setPlayers(p); };
   const currentPlayer = players[currentPlayerIndex];
-
-  // ============================================================
-  // 🎵 SPOTIFY SDK
-  // Only the host has a token, so only host can play music
-  // ============================================================
-
-  useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) return;
-
-    const initPlayer = () => {
-      if (!window.Spotify) return;
-
-      const player = new window.Spotify.Player({
-        name: "Hitster Game Player",
-        getOAuthToken: cb => cb(token),
-        volume: 0.8
-      });
-
-      player.addListener("ready", ({ device_id }) => {
-        setDeviceId(device_id);
-        deviceIdRef.current = device_id;
-      });
-
-      player.addListener("player_state_changed", state => {
-        if (!state) return;
-        setIsPlaying(!state.paused);
-      });
-
-      player.connect();
-      setSpotifyPlayer(player);
-      spotifyPlayerRef.current = player;
-    };
-
-    if (window.Spotify) {
-      initPlayer();
-    } else {
-      window.onSpotifyWebPlaybackSDKReady = initPlayer;
-    }
-
-    return () => {
-      if (spotifyPlayerRef.current) spotifyPlayerRef.current.disconnect();
-    };
-  }, []);
-
-  const handlePlayPause = async (uri) => {
-    const token = localStorage.getItem("token");
-    if (!token) return;
-
-    const player = spotifyPlayerRef.current;
-    const device = deviceIdRef.current;
-
-    if (!player || !device) return;
-
-    if (!isPlaying) {
-      await fetch(
-        `https://api.spotify.com/v1/me/player/play?device_id=${device}`,
-        {
-          method: "PUT",
-          body: JSON.stringify({ uris: [uri] }),
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`
-          }
-        }
-      );
-    } else {
-      player.togglePlay();
-    }
-  };
-
-  const stopPlayback = () => {
-    if (spotifyPlayerRef.current) spotifyPlayerRef.current.pause();
-    setIsPlaying(false);
-  };
 
   // ============================================================
   // 🚀 ON MOUNT
@@ -178,7 +99,7 @@ function Game({
       setDragY(0);
       setInsertIndex(null);
       stop(); // stop music on turn change
-      stopPlayback();
+      
 
       const myTurn = newPlayers[newIndex]?.id === socket.id;
       isMyTurnRef.current = myTurn;
@@ -317,7 +238,7 @@ function Game({
 
     setRevealed(true);
     revealedRef.current = true;
-    stopPlayback();
+    
 
     let correct = true;
     if (left && left.year > newCard.year) correct = false;
@@ -358,7 +279,7 @@ function Game({
   };
 
   const nextTurn = () => {
-    stopPlayback();
+    
     socket.emit("next_turn", { code: roomCode });
   };
 
@@ -371,7 +292,6 @@ function Game({
   }
 
   const newCardOriginalIndex = cards.findIndex(c => c.type === "new");
-  const hasSpotify = !!localStorage.getItem("token");
 
   return (
     <div className="container">
