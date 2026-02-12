@@ -256,6 +256,8 @@ function Game({
 
   const handleDragStart = useCallback((e) => {
     if (revealedRef.current || !isMyTurnRef.current) return;
+    // Prevent pull-to-refresh and overscroll from claiming this touch
+    if (e.cancelable) e.preventDefault();
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     startYRef.current = clientY;
@@ -417,6 +419,15 @@ function Game({
       window.removeEventListener("touchcancel", handleDragEnd);
     };
   }, [handleDragMove, handleDragEnd]);
+
+  // Attach touchstart as non-passive directly on the drag card DOM node
+  // so preventDefault() actually blocks pull-to-refresh before it starts
+  useEffect(() => {
+    const el = dragCardRef.current;
+    if (!el) return;
+    el.addEventListener("touchstart", handleDragStart, { passive: false });
+    return () => el.removeEventListener("touchstart", handleDragStart);
+  });
 
   // ============================================================
   // 🧠 REVEAL
@@ -628,7 +639,6 @@ function Game({
                   userSelect: "none",
                 }}
                 onMouseDown={isNewCard && !revealed && isMyTurn ? handleDragStart : undefined}
-                onTouchStart={isNewCard && !revealed && isMyTurn ? handleDragStart : undefined}
               >
                 {isNewCard ? (
                   <div
