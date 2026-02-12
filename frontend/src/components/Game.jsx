@@ -230,11 +230,15 @@ function Game({
             card.type === "new" && revealed ? "card-expanded" : ""
           }`}
           drag={!revealed && card.type === "new" ? "y" : false}
-          dragConstraints={{ top: 0, bottom: 0 }}
           dragElastic={0}
           dragMomentum={false}
           onDragStart={() => setDraggedCardIndex(index)}
           onDragEnd={handleDragEnd}
+          whileDrag={{ 
+            scale: 1.05,
+            boxShadow: "0 20px 60px rgba(29, 185, 84, 0.6)",
+            zIndex: 1000
+          }}
           style={{
             zIndex: draggedCardIndex === index ? 1000 : (card.type === "new" && revealed ? 100 : 1),
             cursor: card.type === "new" && !revealed ? "grab" : "default"
