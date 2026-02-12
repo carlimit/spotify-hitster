@@ -174,24 +174,23 @@ io.on("connection", (socket) => {
 
   game.started = true;
 
-  // 🎯 Speichere Year Range im Game
-  game.minYear = parseInt(minYear);
-  game.maxYear = parseInt(maxYear);
+  // 🔥 Für jeden Spieler eine Startkarte erzeugen
+  game.players = game.players.map(player => {
+    const randomYear =
+      Math.floor(Math.random() * (maxYear - minYear + 1)) + parseInt(minYear);
 
-  // 🎲 Erstelle Startkarte für jeden Spieler
-  game.players = game.players.map(player => ({
-    ...player,
-    timeline: [
-      {
-        id: Date.now() + Math.random(),
-        year:
-          Math.floor(
-            Math.random() * (game.maxYear - game.minYear + 1)
-          ) + game.minYear,
-        type: "fixed"
-      }
-    ]
-  }));
+    return {
+      ...player,
+      timeline: [
+        {
+          id: Date.now() + Math.random(),
+          year: randomYear,
+          type: "fixed"
+        }
+      ],
+      score: 0
+    };
+  });
 
   io.to(code).emit("game_started", {
     players: game.players,
@@ -199,12 +198,12 @@ io.on("connection", (socket) => {
   });
 
   const activePlayer = game.players[game.currentPlayerIndex];
+
   io.to(activePlayer.id).emit("your_turn", {
-    players: game.players
+    players: game.players,
+    currentPlayerIndex: game.currentPlayerIndex
   });
 });
-
-
 
 
   /* NEXT TURN */
