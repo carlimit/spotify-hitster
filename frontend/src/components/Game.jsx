@@ -9,7 +9,8 @@ function Game({
   selectedGenres,
   minYear,
   maxYear,
-  isHost
+  isHost,
+  roomCode // 🔥 NEW
 }) {
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0);
   const [cards, setCards] = useState([]);
@@ -203,7 +204,7 @@ function Game({
   };
 
   const nextTurn = () => {
-    socket.emit("next_turn", { code: roomCode }); // Pass actual room code as prop
+    socket.emit("next_turn", { code: roomCode });
   };
 
   // ============================================================

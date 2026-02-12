@@ -537,6 +537,21 @@ button[style*="background"] {
   margin-top: 30px !important;
 }
 
+/* ---------- Room Code ---------- */
+
+.room-code {
+  font-size: clamp(36px, 10vw, 52px);
+  font-weight: 900;
+  letter-spacing: 8px;
+  color: #1DB954;
+  background: rgba(29, 185, 84, 0.1);
+  border: 2px solid rgba(29, 185, 84, 0.3);
+  border-radius: 16px;
+  padding: 16px 32px;
+  margin: 12px 0;
+  text-align: center;
+}
+
 /* ---------- Responsive Adjustments ---------- */
 
 @media (max-width: 480px) {

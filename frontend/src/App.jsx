@@ -4,6 +4,7 @@ import Game from "./components/Game";
 import Winner from "./components/Winner";
 import "./App.css";
 import { getLoginUrl } from "./spotify";
+import { socket } from "./socket";
 
 function App() {
 
@@ -18,6 +19,7 @@ function App() {
   const [winner, setWinner] = useState(null);
   const [minYear, setMinYear] = useState(1990);
   const [maxYear, setMaxYear] = useState(2024);
+  const [roomCode, setRoomCode] = useState(null); // 🔥 NEW
 
   // ============================================================
   // 🔐 Spotify Redirect (Host only)
@@ -49,6 +51,21 @@ function App() {
   }, [isHost]);
 
   // ============================================================
+  // 🔥 Listen for game_started to switch phase
+  // ============================================================
+
+  useEffect(() => {
+    socket.on("game_started", ({ players }) => {
+      setPlayers(players);
+      setGamePhase("playing");
+    });
+
+    return () => {
+      socket.off("game_started");
+    };
+  }, []);
+
+  // ============================================================
   // 🟢 START SCREEN
   // ============================================================
 
@@ -70,7 +87,7 @@ function App() {
           style={{ marginTop: "15px", background: "#444" }}
           onClick={() => {
             setIsHost(false);
-            setView("home"); // Join without Spotify
+            setView("home");
           }}
         >
           Join Game
@@ -105,7 +122,6 @@ function App() {
 
   return (
     <div>
-
       {gamePhase === "home" && (
         <Home
           setGamePhase={setGamePhase}
@@ -117,8 +133,8 @@ function App() {
           maxYear={maxYear}
           setMaxYear={setMaxYear}
           isHost={isHost}
+          setRoomCode={setRoomCode} // 🔥 NEW
         />
-
       )}
 
       {gamePhase === "playing" && (
@@ -129,13 +145,13 @@ function App() {
           minYear={minYear}
           maxYear={maxYear}
           isHost={isHost}
+          roomCode={roomCode} // 🔥 NEW
         />
       )}
 
       {gamePhase === "winner" && (
         <Winner winner={winner} setGamePhase={setGamePhase} />
       )}
-
     </div>
   );
 }
