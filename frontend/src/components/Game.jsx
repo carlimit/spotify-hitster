@@ -10,8 +10,8 @@ function Game({
   minYear,
   maxYear,
   isHost
-})
- {
+}) {
+
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0);
   const [cards, setCards] = useState([]);
   const [result, setResult] = useState(null);
@@ -20,16 +20,13 @@ function Game({
   const [revealed, setRevealed] = useState(false);
   const [isMyTurn, setIsMyTurn] = useState(false);
 
-  // Spotify (nur Host)
+  // ==============================
+  // Spotify (Host only)
+  // ==============================
+
   const [player, setPlayer] = useState(null);
   const [deviceId, setDeviceId] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
-
-  const currentPlayer = players[currentPlayerIndex];
-
-  // ============================================================
-  // 🎧 SPOTIFY (HOST ONLY)
-  // ============================================================
 
   useEffect(() => {
     if (!isHost) return;
@@ -54,6 +51,7 @@ function Game({
 
     spotifyPlayer.connect();
     setPlayer(spotifyPlayer);
+
   }, [isHost]);
 
   const handlePlayPause = async (uri) => {
@@ -79,22 +77,32 @@ function Game({
     }
   };
 
-  // ============================================================
-  // 🎮 SOCKET EVENTS (ONLY REGISTER ONCE)
-  // ============================================================
+  // ==============================
+  // SOCKET EVENTS
+  // ==============================
 
   useEffect(() => {
 
     socket.on("game_started", ({ players, currentPlayerIndex }) => {
       setPlayers(players);
       setCurrentPlayerIndex(currentPlayerIndex);
-      setCards(players[currentPlayerIndex].timeline);
+
+      const timeline = players[currentPlayerIndex]?.timeline || [];
+      setCards(timeline);
+
+      setIsMyTurn(false);
+      setRevealed(false);
+      setShowNextButton(false);
+      setResult(null);
     });
 
     socket.on("turn_changed", ({ players, currentPlayerIndex }) => {
       setPlayers(players);
       setCurrentPlayerIndex(currentPlayerIndex);
-      setCards(players[currentPlayerIndex].timeline);
+
+      const timeline = players[currentPlayerIndex]?.timeline || [];
+      setCards(timeline);
+
       setIsMyTurn(false);
       setRevealed(false);
       setShowNextButton(false);
@@ -107,14 +115,11 @@ function Game({
       setIsMyTurn(true);
       setLoading(true);
 
+      const timeline = players[currentPlayerIndex]?.timeline || [];
+
       const newCard = await generateCard();
 
-      const updatedTimeline = [
-        ...players[currentPlayerIndex].timeline,
-        newCard
-      ];
-
-      setCards(updatedTimeline);
+      setCards([...timeline, newCard]);
       setLoading(false);
     });
 
@@ -126,9 +131,9 @@ function Game({
 
   }, []);
 
-  // ============================================================
-  // 🎲 GENERATE CARD
-  // ============================================================
+  // ==============================
+  // GENERATE CARD
+  // ==============================
 
   const generateCard = async () => {
     const randomGenre =
@@ -149,9 +154,9 @@ function Game({
     };
   };
 
-  // ============================================================
-  // 🧠 REVEAL
-  // ============================================================
+  // ==============================
+  // REVEAL
+  // ==============================
 
   const handleReveal = () => {
     if (!isMyTurn) return;
@@ -159,6 +164,8 @@ function Game({
     setRevealed(true);
 
     const newCardIndex = cards.findIndex(c => c.type === "new");
+    if (newCardIndex === -1) return;
+
     const left = cards[newCardIndex - 1];
     const right = cards[newCardIndex + 1];
     const newCard = cards[newCardIndex];
@@ -179,12 +186,14 @@ function Game({
   };
 
   const nextTurn = () => {
-    socket.emit("next_turn"); // Server muss Code selbst speichern
+    socket.emit("next_turn");
   };
 
-  // ============================================================
+  // ==============================
   // UI
-  // ============================================================
+  // ==============================
+
+  const currentPlayer = players[currentPlayerIndex];
 
   if (!currentPlayer) {
     return <div className="container">Waiting for players...</div>;
