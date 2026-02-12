@@ -20,8 +20,11 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: flex-start;
   padding: 20px 16px 140px 16px;
   position: relative;
+  width: 100%;
+  max-width: 100%;
 }
 
 /* ---------- Typography ---------- */
@@ -71,7 +74,8 @@ input[type="text"] {
   border: 2px solid #2a2a2a;
   background: #1a1a1a;
   color: white;
-  margin: 12px 0;
+  margin: 12px auto;
+  display: block;
   transition: all 0.2s ease;
   outline: none;
 }
@@ -125,23 +129,33 @@ button[style*="background"] {
   transition: all 0.2s ease;
 }
 
+/* Genre container centering */
+.container > h2 + * {
+  text-align: center;
+  width: 100%;
+  max-width: 500px;
+}
+
 /* ---------- Timeline ---------- */
 
 .timeline {
   width: 100%;
-  max-width: 480px;
+  max-width: 600px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 24px;
   margin-top: 24px;
-  padding-bottom: 20px;
+  padding: 0 8px 20px 8px;
+  align-items: center;
 }
 
 /* ---------- Cards ---------- */
 
 .card {
   width: 100%;
-  aspect-ratio: 3 / 2;
+  max-width: 500px;
+  min-height: 200px;
+  aspect-ratio: 5 / 3;
   perspective: 1500px;
   transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: grab;
@@ -153,7 +167,8 @@ button[style*="background"] {
 }
 
 .card-expanded {
-  aspect-ratio: 3 / 4;
+  aspect-ratio: 4 / 5;
+  min-height: 400px;
 }
 
 .card-inner {
@@ -187,11 +202,12 @@ button[style*="background"] {
 .card-front.fixed {
   background: linear-gradient(135deg, #2a2a2a 0%, #1f1f1f 100%);
   border: 2px solid #333;
-  font-size: clamp(26px, 6vw, 38px);
+  font-size: clamp(36px, 8vw, 56px);
   font-weight: 800;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
   position: relative;
   color: #1DB954;
+  letter-spacing: -1px;
 }
 
 .card-front.fixed::before {
@@ -237,17 +253,18 @@ button[style*="background"] {
 }
 
 .card-front.new > div:last-child {
-  font-size: 15px;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.9);
-  margin-top: 8px;
+  font-size: 17px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 1);
+  margin-top: 12px;
   letter-spacing: 0.5px;
+  text-transform: uppercase;
 }
 
 /* ---------- Play Button ---------- */
 
 .play-button {
-  font-size: clamp(48px, 10vw, 64px);
+  font-size: clamp(56px, 12vw, 80px);
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3));
@@ -256,9 +273,9 @@ button[style*="background"] {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 80px;
-  height: 80px;
-  background: rgba(0, 0, 0, 0.2);
+  width: 100px;
+  height: 100px;
+  background: rgba(0, 0, 0, 0.3);
   border-radius: 50%;
   backdrop-filter: blur(10px);
 }
@@ -296,31 +313,33 @@ button[style*="background"] {
 /* Year Display */
 
 .revealed-year {
-  font-size: clamp(42px, 10vw, 64px);
+  font-size: clamp(52px, 12vw, 72px);
   font-weight: 900;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
   background: linear-gradient(135deg, #1DB954 0%, #1ed760 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  letter-spacing: -1px;
+  letter-spacing: -2px;
 }
 
 /* Song Info */
 
 .card-back strong {
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 700;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
   text-align: center;
   color: #ffffff;
+  line-height: 1.3;
 }
 
 .song-title {
-  font-size: 14px;
+  font-size: 16px;
   color: #b3b3b3;
   text-align: center;
   font-weight: 400;
+  line-height: 1.4;
 }
 
 /* ---------- Result States ---------- */
@@ -451,20 +470,29 @@ button[style*="background"] {
   padding: 12px 18px;
   background: rgba(255, 255, 255, 0.05);
   border-radius: 10px;
-  margin: 6px 0;
+  margin: 6px auto;
   border-left: 3px solid #1DB954;
   font-weight: 500;
+  display: block;
 }
 
 /* ---------- Responsive Adjustments ---------- */
 
 @media (max-width: 480px) {
   .timeline {
-    gap: 16px;
+    gap: 20px;
+    max-width: 100%;
+    padding: 0 4px 20px 4px;
   }
   
   .card {
     border-radius: 16px;
+    max-width: 100%;
+    min-height: 180px;
+  }
+  
+  .card-expanded {
+    min-height: 380px;
   }
   
   h1 {
@@ -478,6 +506,21 @@ button[style*="background"] {
   .action-container button {
     padding: 16px;
     font-size: 16px;
+  }
+}
+
+@media (max-width: 360px) {
+  .card {
+    min-height: 160px;
+  }
+  
+  .card-expanded {
+    min-height: 350px;
+  }
+  
+  .play-button {
+    width: 85px;
+    height: 85px;
   }
 }
 
