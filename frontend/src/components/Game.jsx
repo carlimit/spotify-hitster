@@ -273,7 +273,6 @@ function Game({
     e.preventDefault();
     dragYRef.current = delta;
 
-    // Move card directly via DOM — zero re-renders during drag
     if (dragCardRef.current) {
       dragCardRef.current.style.transform = `translateY(${delta}px) scale(1.04)`;
       dragCardRef.current.style.boxShadow = "0 28px 70px rgba(29,185,84,0.55)";
@@ -290,34 +289,51 @@ function Game({
       scrollIntervalRef.current = setInterval(() => window.scrollBy(0, SCROLL_SPEED), 16);
     }
 
-    // Compute insert index using actual screen position of dragged card center
+    // Compute target slot using ONLY fixed card positions
+    // slot = 0 means "before all fixed cards", slot = fixedCards.length means "after all"
     const currentCards = cardsRef.current;
     const newIdx = currentCards.findIndex(c => c.type === "new");
-    const cardEls = timelineRef.current?.querySelectorAll(".card");
-    if (!cardEls?.length) return;
+    if (!dragCardRef.current || !timelineRef.current) return;
 
-    // Get the dragged card's current center Y on screen
-    const draggedRect = dragCardRef.current?.getBoundingClientRect();
-    if (!draggedRect) return;
+    const draggedRect = dragCardRef.current.getBoundingClientRect();
     const draggedCenterY = draggedRect.top + draggedRect.height / 2;
 
-    // Find which slot the center falls into by comparing against other cards' midpoints
-    let target = currentCards.length - 1;
-    for (let i = 0; i < cardEls.length; i++) {
-      if (i === newIdx) continue; // skip the dragged card itself
-      const rect = cardEls[i].getBoundingClientRect();
-      const midY = rect.top + rect.height / 2;
-      if (draggedCenterY < midY) {
-        // Dragged card center is above this card's midpoint → insert before it
-        target = i < newIdx ? i : i - 1;
+    // Get all card elements and map them to fixed-card midpoints only
+    const allCardEls = timelineRef.current.querySelectorAll(".card");
+    const fixedMidpoints = []; // {midY, originalIndex}
+    currentCards.forEach((c, i) => {
+      if (c.type !== "new" && allCardEls[i]) {
+        const r = allCardEls[i].getBoundingClientRect();
+        fixedMidpoints.push({ midY: r.top + r.height / 2, originalIndex: i });
+      }
+    });
+
+    // Find which gap between fixed cards the dragged center falls into
+    // slot = how many fixed cards are ABOVE the dragged center
+    let fixedSlot = fixedMidpoints.length; // default: after all fixed cards
+    for (let i = 0; i < fixedMidpoints.length; i++) {
+      if (draggedCenterY < fixedMidpoints[i].midY) {
+        fixedSlot = i;
         break;
       }
-      // If we've passed all cards, target stays at last position
-      target = i < newIdx ? i + 1 : i;
     }
-    target = Math.max(0, Math.min(currentCards.length - 1, target));
-    insertIndexRef.current = target;
-    setInsertIndex(prev => prev === target ? prev : target);
+
+    // Convert fixedSlot to array index: fixedSlot=0 → before first card
+    // The fixed cards that are before the new card occupy indices 0..newIdx-1
+    // The fixed cards after occupy newIdx+1..n
+    // fixedSlot=0 → slot 0 in array
+    // fixedSlot=k where k <= newIdx → slot k (insert before the k-th card)
+    // fixedSlot=k where k > newIdx-1 → slot k+1 (skip over the new card's position)
+    let arraySlot;
+    if (fixedSlot <= newIdx) {
+      arraySlot = fixedSlot;
+    } else {
+      arraySlot = fixedSlot + 1;
+    }
+    arraySlot = Math.max(0, Math.min(currentCards.length, arraySlot));
+
+    insertIndexRef.current = arraySlot;
+    setInsertIndex(prev => prev === arraySlot ? prev : arraySlot);
   }, []);
 
   const insertIndexRef = useRef(null);
@@ -336,14 +352,15 @@ function Game({
 
     const currentCards = cardsRef.current;
     const newIdx = currentCards.findIndex(c => c.type === "new");
-    const target = insertIndexRef.current !== null
-      ? insertIndexRef.current
-      : newIdx;
+    const arraySlot = insertIndexRef.current !== null ? insertIndexRef.current : newIdx;
 
+    // arraySlot is the desired position in the original array
+    // splice(newIdx, 1) removes the card; indices after newIdx shift down by 1
+    // so if arraySlot > newIdx, the actual insert position is arraySlot - 1
     const reordered = [...currentCards];
     const [moved] = reordered.splice(newIdx, 1);
-    const finalTarget = Math.max(0, Math.min(reordered.length, target > newIdx ? target - 1 : target));
-    reordered.splice(finalTarget, 0, moved);
+    const insertAt = arraySlot > newIdx ? arraySlot - 1 : arraySlot;
+    reordered.splice(Math.max(0, Math.min(reordered.length, insertAt)), 0, moved);
     cardsRef.current = reordered;
     setCards(reordered);
     setDragging(false);
@@ -522,10 +539,14 @@ function Game({
             if (dragging && !isNewCard && insertIndex !== null) {
               const origIdx = newCardOriginalIndex;
               const cardEls = timelineRef.current?.querySelectorAll(".card");
-              const cardH = cardEls?.[0]?.getBoundingClientRect().height + 16 || 196;
-              if (insertIndex < origIdx && index >= insertIndex && index < origIdx) {
+              const cardH = (cardEls?.[0]?.getBoundingClientRect().height || 180) + 16;
+              // Cards between insertIndex and origIdx need to shift to make room
+              // Dragging UP: insertIndex < origIdx → cards at [insertIndex..origIdx-1] shift down
+              if (insertIndex <= origIdx && index >= insertIndex && index < origIdx) {
                 shiftY = cardH;
-              } else if (insertIndex > origIdx && index > origIdx && index <= insertIndex) {
+              }
+              // Dragging DOWN: insertIndex > origIdx+1 → cards at [origIdx+1..insertIndex-1] shift up
+              else if (insertIndex > origIdx + 1 && index > origIdx && index < insertIndex) {
                 shiftY = -cardH;
               }
             }

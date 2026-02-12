@@ -226,30 +226,35 @@ function SinglePlayerGame({ t,
         scrollIntervalRef.current = setInterval(() => window.scrollBy(0, SCROLL_SPEED), 16);
       }
 
-      // Use actual screen position of dragged card center
-      const cards = cardsRef.current;
-      const newIdx = cards.findIndex(c => c.type === "new");
-      const container = timelineRef.current;
-      if (!container || !dragCardRef.current) return;
-      const cardEls = container.querySelectorAll(".card");
+      const currentCards = cardsRef.current;
+      const newIdx = currentCards.findIndex(c => c.type === "new");
+      if (!dragCardRef.current || !timelineRef.current) return;
 
       const draggedRect = dragCardRef.current.getBoundingClientRect();
       const draggedCenterY = draggedRect.top + draggedRect.height / 2;
 
-      let target = cards.length - 1;
-      for (let i = 0; i < cardEls.length; i++) {
-        if (i === newIdx) continue;
-        const rect = cardEls[i].getBoundingClientRect();
-        const midY = rect.top + rect.height / 2;
-        if (draggedCenterY < midY) {
-          target = i < newIdx ? i : i - 1;
+      const allCardEls = timelineRef.current.querySelectorAll(".card");
+      const fixedMidpoints = [];
+      currentCards.forEach((c, i) => {
+        if (c.type !== "new" && allCardEls[i]) {
+          const r = allCardEls[i].getBoundingClientRect();
+          fixedMidpoints.push({ midY: r.top + r.height / 2, originalIndex: i });
+        }
+      });
+
+      let fixedSlot = fixedMidpoints.length;
+      for (let i = 0; i < fixedMidpoints.length; i++) {
+        if (draggedCenterY < fixedMidpoints[i].midY) {
+          fixedSlot = i;
           break;
         }
-        target = i < newIdx ? i + 1 : i;
       }
-      target = Math.max(0, Math.min(cards.length - 1, target));
-      insertIndexRef.current = target;
-      setInsertIndex(prev => prev === target ? prev : target);
+
+      let arraySlot = fixedSlot <= newIdx ? fixedSlot : fixedSlot + 1;
+      arraySlot = Math.max(0, Math.min(currentCards.length, arraySlot));
+
+      insertIndexRef.current = arraySlot;
+      setInsertIndex(prev => prev === arraySlot ? prev : arraySlot);
     };
 
     const onEnd = () => {
@@ -268,18 +273,16 @@ function SinglePlayerGame({ t,
       startYRef.current = 0;
 
       const currentCards = cardsRef.current;
-      const origIdx = currentCards.findIndex(c => c.type === "new");
-      const target = insertIndexRef.current;
+      const newIdx = currentCards.findIndex(c => c.type === "new");
+      const arraySlot = insertIndexRef.current !== null ? insertIndexRef.current : newIdx;
       insertIndexRef.current = null;
 
-      if (target !== null && target !== origIdx) {
-        const newCards = [...currentCards];
-        const [card] = newCards.splice(origIdx, 1);
-        const finalTarget = Math.max(0, Math.min(newCards.length, target > origIdx ? target - 1 : target));
-        newCards.splice(finalTarget, 0, card);
-        setCards(newCards);
-        cardsRef.current = newCards;
-      }
+      const reordered = [...currentCards];
+      const [card] = reordered.splice(newIdx, 1);
+      const insertAt = arraySlot > newIdx ? arraySlot - 1 : arraySlot;
+      reordered.splice(Math.max(0, Math.min(reordered.length, insertAt)), 0, card);
+      setCards(reordered);
+      cardsRef.current = reordered;
       setInsertIndex(null);
     };
 
@@ -356,9 +359,12 @@ function SinglePlayerGame({ t,
             if (dragging && !isNewCard && insertIndex !== null) {
               const origIdx = newCardOriginalIndex;
               const cardEls = timelineRef.current?.querySelectorAll(".card");
-              const cardH = cardEls?.[0]?.getBoundingClientRect().height + 16 || 196;
-              if (insertIndex < origIdx && index >= insertIndex && index < origIdx) shiftY = cardH;
-              else if (insertIndex > origIdx && index > origIdx && index <= insertIndex) shiftY = -cardH;
+              const cardH = (cardEls?.[0]?.getBoundingClientRect().height || 180) + 16;
+              if (insertIndex <= origIdx && index >= insertIndex && index < origIdx) {
+                shiftY = cardH;
+              } else if (insertIndex > origIdx + 1 && index > origIdx && index < insertIndex) {
+                shiftY = -cardH;
+              }
             }
 
             return (
