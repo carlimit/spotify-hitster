@@ -1,10 +1,10 @@
-import { useState, useEffect, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { motion } from "framer-motion";
 import axios from "axios";
 import { socket } from "../socket";
 
 function Game({
-  players,
+  players: initialPlayers,
   setPlayers,
   selectedGenres,
   minYear,
@@ -13,6 +13,7 @@ function Game({
   setScreen,
   setWinner
 }) {
+  const [players, setLocalPlayers] = useState(initialPlayers);
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0);
   const [cards, setCards] = useState([]);
   const [result, setResult] = useState(null);
@@ -24,8 +25,6 @@ function Game({
   // Drag state
   const [dragging, setDragging] = useState(false);
   const [dragY, setDragY] = useState(0);
-  const [dragCardIndex, setDragCardIndex] = useState(null);
-  const [orderedCards, setOrderedCards] = useState([]);
 
   // Refs
   const selectedGenresRef = useRef(selectedGenres);
@@ -34,17 +33,22 @@ function Game({
   const cardsRef = useRef(cards);
   const timelineRef = useRef(null);
   const startYRef = useRef(0);
-  const cardHeightRef = useRef(0);
+  const draggingRef = useRef(false);
 
   useEffect(() => { selectedGenresRef.current = selectedGenres; }, [selectedGenres]);
   useEffect(() => { minYearRef.current = minYear; }, [minYear]);
   useEffect(() => { maxYearRef.current = maxYear; }, [maxYear]);
   useEffect(() => { cardsRef.current = cards; }, [cards]);
 
+  const updatePlayers = (p) => {
+    setLocalPlayers(p);
+    setPlayers(p);
+  };
+
   const currentPlayer = players[currentPlayerIndex];
 
   // ============================================================
-  // 🚀 ON MOUNT
+  // 🚀 ON MOUNT — check if it's my turn and load card
   // ============================================================
 
   useEffect(() => {
@@ -63,16 +67,16 @@ function Game({
 
   useEffect(() => {
     socket.on("turn_changed", ({ players: newPlayers, currentPlayerIndex: newIndex }) => {
-      // Guard against undefined
       if (!newPlayers || newIndex === undefined) return;
 
-      setPlayers(newPlayers);
+      updatePlayers(newPlayers);
       setCurrentPlayerIndex(newIndex);
       setRevealed(false);
       setShowNextButton(false);
       setResult(null);
       setDragging(false);
-      setDragCardIndex(null);
+      draggingRef.current = false;
+      setDragY(0);
 
       const myTurn = newPlayers[newIndex]?.id === socket.id;
       setIsMyTurn(myTurn);
@@ -83,13 +87,9 @@ function Game({
         setCards(newPlayers[newIndex]?.timeline || []);
       }
     });
+
     return () => socket.off("turn_changed");
   }, []);
-
-  // Keep orderedCards in sync with cards when not dragging
-  useEffect(() => {
-    if (!dragging) setOrderedCards(cards);
-  }, [cards, dragging]);
 
   // ============================================================
   // 🎲 GENERATE + LOAD CARD
@@ -100,7 +100,9 @@ function Game({
     const min = minYearRef.current;
     const max = maxYearRef.current;
     const randomGenre = genres[Math.floor(Math.random() * genres.length)];
-    const res = await axios.get(`/api/track?genre=${randomGenre}&minYear=${min}&maxYear=${max}`);
+    const res = await axios.get(
+      `/api/track?genre=${randomGenre}&minYear=${min}&maxYear=${max}`
+    );
     return {
       id: Date.now(),
       year: parseInt(res.data.year),
@@ -118,7 +120,7 @@ function Game({
       const newCard = await generateCard();
       const newCards = [...player.timeline, newCard];
       setCards(newCards);
-      setOrderedCards(newCards);
+      cardsRef.current = newCards;
     } catch (err) {
       console.error("Failed to load card:", err);
     } finally {
@@ -127,82 +129,96 @@ function Game({
   };
 
   // ============================================================
-  // 👆 DRAG — pure pointer/touch tracking, no physics
+  // 👆 DRAG — raw pointer/touch, 1:1 finger tracking
   // ============================================================
 
-  const getNewCardIndex = (cardList) => cardList.findIndex(c => c.type === "new");
-
-  const handleDragStart = (e) => {
+  const handleDragStart = useCallback((e) => {
     if (revealed || !isMyTurn) return;
     e.preventDefault();
 
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     startYRef.current = clientY;
-
-    // measure card height from the timeline
-    const firstCard = timelineRef.current?.querySelector(".card");
-    if (firstCard) cardHeightRef.current = firstCard.getBoundingClientRect().height + 20; // +gap
-
+    draggingRef.current = true;
     setDragging(true);
     setDragY(0);
-    setDragCardIndex(getNewCardIndex(cards));
+  }, [revealed, isMyTurn]);
 
-    window.addEventListener("mousemove", handleDragMove, { passive: false });
-    window.addEventListener("touchmove", handleDragMove, { passive: false });
-    window.addEventListener("mouseup", handleDragEnd);
-    window.addEventListener("touchend", handleDragEnd);
-  };
-
-  const handleDragMove = (e) => {
+  const handleDragMove = useCallback((e) => {
+    if (!draggingRef.current) return;
     e.preventDefault();
+
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     const delta = clientY - startYRef.current;
     setDragY(delta);
 
-    // Reorder based on current finger position
+    // Reorder cards based on drag position
     const currentCards = cardsRef.current;
-    const newIdx = getNewCardIndex(currentCards);
-    const cardH = cardHeightRef.current || 180;
+    const newIdx = currentCards.findIndex(c => c.type === "new");
+    if (newIdx === -1) return;
 
-    // How many slots has the card moved?
+    // Get card height from DOM
+    const cardEls = timelineRef.current?.querySelectorAll(".card");
+    if (!cardEls || cardEls.length === 0) return;
+    const cardH = cardEls[0].getBoundingClientRect().height + 20;
+
     const slotsMoved = Math.round(delta / cardH);
-    const rawTarget = newIdx + slotsMoved;
-    const targetIndex = Math.max(0, Math.min(currentCards.length - 1, rawTarget));
+    const targetIndex = Math.max(0, Math.min(currentCards.length - 1, newIdx + slotsMoved));
 
     if (targetIndex !== newIdx) {
       const reordered = [...currentCards];
       const [moved] = reordered.splice(newIdx, 1);
       reordered.splice(targetIndex, 0, moved);
+      cardsRef.current = reordered;
       setCards(reordered);
-      setOrderedCards(reordered);
-      setDragCardIndex(targetIndex);
-      // Reset delta relative to new position
-      startYRef.current = clientY - ((rawTarget - targetIndex) * cardH);
+      // Adjust start so card doesn't jump
+      const overshoot = (newIdx + slotsMoved - targetIndex) * cardH;
+      startYRef.current = clientY - overshoot;
+      setDragY(overshoot);
     }
-  };
+  }, []);
 
-  const handleDragEnd = () => {
+  const handleDragEnd = useCallback(() => {
+    if (!draggingRef.current) return;
+    draggingRef.current = false;
     setDragging(false);
     setDragY(0);
-    setDragCardIndex(null);
+  }, []);
 
-    window.removeEventListener("mousemove", handleDragMove);
-    window.removeEventListener("touchmove", handleDragMove);
-    window.removeEventListener("mouseup", handleDragEnd);
-    window.removeEventListener("touchend", handleDragEnd);
-  };
+  // Attach/detach global listeners
+  useEffect(() => {
+    if (dragging) {
+      window.addEventListener("mousemove", handleDragMove, { passive: false });
+      window.addEventListener("touchmove", handleDragMove, { passive: false });
+      window.addEventListener("mouseup", handleDragEnd);
+      window.addEventListener("touchend", handleDragEnd);
+    } else {
+      window.removeEventListener("mousemove", handleDragMove);
+      window.removeEventListener("touchmove", handleDragMove);
+      window.removeEventListener("mouseup", handleDragEnd);
+      window.removeEventListener("touchend", handleDragEnd);
+    }
+    return () => {
+      window.removeEventListener("mousemove", handleDragMove);
+      window.removeEventListener("touchmove", handleDragMove);
+      window.removeEventListener("mouseup", handleDragEnd);
+      window.removeEventListener("touchend", handleDragEnd);
+    };
+  }, [dragging, handleDragMove, handleDragEnd]);
 
   // ============================================================
   // 🧠 REVEAL
   // ============================================================
 
   const handleReveal = () => {
-    setRevealed(true);
+    const currentCards = cardsRef.current;
+    const newCardIndex = currentCards.findIndex(c => c.type === "new");
+    if (newCardIndex === -1) return;
 
-    const newCardIndex = cards.findIndex(c => c.type === "new");
-    const left = cards[newCardIndex - 1];
-    const right = cards[newCardIndex + 1];
-    const newCard = cards[newCardIndex];
+    const left = currentCards[newCardIndex - 1];
+    const right = currentCards[newCardIndex + 1];
+    const newCard = currentCards[newCardIndex];
+
+    setRevealed(true);
 
     let correct = true;
     if (left && left.year > newCard.year) correct = false;
@@ -210,18 +226,21 @@ function Game({
 
     if (!correct) {
       setResult("wrong");
-      setTimeout(() => setShowNextButton(true), 700);
+      setTimeout(() => setShowNextButton(true), 800);
       return;
     }
 
     setResult("correct");
+
     const updatedPlayers = [...players];
     updatedPlayers[currentPlayerIndex] = {
       ...currentPlayer,
-      timeline: cards.map(c => c.id === newCard.id ? { ...c, type: "fixed" } : c),
+      timeline: currentCards.map(c =>
+        c.id === newCard.id ? { ...c, type: "fixed" } : c
+      ),
       score: currentPlayer.score + 1
     };
-    setPlayers(updatedPlayers);
+    updatePlayers(updatedPlayers);
 
     if (updatedPlayers[currentPlayerIndex].score >= 10) {
       setWinner(updatedPlayers[currentPlayerIndex]);
@@ -229,7 +248,7 @@ function Game({
       return;
     }
 
-    setTimeout(() => setShowNextButton(true), 700);
+    setTimeout(() => setShowNextButton(true), 800);
   };
 
   const nextTurn = () => {
@@ -258,28 +277,42 @@ function Game({
             const isDragged = isNewCard && dragging;
 
             return (
-              <motion.div
+              <div
                 key={card.id}
                 className={`card ${isNewCard && revealed ? "card-expanded" : ""}`}
-                animate={{ y: 0 }}
-                transition={{ type: "spring", stiffness: 400, damping: 35 }}
                 style={{
                   position: "relative",
                   zIndex: isDragged ? 1000 : 1,
-                  y: isDragged ? dragY : 0,
-                  transform: isDragged ? `translateY(${dragY}px) scale(1.04)` : "translateY(0) scale(1)",
-                  boxShadow: isDragged ? "0 20px 60px rgba(29,185,84,0.5)" : undefined,
-                  cursor: isNewCard && !revealed && isMyTurn ? (dragging ? "grabbing" : "grab") : "default",
+                  transform: isDragged
+                    ? `translateY(${dragY}px) scale(1.04)`
+                    : "translateY(0) scale(1)",
+                  boxShadow: isDragged
+                    ? "0 24px 64px rgba(29,185,84,0.5)"
+                    : undefined,
+                  transition: isDragged
+                    ? "box-shadow 0.15s ease"
+                    : "transform 0.2s ease, box-shadow 0.15s ease",
+                  cursor: isNewCard && !revealed && isMyTurn
+                    ? (dragging ? "grabbing" : "grab")
+                    : "default",
                   touchAction: "none",
-                  transition: isDragged ? "box-shadow 0.2s, transform 0.05s" : "transform 0.25s ease, box-shadow 0.2s"
+                  userSelect: "none"
                 }}
                 onMouseDown={isNewCard && !revealed && isMyTurn ? handleDragStart : undefined}
                 onTouchStart={isNewCard && !revealed && isMyTurn ? handleDragStart : undefined}
               >
                 {isNewCard ? (
-                  <div className={`card-inner ${revealed ? "flipped" : ""} ${result === "correct" ? "result-correct" : ""} ${result === "wrong" ? "result-wrong" : ""}`}>
+                  <div
+                    className={`card-inner
+                      ${revealed ? "flipped" : ""}
+                      ${result === "correct" ? "result-correct" : ""}
+                      ${result === "wrong" ? "result-wrong" : ""}
+                    `}
+                  >
                     <div className="card-front new">
-                      <div>{isMyTurn ? "Drag to place" : `${currentPlayer.name} is playing...`}</div>
+                      <div>
+                        {isMyTurn ? "Drag to place" : `${currentPlayer.name} is playing...`}
+                      </div>
                     </div>
                     <div className="card-back">
                       <img src={card.cover} className="cover-large" alt="" />
@@ -293,7 +326,7 @@ function Game({
                     <div>{card.year}</div>
                   </div>
                 )}
-              </motion.div>
+              </div>
             );
           })}
         </div>
