@@ -15,23 +15,29 @@ function Home({
   isHost
 }) {
   const [playerName, setPlayerName] = useState("");
-  const [gameCode, setGameCode] = useState("");
+  const [inputCode, setInputCode] = useState(""); // was user eintippt
+  const [roomCode, setRoomCode] = useState(null); // echtes Game Code
   const [lobbyPlayers, setLobbyPlayers] = useState([]);
   const [hasJoined, setHasJoined] = useState(false);
 
-  // -----------------------------
-  // SOCKET LISTENERS
-  // -----------------------------
+  // ============================================================
+  // SOCKET LISTENER
+  // ============================================================
+
   useEffect(() => {
     socket.on("player_list", players => {
       setLobbyPlayers(players);
     });
 
     socket.on("game_created", ({ code }) => {
-      setGameCode(code);
+      setRoomCode(code);
       setHasJoined(true);
     });
 
+    socket.on("joined_success", ({ code }) => {
+      setRoomCode(code);
+      setHasJoined(true);
+    });
 
     socket.on("game_started", ({ players }) => {
       setPlayers(players);
@@ -41,35 +47,45 @@ function Home({
     return () => {
       socket.off("player_list");
       socket.off("game_created");
+      socket.off("joined_success");
       socket.off("game_started");
     };
   }, []);
 
-  // -----------------------------
-  // CREATE GAME (HOST ONLY)
-  // -----------------------------
+  // ============================================================
+  // CREATE GAME (HOST)
+  // ============================================================
+
   const createGame = () => {
     if (!playerName.trim()) return;
     socket.emit("create_game", { name: playerName });
   };
 
-  // -----------------------------
+  // ============================================================
   // JOIN GAME
-  // -----------------------------
+  // ============================================================
+
   const joinGame = () => {
-    if (!playerName.trim() || !gameCode.trim()) return;
-    socket.emit("join_game", { code: gameCode, name: playerName });
-    setHasJoined(true);
+    if (!playerName.trim() || !inputCode.trim()) return;
+
+    socket.emit("join_game", {
+      code: inputCode,
+      name: playerName
+    });
   };
 
-  // -----------------------------
-  // START GAME (HOST ONLY)
-  // -----------------------------
-  const startGame = () => {
-  if (!gameCode) return;
-  socket.emit("start_game", { code: gameCode });
-};
+  // ============================================================
+  // START GAME (HOST)
+  // ============================================================
 
+  const startGame = () => {
+    if (!roomCode) return;
+    socket.emit("start_game", { code: roomCode });
+  };
+
+  // ============================================================
+  // GENRE TOGGLE
+  // ============================================================
 
   const toggleGenre = genre => {
     if (selectedGenres.includes(genre)) {
@@ -79,11 +95,16 @@ function Home({
     }
   };
 
+  // ============================================================
+  // UI
+  // ============================================================
+
   return (
     <div className="container">
       <h1>Lobby</h1>
 
-      {/* NAME INPUT */}
+      {/* ===================== JOIN / CREATE ===================== */}
+
       {!hasJoined && (
         <>
           <input
@@ -102,9 +123,9 @@ function Home({
               <input
                 type="text"
                 placeholder="Enter Game Code"
-                value={gameCode}
+                value={inputCode}
                 onChange={e =>
-                  setGameCode(e.target.value.toUpperCase())
+                  setInputCode(e.target.value.toUpperCase())
                 }
               />
               <button onClick={joinGame}>
@@ -115,17 +136,19 @@ function Home({
         </>
       )}
 
-      {/* LOBBY */}
+      {/* ===================== LOBBY ===================== */}
+
       {hasJoined && (
         <>
-          <h2>Game Code: {gameCode}</h2>
+          <h2>Game Code: {roomCode}</h2>
 
           <div className="player-list">
             {lobbyPlayers.map((p, i) => (
-              <p key={i}>{p.name}</p>
+              <p key={p.id || i}>{p.name}</p>
             ))}
           </div>
 
+          {/* SETTINGS ONLY FOR HOST */}
           {isHost && (
             <>
               <h2>Settings</h2>

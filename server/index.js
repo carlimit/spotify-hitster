@@ -130,11 +130,9 @@ io.on("connection", (socket) => {
   const game = games[code];
   if (!game) return;
 
-  // Kein doppeltes Joinen
   const alreadyJoined = game.players.find(p => p.id === socket.id);
   if (alreadyJoined) return;
 
-  // Kein Join wenn Spiel schon gestartet
   if (game.started) return;
 
   game.players.push({
@@ -145,6 +143,8 @@ io.on("connection", (socket) => {
   });
 
   socket.join(code);
+
+  socket.emit("joined_success", { code }); // 🔥 DAS FEHLT
   io.to(code).emit("player_list", game.players);
 });
 
