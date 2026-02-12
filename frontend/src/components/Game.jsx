@@ -1,22 +1,22 @@
 import { useState, useEffect } from "react";
 import { Reorder } from "framer-motion";
 import axios from "axios";
+import { socket } from "../socket";
 
 function Game({
-  players,
-  setPlayers,
-  setGamePhase,
-  setWinner,
   selectedGenres,
   minYear,
   maxYear
 }) {
+  const [players, setPlayers] = useState([]);
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0);
   const [cards, setCards] = useState([]);
   const [result, setResult] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [showNextButton, setShowNextButton] = useState(false);
   const [revealed, setRevealed] = useState(false);
+  const [isMyTurn, setIsMyTurn] = useState(false);
+  const [gameCode, setGameCode] = useState(null);
 
   // Spotify
   const [player, setPlayer] = useState(null);
@@ -26,7 +26,7 @@ function Game({
   const currentPlayer = players[currentPlayerIndex];
 
   // -----------------------------
-  // 🎵 Spotify SDK
+  // 🎧 Spotify Setup
   // -----------------------------
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -73,7 +73,43 @@ function Game({
   };
 
   // -----------------------------
-  // 🎲 Generate Card
+  // 🎮 Socket Events
+  // -----------------------------
+  useEffect(() => {
+    socket.on("game_started", ({ players, currentPlayerIndex }) => {
+      setPlayers(players);
+      setCurrentPlayerIndex(currentPlayerIndex);
+      setCards(players[currentPlayerIndex].timeline);
+    });
+
+    socket.on("turn_changed", ({ currentPlayerIndex }) => {
+      setCurrentPlayerIndex(currentPlayerIndex);
+      setIsMyTurn(false);
+      setRevealed(false);
+      setShowNextButton(false);
+      setResult(null);
+      setCards(players[currentPlayerIndex]?.timeline || []);
+    });
+
+    socket.on("your_turn", async () => {
+      setIsMyTurn(true);
+      setLoading(true);
+
+      const newCard = await generateCard();
+
+      setCards([...currentPlayer.timeline, newCard]);
+      setLoading(false);
+    });
+
+    return () => {
+      socket.off("game_started");
+      socket.off("turn_changed");
+      socket.off("your_turn");
+    };
+  }, [players]);
+
+  // -----------------------------
+  // 🎲 Generate Card (nur Client sichtbar)
   // -----------------------------
   const generateCard = async () => {
     const randomGenre =
@@ -95,23 +131,11 @@ function Game({
   };
 
   // -----------------------------
-  // Load Card
-  // -----------------------------
-  useEffect(() => {
-    const loadCard = async () => {
-      setLoading(true);
-      const newCard = await generateCard();
-      setCards([...currentPlayer.timeline, newCard]);
-      setLoading(false);
-    };
-
-    loadCard();
-  }, [currentPlayerIndex]);
-
-  // -----------------------------
-  // Reveal Logic
+  // 🧠 Reveal Logic (nur lokal)
   // -----------------------------
   const handleReveal = () => {
+    if (!isMyTurn) return;
+
     setRevealed(true);
 
     const newCardIndex = cards.findIndex(c => c.type === "new");
@@ -131,45 +155,15 @@ function Game({
     }
 
     setResult("correct");
-
-    const updatedPlayers = [...players];
-
-    updatedPlayers[currentPlayerIndex] = {
-      ...currentPlayer,
-      timeline: cards.map(c =>
-        c.id === newCard.id ? { ...c, type: "fixed" } : c
-      ),
-      score: currentPlayer.score + 1
-    };
-
-    setTimeout(() => {
-      setPlayers(updatedPlayers);
-
-      if (updatedPlayers[currentPlayerIndex].score >= 10) {
-        setWinner(updatedPlayers[currentPlayerIndex]);
-        setGamePhase("winner");
-        return;
-      }
-
-      setShowNextButton(true);
-    }, 600);
+    setTimeout(() => setShowNextButton(true), 600);
   };
 
   const nextTurn = () => {
-    const nextIndex = (currentPlayerIndex + 1) % players.length;
-    setCurrentPlayerIndex(nextIndex);
-    setRevealed(false);
-    setResult(null);
-    setShowNextButton(false);
-    setIsPlaying(false);
+    socket.emit("next_turn");
   };
 
-  if (loading) {
-    return (
-      <div className="container">
-        <h2>Loading song...</h2>
-      </div>
-    );
+  if (!currentPlayer) {
+    return <div className="container">Waiting...</div>;
   }
 
   return (
@@ -187,20 +181,16 @@ function Game({
           <Reorder.Item
             key={card.id}
             value={card}
-            dragListener={card.type === "new" && !revealed}
+            dragListener={card.type === "new" && !revealed && isMyTurn}
             dragElastic={0}
             dragMomentum={false}
             whileDrag={{ scale: 1.02 }}
-            transition={{
-              type: "tween",
-              duration: 0.15
-            }}
+            transition={{ type: "tween", duration: 0.15 }}
             layout="position"
             className={`card ${
               card.type === "new" && revealed ? "card-expanded" : ""
             }`}
           >
-
             {card.type === "new" ? (
               <div
                 className={`card-inner 
@@ -236,8 +226,13 @@ function Game({
       </Reorder.Group>
 
       <div className="action-container">
-        {!revealed && <button onClick={handleReveal}>Reveal</button>}
-        {showNextButton && <button onClick={nextTurn}>Next Player</button>}
+        {isMyTurn && !revealed && (
+          <button onClick={handleReveal}>Reveal</button>
+        )}
+
+        {isMyTurn && showNextButton && (
+          <button onClick={nextTurn}>Next Player</button>
+        )}
       </div>
     </div>
   );
