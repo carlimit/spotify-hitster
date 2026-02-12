@@ -272,16 +272,37 @@ function Game({
       dragCardRef.current.style.zIndex = "1000";
     }
 
-    // Compute insert index and only re-render if it changed
+    // Compute insert index using actual screen position of dragged card center
     const currentCards = cardsRef.current;
     const newIdx = currentCards.findIndex(c => c.type === "new");
     const cardEls = timelineRef.current?.querySelectorAll(".card");
     if (!cardEls?.length) return;
-    const cardH = cardEls[0].getBoundingClientRect().height + 16;
-    const slotsMoved = Math.round(delta / cardH);
-    const target = Math.max(0, Math.min(currentCards.length - 1, newIdx + slotsMoved));
+
+    // Get the dragged card's current center Y on screen
+    const draggedRect = dragCardRef.current?.getBoundingClientRect();
+    if (!draggedRect) return;
+    const draggedCenterY = draggedRect.top + draggedRect.height / 2;
+
+    // Find which slot the center falls into by comparing against other cards' midpoints
+    let target = currentCards.length - 1;
+    for (let i = 0; i < cardEls.length; i++) {
+      if (i === newIdx) continue; // skip the dragged card itself
+      const rect = cardEls[i].getBoundingClientRect();
+      const midY = rect.top + rect.height / 2;
+      if (draggedCenterY < midY) {
+        // Dragged card center is above this card's midpoint → insert before it
+        target = i < newIdx ? i : i - 1;
+        break;
+      }
+      // If we've passed all cards, target stays at last position
+      target = i < newIdx ? i + 1 : i;
+    }
+    target = Math.max(0, Math.min(currentCards.length - 1, target));
+    insertIndexRef.current = target;
     setInsertIndex(prev => prev === target ? prev : target);
   }, []);
+
+  const insertIndexRef = useRef(null);
 
   const handleDragEnd = useCallback(() => {
     if (!draggingRef.current) { startYRef.current = 0; return; }
@@ -296,19 +317,20 @@ function Game({
 
     const currentCards = cardsRef.current;
     const newIdx = currentCards.findIndex(c => c.type === "new");
-    const cardEls = timelineRef.current?.querySelectorAll(".card");
-    const cardH = cardEls?.[0]?.getBoundingClientRect().height + 16 || 196;
-    const slotsMoved = Math.round(dragYRef.current / cardH);
-    const target = Math.max(0, Math.min(currentCards.length - 1, newIdx + slotsMoved));
+    const target = insertIndexRef.current !== null
+      ? insertIndexRef.current
+      : newIdx;
 
     const reordered = [...currentCards];
     const [moved] = reordered.splice(newIdx, 1);
-    reordered.splice(target, 0, moved);
+    const finalTarget = Math.max(0, Math.min(reordered.length, target > newIdx ? target - 1 : target));
+    reordered.splice(finalTarget, 0, moved);
     cardsRef.current = reordered;
     setCards(reordered);
     setDragging(false);
     setDragY(0);
     setInsertIndex(null);
+    insertIndexRef.current = null;
     startYRef.current = 0;
   }, []);
 

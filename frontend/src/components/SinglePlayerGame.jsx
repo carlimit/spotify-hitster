@@ -178,6 +178,7 @@ function SinglePlayerGame({ t,
   };
 
   const dragCardRef = useRef(null);
+  const insertIndexRef = useRef(null);
 
   // ── Drag ──
   const handleDragStart = useCallback((e) => {
@@ -201,24 +202,36 @@ function SinglePlayerGame({ t,
       e.preventDefault();
       dragYRef.current = delta;
 
-      // Move card directly via DOM — no React re-render during drag
       if (dragCardRef.current) {
         dragCardRef.current.style.transform = `translateY(${delta}px) scale(1.04)`;
         dragCardRef.current.style.boxShadow = "0 28px 70px rgba(29,185,84,0.55)";
         dragCardRef.current.style.zIndex = "1000";
       }
 
+      // Use actual screen position of dragged card center
       const cards = cardsRef.current;
+      const newIdx = cards.findIndex(c => c.type === "new");
       const container = timelineRef.current;
-      if (!container) return;
+      if (!container || !dragCardRef.current) return;
       const cardEls = container.querySelectorAll(".card");
-      let newInsert = cards.findIndex(c => c.type === "new");
+
+      const draggedRect = dragCardRef.current.getBoundingClientRect();
+      const draggedCenterY = draggedRect.top + draggedRect.height / 2;
+
+      let target = cards.length - 1;
       for (let i = 0; i < cardEls.length; i++) {
+        if (i === newIdx) continue;
         const rect = cardEls[i].getBoundingClientRect();
-        if (clientY < rect.top + rect.height / 2) { newInsert = i; break; }
-        if (i === cardEls.length - 1) newInsert = i + 1;
+        const midY = rect.top + rect.height / 2;
+        if (draggedCenterY < midY) {
+          target = i < newIdx ? i : i - 1;
+          break;
+        }
+        target = i < newIdx ? i + 1 : i;
       }
-      setInsertIndex(prev => prev === newInsert ? prev : newInsert);
+      target = Math.max(0, Math.min(cards.length - 1, target));
+      insertIndexRef.current = target;
+      setInsertIndex(prev => prev === target ? prev : target);
     };
 
     const onEnd = () => {
@@ -237,17 +250,18 @@ function SinglePlayerGame({ t,
 
       const currentCards = cardsRef.current;
       const origIdx = currentCards.findIndex(c => c.type === "new");
-      setInsertIndex(idx => {
-        if (idx !== null && idx !== origIdx) {
-          const newCards = [...currentCards];
-          const [card] = newCards.splice(origIdx, 1);
-          const targetIdx = idx > origIdx ? idx - 1 : idx;
-          newCards.splice(targetIdx, 0, card);
-          setCards(newCards);
-          cardsRef.current = newCards;
-        }
-        return null;
-      });
+      const target = insertIndexRef.current;
+      insertIndexRef.current = null;
+
+      if (target !== null && target !== origIdx) {
+        const newCards = [...currentCards];
+        const [card] = newCards.splice(origIdx, 1);
+        const finalTarget = Math.max(0, Math.min(newCards.length, target > origIdx ? target - 1 : target));
+        newCards.splice(finalTarget, 0, card);
+        setCards(newCards);
+        cardsRef.current = newCards;
+      }
+      setInsertIndex(null);
     };
 
     window.addEventListener("mousemove", onMove, { passive: false });
