@@ -175,6 +175,14 @@ io.on("connection", (socket) => {
     game.players[playerIndex].score = score;
   });
 
+  /* PLAY TRACK — any player can trigger, host's device plays it */
+  socket.on("play_track", ({ code, uri }) => {
+    const game = games[code];
+    if (!game) return;
+    // Forward to host only
+    io.to(game.host).emit("play_track", { uri });
+  });
+
   /* NEXT TURN */
   socket.on("next_turn", ({ code }) => {
     const game = games[code];

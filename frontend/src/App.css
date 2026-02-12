@@ -304,7 +304,52 @@ button:active {
   background: linear-gradient(90deg, transparent, #1DB954, transparent);
 }
 
-/* ---------- New (Active) Card Front ---------- */
+/* ---------- Play Button ---------- */
+
+.play-button {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.35);
+  border: 3px solid rgba(255, 255, 255, 0.7) !important;
+  color: white;
+  font-size: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
+  margin: 0 0 12px 0 !important;
+  min-width: unset !important;
+  padding: 0 !important;
+  transition: transform 0.15s ease, background 0.15s ease !important;
+  flex-shrink: 0;
+}
+
+.play-button:hover:not(:disabled) {
+  transform: scale(1.08) !important;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.play-button:active:not(:disabled) {
+  transform: scale(0.95) !important;
+}
+
+.play-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.drag-hint {
+  font-size: 15px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.95);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* ---------- Play Button ---------- */
 
 .card-front.new {
   background: linear-gradient(135deg, #1DB954, #1ed760);

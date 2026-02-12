@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import axios from "axios";
 import { socket } from "../socket";
+import { useSpotifyPlayer } from "./useSpotifyPlayer";
 
 function Game({
   players: initialPlayers,
@@ -19,34 +20,116 @@ function Game({
   const [loading, setLoading] = useState(false);
   const [showNextButton, setShowNextButton] = useState(false);
   const [revealed, setRevealed] = useState(false);
-
   const [isMyTurn, setIsMyTurn] = useState(false);
 
-  // Drag state
+  // Spotify — host plays locally, guests send signal via socket
+  const { ready: spotifyReady, playing, togglePlay, stop } = useSpotifyPlayer(roomCode);
+
+  // Drag
   const [dragY, setDragY] = useState(0);
   const [dragging, setDragging] = useState(false);
   const [insertIndex, setInsertIndex] = useState(null);
 
-  // Refs — always fresh, avoids stale closure bugs
+  // Refs — always fresh values inside callbacks
   const selectedGenresRef = useRef(selectedGenres);
   const minYearRef = useRef(minYear);
   const maxYearRef = useRef(maxYear);
   const cardsRef = useRef(cards);
   const isMyTurnRef = useRef(false);
   const revealedRef = useRef(false);
-  const timelineRef = useRef(null);
-  const startYRef = useRef(0);
+  const dragYRef = useRef(0);
   const draggingRef = useRef(false);
-  const originalIndexRef = useRef(null);
+  const startYRef = useRef(0);
+  const timelineRef = useRef(null);
+  const spotifyPlayerRef = useRef(null);
+  const deviceIdRef = useRef(null);
 
   useEffect(() => { selectedGenresRef.current = selectedGenres; }, [selectedGenres]);
   useEffect(() => { minYearRef.current = minYear; }, [minYear]);
   useEffect(() => { maxYearRef.current = maxYear; }, [maxYear]);
   useEffect(() => { cardsRef.current = cards; }, [cards]);
   useEffect(() => { revealedRef.current = revealed; }, [revealed]);
+  useEffect(() => { dragYRef.current = dragY; }, [dragY]);
+  useEffect(() => { spotifyPlayerRef.current = spotifyPlayer; }, [spotifyPlayer]);
+  useEffect(() => { deviceIdRef.current = deviceId; }, [deviceId]);
 
   const updatePlayers = (p) => { setLocalPlayers(p); setPlayers(p); };
   const currentPlayer = players[currentPlayerIndex];
+
+  // ============================================================
+  // 🎵 SPOTIFY SDK
+  // Only the host has a token, so only host can play music
+  // ============================================================
+
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    const initPlayer = () => {
+      if (!window.Spotify) return;
+
+      const player = new window.Spotify.Player({
+        name: "Hitster Game Player",
+        getOAuthToken: cb => cb(token),
+        volume: 0.8
+      });
+
+      player.addListener("ready", ({ device_id }) => {
+        setDeviceId(device_id);
+        deviceIdRef.current = device_id;
+      });
+
+      player.addListener("player_state_changed", state => {
+        if (!state) return;
+        setIsPlaying(!state.paused);
+      });
+
+      player.connect();
+      setSpotifyPlayer(player);
+      spotifyPlayerRef.current = player;
+    };
+
+    if (window.Spotify) {
+      initPlayer();
+    } else {
+      window.onSpotifyWebPlaybackSDKReady = initPlayer;
+    }
+
+    return () => {
+      if (spotifyPlayerRef.current) spotifyPlayerRef.current.disconnect();
+    };
+  }, []);
+
+  const handlePlayPause = async (uri) => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    const player = spotifyPlayerRef.current;
+    const device = deviceIdRef.current;
+
+    if (!player || !device) return;
+
+    if (!isPlaying) {
+      await fetch(
+        `https://api.spotify.com/v1/me/player/play?device_id=${device}`,
+        {
+          method: "PUT",
+          body: JSON.stringify({ uris: [uri] }),
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
+    } else {
+      player.togglePlay();
+    }
+  };
+
+  const stopPlayback = () => {
+    if (spotifyPlayerRef.current) spotifyPlayerRef.current.pause();
+    setIsPlaying(false);
+  };
 
   // ============================================================
   // 🚀 ON MOUNT
@@ -56,6 +139,7 @@ function Game({
     const myTurn = players[0]?.id === socket.id;
     isMyTurnRef.current = myTurn;
     setIsMyTurn(myTurn);
+
     if (myTurn) {
       loadNewCard(players[0]);
     } else {
@@ -70,16 +154,16 @@ function Game({
   // ============================================================
 
   useEffect(() => {
-    socket.on("turn_changed", ({ players: newPlayers, currentPlayerIndex: newIndex, selectedGenres: genres, minYear: min, maxYear: max }) => {
-      console.log("🔄 turn_changed received", { newPlayers, newIndex, myId: socket.id });
+    socket.on("turn_changed", ({
+      players: newPlayers,
+      currentPlayerIndex: newIndex,
+      selectedGenres: genres,
+      minYear: min,
+      maxYear: max
+    }) => {
+      if (!newPlayers || newIndex === undefined) return;
 
-      if (!newPlayers || newIndex === undefined) {
-        console.error("❌ turn_changed missing data!");
-        return;
-      }
-
-      // Update genres/years from server so all clients are in sync
-      if (genres && genres.length) selectedGenresRef.current = genres;
+      if (genres?.length) selectedGenresRef.current = genres;
       if (min) minYearRef.current = Number(min);
       if (max) maxYearRef.current = Number(max);
 
@@ -93,18 +177,17 @@ function Game({
       draggingRef.current = false;
       setDragY(0);
       setInsertIndex(null);
+      stop(); // stop music on turn change
+      stopPlayback();
 
       const myTurn = newPlayers[newIndex]?.id === socket.id;
-      console.log("🎮 Is my turn?", myTurn, "| my id:", socket.id, "| active player id:", newPlayers[newIndex]?.id);
       isMyTurnRef.current = myTurn;
       setIsMyTurn(myTurn);
 
       if (myTurn) {
-        console.log("📥 Loading new card for", newPlayers[newIndex]?.name, "| timeline:", newPlayers[newIndex]?.timeline);
-        loadNewCard(newPlayers[newIndex]); // uses server's saved timeline
+        loadNewCard(newPlayers[newIndex]);
       } else {
         const c = newPlayers[newIndex]?.timeline || [];
-        console.log("👁 Showing timeline for", newPlayers[newIndex]?.name, c);
         setCards(c);
         cardsRef.current = c;
       }
@@ -140,7 +223,8 @@ function Game({
     setLoading(true);
     try {
       const newCard = await generateCard();
-      const newCards = [...player.timeline, newCard];
+      // New card at TOP so no scrolling needed
+      const newCards = [newCard, ...player.timeline];
       setCards(newCards);
       cardsRef.current = newCards;
     } catch (err) {
@@ -151,40 +235,32 @@ function Game({
   };
 
   // ============================================================
-  // 👆 DRAG — card stays with finger, others shift around it
+  // 👆 DRAG — card stays exactly with finger
   // ============================================================
 
   const handleDragStart = useCallback((e) => {
     if (revealedRef.current || !isMyTurnRef.current) return;
     e.preventDefault();
-
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     startYRef.current = clientY;
-    const newIdx = cardsRef.current.findIndex(c => c.type === "new");
-    originalIndexRef.current = newIdx;
     draggingRef.current = true;
     setDragging(true);
     setDragY(0);
-    setInsertIndex(newIdx);
+    setInsertIndex(cardsRef.current.findIndex(c => c.type === "new"));
   }, []);
 
   const handleDragMove = useCallback((e) => {
     if (!draggingRef.current) return;
     e.preventDefault();
-
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     const delta = clientY - startYRef.current;
-
-    // Update the visual position of the dragged card — pure 1:1
     setDragY(delta);
 
-    // Calculate where the card WOULD be inserted (for other cards to move)
     const currentCards = cardsRef.current;
     const newIdx = currentCards.findIndex(c => c.type === "new");
     const cardEls = timelineRef.current?.querySelectorAll(".card");
-    if (!cardEls || cardEls.length === 0) return;
-
-    const cardH = cardEls[0].getBoundingClientRect().height + 16; // +gap
+    if (!cardEls?.length) return;
+    const cardH = cardEls[0].getBoundingClientRect().height + 16;
     const slotsMoved = Math.round(delta / cardH);
     const target = Math.max(0, Math.min(currentCards.length - 1, newIdx + slotsMoved));
     setInsertIndex(target);
@@ -195,33 +271,21 @@ function Game({
     draggingRef.current = false;
     setDragging(false);
 
-    // Commit reorder
     const currentCards = cardsRef.current;
     const newIdx = currentCards.findIndex(c => c.type === "new");
-
     const cardEls = timelineRef.current?.querySelectorAll(".card");
-    const cardH = cardEls && cardEls[0]
-      ? cardEls[0].getBoundingClientRect().height + 16
-      : 180;
-
-    const delta = dragY; // won't be updated yet, use ref
-    // Actually recalculate from the last known position
-    const reordered = [...currentCards];
+    const cardH = cardEls?.[0]?.getBoundingClientRect().height + 16 || 196;
     const slotsMoved = Math.round(dragYRef.current / cardH);
-    const target = Math.max(0, Math.min(reordered.length - 1, newIdx + slotsMoved));
+    const target = Math.max(0, Math.min(currentCards.length - 1, newIdx + slotsMoved));
 
+    const reordered = [...currentCards];
     const [moved] = reordered.splice(newIdx, 1);
     reordered.splice(target, 0, moved);
-
     cardsRef.current = reordered;
     setCards(reordered);
     setDragY(0);
     setInsertIndex(null);
   }, []);
-
-  // Keep a ref of dragY for use in handleDragEnd
-  const dragYRef = useRef(0);
-  useEffect(() => { dragYRef.current = dragY; }, [dragY]);
 
   useEffect(() => {
     if (dragging) {
@@ -243,7 +307,6 @@ function Game({
   // ============================================================
 
   const handleReveal = () => {
-    console.log("🃏 handleReveal called", { isMyTurn, isMyTurnRef: isMyTurnRef.current, revealed, cards: cardsRef.current });
     const currentCards = cardsRef.current;
     const newCardIndex = currentCards.findIndex(c => c.type === "new");
     if (newCardIndex === -1) return;
@@ -254,6 +317,7 @@ function Game({
 
     setRevealed(true);
     revealedRef.current = true;
+    stopPlayback();
 
     let correct = true;
     if (left && left.year > newCard.year) correct = false;
@@ -278,7 +342,6 @@ function Game({
     };
     updatePlayers(updatedPlayers);
 
-    // ✅ Save updated timeline + score to server
     socket.emit("update_timeline", {
       code: roomCode,
       timeline: updatedTimeline,
@@ -295,6 +358,7 @@ function Game({
   };
 
   const nextTurn = () => {
+    stopPlayback();
     socket.emit("next_turn", { code: roomCode });
   };
 
@@ -307,6 +371,7 @@ function Game({
   }
 
   const newCardOriginalIndex = cards.findIndex(c => c.type === "new");
+  const hasSpotify = !!localStorage.getItem("token");
 
   return (
     <div className="container">
@@ -321,15 +386,15 @@ function Game({
             const isNewCard = card.type === "new";
             const isDragged = isNewCard && dragging;
 
-            // Shift other cards to make room while dragging
             let shiftY = 0;
             if (dragging && !isNewCard && insertIndex !== null) {
               const origIdx = newCardOriginalIndex;
-              const cardH = timelineRef.current?.querySelector(".card")?.getBoundingClientRect().height + 16 || 196;
+              const cardEls = timelineRef.current?.querySelectorAll(".card");
+              const cardH = cardEls?.[0]?.getBoundingClientRect().height + 16 || 196;
               if (insertIndex < origIdx && index >= insertIndex && index < origIdx) {
-                shiftY = cardH; // shift down
+                shiftY = cardH;
               } else if (insertIndex > origIdx && index > origIdx && index <= insertIndex) {
-                shiftY = -cardH; // shift up
+                shiftY = -cardH;
               }
             }
 
@@ -348,9 +413,7 @@ function Game({
                     : undefined,
                   transition: isDragged
                     ? "box-shadow 0.15s"
-                    : shiftY !== 0
-                      ? "transform 0.18s ease"
-                      : "transform 0.18s ease, box-shadow 0.15s",
+                    : "transform 0.18s ease",
                   cursor: isNewCard && !revealed && isMyTurn
                     ? (dragging ? "grabbing" : "grab")
                     : "default",
@@ -368,9 +431,27 @@ function Game({
                       ${result === "wrong" ? "result-wrong" : ""}
                     `}
                   >
+                    {/* FRONT */}
                     <div className="card-front new">
-                      <div>{isMyTurn ? "Drag to place" : `${currentPlayer.name} is playing...`}</div>
+                      <button
+                          className="play-button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            togglePlay(card.uri);
+                          }}
+                          onMouseDown={e => e.stopPropagation()}
+                          onTouchStart={e => e.stopPropagation()}
+                          disabled={!spotifyReady}
+                          title={spotifyReady ? "Play / Pause" : "Connecting to Spotify..."}
+                        >
+                          {playing ? "⏸" : "▶"}
+                        </button>
+                      <div className="drag-hint">
+                        {isMyTurn ? "Drag to place" : `${currentPlayer.name} is playing...`}
+                      </div>
                     </div>
+
+                    {/* BACK */}
                     <div className="card-back">
                       <img src={card.cover} className="cover-large" alt="" />
                       <div className="revealed-year">{card.year}</div>
