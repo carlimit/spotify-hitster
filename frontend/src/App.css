@@ -144,9 +144,10 @@ button[style*="background"] {
   display: flex;
   flex-direction: column;
   gap: 24px;
-  margin-top: 24px;
-  padding: 0 8px 20px 8px;
+  margin: 24px auto 0 auto;
+  padding: 0 0 20px 0;
   align-items: center;
+  list-style: none;
 }
 
 /* ---------- Cards ---------- */
@@ -160,6 +161,9 @@ button[style*="background"] {
   transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: grab;
   touch-action: none;
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
 }
 
 .card:active {
@@ -169,6 +173,7 @@ button[style*="background"] {
 .card-expanded {
   aspect-ratio: 4 / 5;
   min-height: 400px;
+  z-index: 10;
 }
 
 .card-inner {
@@ -177,10 +182,12 @@ button[style*="background"] {
   position: relative;
   transition: transform 0.7s cubic-bezier(0.4, 0, 0.2, 1);
   transform-style: preserve-3d;
+  z-index: 1;
 }
 
 .card-inner.flipped {
   transform: rotateY(180deg);
+  z-index: 100;
 }
 
 .card-front,
@@ -190,11 +197,20 @@ button[style*="background"] {
   height: 100%;
   border-radius: 20px;
   backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   overflow: hidden;
+}
+
+.card-back {
+  z-index: 2;
+}
+
+.card-front {
+  z-index: 1;
 }
 
 /* ---------- Fixed Cards (Timeline Years) ---------- */
@@ -297,6 +313,8 @@ button[style*="background"] {
   padding: 20px;
   justify-content: flex-start;
   box-shadow: 0 15px 50px rgba(0, 0, 0, 0.6);
+  position: relative;
+  z-index: 100;
 }
 
 /* Cover Image */
@@ -482,17 +500,19 @@ button[style*="background"] {
   .timeline {
     gap: 20px;
     max-width: 100%;
-    padding: 0 4px 20px 4px;
+    padding: 0 0 20px 0;
+    margin: 24px 0 0 0;
   }
   
   .card {
     border-radius: 16px;
-    max-width: 100%;
+    max-width: 95%;
     min-height: 180px;
   }
   
   .card-expanded {
     min-height: 380px;
+    max-width: 95%;
   }
   
   h1 {
@@ -512,10 +532,12 @@ button[style*="background"] {
 @media (max-width: 360px) {
   .card {
     min-height: 160px;
+    max-width: 100%;
   }
   
   .card-expanded {
     min-height: 350px;
+    max-width: 100%;
   }
   
   .play-button {

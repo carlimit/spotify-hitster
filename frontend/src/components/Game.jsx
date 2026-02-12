@@ -189,16 +189,29 @@ function Game({
       values={cards}
       onReorder={setCards}
       className="timeline"
+      layoutScroll
+      style={{ position: 'relative' }}
     >
       {cards.map(card => (
         <Reorder.Item
           key={card.id}
           value={card}
-          drag={!revealed}
-          dragListener={card.type === "new"}
+          drag={!revealed && card.type === "new"}
+          dragListener={card.type === "new" && !revealed}
+          dragElastic={0.1}
+          dragConstraints={{ top: 0, bottom: 0 }}
+          whileDrag={{ 
+            scale: 1.05,
+            zIndex: 999,
+            cursor: 'grabbing'
+          }}
           className={`card ${
             card.type === "new" && revealed ? "card-expanded" : ""
           }`}
+          style={{ 
+            position: 'relative',
+            zIndex: card.type === "new" && revealed ? 100 : 1
+          }}
         >
           {card.type === "new" ? (
             <div
@@ -219,7 +232,7 @@ function Game({
               </div>
 
               <div className="card-back">
-                <img src={card.cover} className="cover-large" />
+                <img src={card.cover} className="cover-large" alt={card.name} />
                 <div className="revealed-year">{card.year}</div>
                 <strong>{card.artist}</strong>
                 <div className="song-title">{card.name}</div>
