@@ -188,10 +188,19 @@ function Game({
             key={card.id}
             value={card}
             dragListener={card.type === "new" && !revealed}
+            dragElastic={0}
+            dragMomentum={false}
+            whileDrag={{ scale: 1.02 }}
+            transition={{
+              type: "tween",
+              duration: 0.15
+            }}
+            layout="position"
             className={`card ${
               card.type === "new" && revealed ? "card-expanded" : ""
             }`}
           >
+
             {card.type === "new" ? (
               <div
                 className={`card-inner 
