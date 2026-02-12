@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import axios from "axios";
+import { useSpotifyDirect } from "./useSpotifyPlayer";
 
 function SinglePlayerGame({
   setScreen,
@@ -19,6 +20,7 @@ function SinglePlayerGame({
   const [totalPlayed, setTotalPlayed] = useState(0);
   const [gameOver, setGameOver] = useState(false);
   const [timeLeft, setTimeLeft] = useState(null);
+  const { ready: spotifyReady, playing, togglePlay, stop } = useSpotifyDirect();
 
   // Drag
   const [dragY, setDragY] = useState(0);
@@ -84,6 +86,7 @@ function SinglePlayerGame({
     setDragging(false);
     draggingRef.current = false;
     setInsertIndex(null);
+    stop();
 
     try {
       const card = await generateCard();
@@ -308,6 +311,18 @@ function SinglePlayerGame({
                   {isNewCard ? (
                     <div className={`card-inner ${revealed ? "flipped" : ""} ${result === "correct" ? "result-correct" : ""} ${result === "wrong" ? "result-wrong" : ""}`}>
                       <div className="card-front new">
+                        {localStorage.getItem("token") && (
+                          <button
+                            className="play-button"
+                            onClick={e => { e.stopPropagation(); togglePlay(card.uri); }}
+                            onMouseDown={e => e.stopPropagation()}
+                            onTouchStart={e => e.stopPropagation()}
+                            disabled={!spotifyReady}
+                            title={spotifyReady ? "Play / Pause" : "Connecting to Spotify..."}
+                          >
+                            {playing ? "⏸" : "▶"}
+                          </button>
+                        )}
                         <div className="drag-hint">Drag to place</div>
                       </div>
                       <div className="card-back">
