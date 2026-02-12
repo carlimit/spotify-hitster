@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import axios from "axios";
 import { socket } from "../socket";
@@ -10,7 +10,7 @@ function Game({
   minYear,
   maxYear,
   isHost,
-  roomCode // 🔥 NEW
+  roomCode
 }) {
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0);
   const [cards, setCards] = useState([]);
@@ -21,96 +21,35 @@ function Game({
   const [isMyTurn, setIsMyTurn] = useState(false);
   const [draggedCardIndex, setDraggedCardIndex] = useState(null);
 
+  // ============================================================
+  // 🔑 USE REFS to avoid stale closures in socket listeners
+  // These always hold the latest values no matter when the
+  // socket callback fires
+  // ============================================================
+
+  const selectedGenresRef = useRef(selectedGenres);
+  const minYearRef = useRef(minYear);
+  const maxYearRef = useRef(maxYear);
+
+  useEffect(() => { selectedGenresRef.current = selectedGenres; }, [selectedGenres]);
+  useEffect(() => { minYearRef.current = minYear; }, [minYear]);
+  useEffect(() => { maxYearRef.current = maxYear; }, [maxYear]);
+
   const currentPlayer = players[currentPlayerIndex];
 
   // ============================================================
-  // 🔁 SYNC CARDS WHEN PLAYERS CHANGE
-  // ============================================================
-
-  useEffect(() => {
-    if (players.length > 0 && players[currentPlayerIndex]) {
-      setCards(players[currentPlayerIndex].timeline || []);
-    }
-  }, [players, currentPlayerIndex]);
-
-  // ============================================================
-  // 🎮 SOCKET EVENTS
-  // ============================================================
-
-  useEffect(() => {
-
-    socket.on("game_started", ({ players, currentPlayerIndex }) => {
-      setPlayers(players);
-      setCurrentPlayerIndex(currentPlayerIndex);
-      
-      // Check if it's my turn when game starts
-      const mySocketId = socket.id;
-      const isMyTurnNow = players[currentPlayerIndex]?.id === mySocketId;
-      setIsMyTurn(isMyTurnNow);
-      
-      // Load card if it's my turn
-      if (isMyTurnNow) {
-        loadNewCard(players[currentPlayerIndex]);
-      }
-    });
-
-    socket.on("turn_changed", ({ players, currentPlayerIndex }) => {
-      setPlayers(players);
-      setCurrentPlayerIndex(currentPlayerIndex);
-      setRevealed(false);
-      setShowNextButton(false);
-      setResult(null);
-      
-      // Check if it's my turn
-      const mySocketId = socket.id;
-      const isMyTurnNow = players[currentPlayerIndex]?.id === mySocketId;
-      setIsMyTurn(isMyTurnNow);
-      
-      // Load new card if it's my turn
-      if (isMyTurnNow) {
-        loadNewCard(players[currentPlayerIndex]);
-      }
-    });
-
-    socket.on("your_turn", () => {
-      console.log("🔥 I RECEIVED YOUR TURN");
-    });
-
-    return () => {
-      socket.off("game_started");
-      socket.off("turn_changed");
-      socket.off("your_turn");
-    };
-
-  }, []);
-
-  // ============================================================
-  // 📥 LOAD NEW CARD WHEN IT'S MY TURN
-  // ============================================================
-
-  const loadNewCard = async (player) => {
-    setLoading(true);
-    try {
-      const newCard = await generateCard();
-      const updatedTimeline = [...player.timeline, newCard];
-      setCards(updatedTimeline);
-    } catch (error) {
-      console.error("Error loading card:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ============================================================
-  // 🎲 GENERATE CARD
+  // 🎲 GENERATE CARD (uses refs - always fresh values)
   // ============================================================
 
   const generateCard = async () => {
-    const randomGenre =
-      selectedGenres[Math.floor(Math.random() * selectedGenres.length)];
+    const genres = selectedGenresRef.current;
+    const min = minYearRef.current;
+    const max = maxYearRef.current;
+
+    const randomGenre = genres[Math.floor(Math.random() * genres.length)];
 
     const res = await axios.get(
-      `/api/track?genre=${randomGenre}&minYear=${minYear}&maxYear=${maxYear}`
+      `/api/track?genre=${randomGenre}&minYear=${min}&maxYear=${max}`
     );
 
     return {
@@ -125,36 +64,90 @@ function Game({
   };
 
   // ============================================================
-  // 🎯 Handle Drag End - Reorder cards
+  // 📥 LOAD NEW CARD
+  // ============================================================
+
+  const loadNewCard = async (player) => {
+    setLoading(true);
+    try {
+      const newCard = await generateCard();
+      setCards([...player.timeline, newCard]);
+    } catch (err) {
+      console.error("Failed to load card:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ============================================================
+  // 🎮 SOCKET EVENTS
+  // ============================================================
+
+  useEffect(() => {
+
+    socket.on("game_started", ({ players, currentPlayerIndex }) => {
+      setPlayers(players);
+      setCurrentPlayerIndex(currentPlayerIndex);
+
+      const isMyTurnNow = players[currentPlayerIndex]?.id === socket.id;
+      setIsMyTurn(isMyTurnNow);
+
+      if (isMyTurnNow) {
+        loadNewCard(players[currentPlayerIndex]);
+      } else {
+        // Not my turn - just show my fixed timeline
+        setCards(players.find(p => p.id === socket.id)?.timeline || []);
+      }
+    });
+
+    socket.on("turn_changed", ({ players, currentPlayerIndex }) => {
+      setPlayers(players);
+      setCurrentPlayerIndex(currentPlayerIndex);
+      setRevealed(false);
+      setShowNextButton(false);
+      setResult(null);
+
+      const isMyTurnNow = players[currentPlayerIndex]?.id === socket.id;
+      setIsMyTurn(isMyTurnNow);
+
+      if (isMyTurnNow) {
+        loadNewCard(players[currentPlayerIndex]);
+      } else {
+        // Show current active player's timeline to everyone
+        setCards(players[currentPlayerIndex]?.timeline || []);
+      }
+    });
+
+    return () => {
+      socket.off("game_started");
+      socket.off("turn_changed");
+    };
+
+  }, []); // eslint-disable-line — intentionally empty, using refs instead
+
+  // ============================================================
+  // 🎯 DRAG END - reorder cards
   // ============================================================
 
   const handleDragEnd = (event, info) => {
     const newCardIndex = cards.findIndex(c => c.type === "new");
     const draggedCard = cards[newCardIndex];
-    
-    // Get positions of all cards
-    const cardElements = document.querySelectorAll('.card');
+
+    const cardElements = document.querySelectorAll(".card");
     const positions = Array.from(cardElements).map(el => {
       const rect = el.getBoundingClientRect();
       return rect.top + rect.height / 2;
     });
-    
-    // Find where to insert based on drag position
-    const dragY = event.clientY || (event.touches && event.touches[0].clientY);
+
+    const dragY = event.clientY ?? event.changedTouches?.[0]?.clientY;
     let insertIndex = 0;
-    
+
     for (let i = 0; i < positions.length; i++) {
-      if (dragY > positions[i]) {
-        insertIndex = i + 1;
-      }
+      if (dragY > positions[i]) insertIndex = i + 1;
     }
-    
-    // Don't count the dragged card itself
-    if (insertIndex > newCardIndex) {
-      insertIndex--;
-    }
-    
-    // Reorder
+
+    if (insertIndex > newCardIndex) insertIndex--;
+
     const newCards = [...cards];
     newCards.splice(newCardIndex, 1);
     newCards.splice(insertIndex, 0, draggedCard);
@@ -177,7 +170,6 @@ function Game({
     const newCard = cards[newCardIndex];
 
     let correct = true;
-
     if (left && left.year > newCard.year) correct = false;
     if (right && right.year < newCard.year) correct = false;
 
@@ -188,8 +180,7 @@ function Game({
     }
 
     setResult("correct");
-    
-    // Update score locally (you might want to emit this to server)
+
     const updatedPlayers = [...players];
     updatedPlayers[currentPlayerIndex] = {
       ...currentPlayer,
@@ -199,9 +190,13 @@ function Game({
       score: currentPlayer.score + 1
     };
     setPlayers(updatedPlayers);
-    
+
     setTimeout(() => setShowNextButton(true), 700);
   };
+
+  // ============================================================
+  // ➡️ NEXT TURN
+  // ============================================================
 
   const nextTurn = () => {
     socket.emit("next_turn", { code: roomCode });
@@ -218,9 +213,13 @@ function Game({
   return (
     <div className="container">
       <h2>{currentPlayer.name}'s Turn</h2>
-      <h3>Score: {currentPlayer.score}</h3>
+      <h3>
+        {isMyTurn ? "🎵 Your turn!" : `Waiting for ${currentPlayer.name}...`}
+      </h3>
 
-      {loading && <p>Loading song...</p>}
+      {loading && (
+        <div className="loading-card">Loading song...</div>
+      )}
 
       <div className="timeline">
         {cards.map((card, index) => (
@@ -234,7 +233,7 @@ function Game({
             dragMomentum={false}
             onDragStart={() => setDraggedCardIndex(index)}
             onDragEnd={handleDragEnd}
-            whileDrag={{ 
+            whileDrag={{
               scale: 1.05,
               boxShadow: "0 20px 60px rgba(29, 185, 84, 0.6)",
               zIndex: 1000
@@ -255,7 +254,9 @@ function Game({
                 `}
               >
                 <div className="card-front new">
-                  <div>Drag to place</div>
+                  <div>
+                    {isMyTurn ? "Drag to place" : `${currentPlayer.name} is playing...`}
+                  </div>
                 </div>
 
                 <div className="card-back">
@@ -275,10 +276,9 @@ function Game({
       </div>
 
       <div className="action-container">
-        {isMyTurn && !revealed && (
+        {isMyTurn && !revealed && !loading && (
           <button onClick={handleReveal}>Reveal</button>
         )}
-
         {isMyTurn && showNextButton && (
           <button onClick={nextTurn}>Next Player</button>
         )}
