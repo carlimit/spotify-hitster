@@ -228,27 +228,29 @@ button:active {
 .card {
   width: 100%;
   max-width: 480px;
-  /* Height defined by aspect-ratio */
   aspect-ratio: 5 / 3;
+  min-height: 180px;
   position: relative;
   border-radius: 20px;
-  /* perspective on parent for 3d flip */
   perspective: 1200px;
 }
 
 /* When revealed, card needs to be taller to show album art */
 .card-expanded {
   aspect-ratio: unset !important;
-  height: 480px;
+  height: 500px;
+  min-height: 500px;
 }
 
 @media (max-width: 480px) {
   .card {
     max-width: 100%;
+    min-height: 160px;
     border-radius: 16px;
   }
   .card-expanded {
-    height: 420px;
+    height: 440px;
+    min-height: 440px;
   }
 }
 

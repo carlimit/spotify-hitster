@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { motion } from "framer-motion";
 import axios from "axios";
 import { socket } from "../socket";
 
@@ -20,44 +19,46 @@ function Game({
   const [loading, setLoading] = useState(false);
   const [showNextButton, setShowNextButton] = useState(false);
   const [revealed, setRevealed] = useState(false);
-  const [isMyTurn, setIsMyTurn] = useState(false);
 
   // Drag state
-  const [dragging, setDragging] = useState(false);
   const [dragY, setDragY] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const [insertIndex, setInsertIndex] = useState(null); // where card WOULD land
 
-  // Refs
+  // Refs — always fresh, avoids stale closure bugs
   const selectedGenresRef = useRef(selectedGenres);
   const minYearRef = useRef(minYear);
   const maxYearRef = useRef(maxYear);
   const cardsRef = useRef(cards);
+  const isMyTurnRef = useRef(false);
+  const revealedRef = useRef(false);
   const timelineRef = useRef(null);
   const startYRef = useRef(0);
   const draggingRef = useRef(false);
+  const originalIndexRef = useRef(null);
 
   useEffect(() => { selectedGenresRef.current = selectedGenres; }, [selectedGenres]);
   useEffect(() => { minYearRef.current = minYear; }, [minYear]);
   useEffect(() => { maxYearRef.current = maxYear; }, [maxYear]);
   useEffect(() => { cardsRef.current = cards; }, [cards]);
+  useEffect(() => { revealedRef.current = revealed; }, [revealed]);
 
-  const updatePlayers = (p) => {
-    setLocalPlayers(p);
-    setPlayers(p);
-  };
-
+  const updatePlayers = (p) => { setLocalPlayers(p); setPlayers(p); };
   const currentPlayer = players[currentPlayerIndex];
 
   // ============================================================
-  // 🚀 ON MOUNT — check if it's my turn and load card
+  // 🚀 ON MOUNT
   // ============================================================
 
   useEffect(() => {
     const myTurn = players[0]?.id === socket.id;
-    setIsMyTurn(myTurn);
+    isMyTurnRef.current = myTurn;
     if (myTurn) {
       loadNewCard(players[0]);
     } else {
-      setCards(players[0]?.timeline || []);
+      const c = players[0]?.timeline || [];
+      setCards(c);
+      cardsRef.current = c;
     }
   }, []);
 
@@ -72,19 +73,23 @@ function Game({
       updatePlayers(newPlayers);
       setCurrentPlayerIndex(newIndex);
       setRevealed(false);
+      revealedRef.current = false;
       setShowNextButton(false);
       setResult(null);
       setDragging(false);
       draggingRef.current = false;
       setDragY(0);
+      setInsertIndex(null);
 
       const myTurn = newPlayers[newIndex]?.id === socket.id;
-      setIsMyTurn(myTurn);
+      isMyTurnRef.current = myTurn;
 
       if (myTurn) {
         loadNewCard(newPlayers[newIndex]);
       } else {
-        setCards(newPlayers[newIndex]?.timeline || []);
+        const c = newPlayers[newIndex]?.timeline || [];
+        setCards(c);
+        cardsRef.current = c;
       }
     });
 
@@ -129,19 +134,22 @@ function Game({
   };
 
   // ============================================================
-  // 👆 DRAG — raw pointer/touch, 1:1 finger tracking
+  // 👆 DRAG — card stays with finger, others shift around it
   // ============================================================
 
   const handleDragStart = useCallback((e) => {
-    if (revealed || !isMyTurn) return;
+    if (revealedRef.current || !isMyTurnRef.current) return;
     e.preventDefault();
 
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     startYRef.current = clientY;
+    const newIdx = cardsRef.current.findIndex(c => c.type === "new");
+    originalIndexRef.current = newIdx;
     draggingRef.current = true;
     setDragging(true);
     setDragY(0);
-  }, [revealed, isMyTurn]);
+    setInsertIndex(newIdx);
+  }, []);
 
   const handleDragMove = useCallback((e) => {
     if (!draggingRef.current) return;
@@ -149,53 +157,61 @@ function Game({
 
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     const delta = clientY - startYRef.current;
+
+    // Update the visual position of the dragged card — pure 1:1
     setDragY(delta);
 
-    // Reorder cards based on drag position
+    // Calculate where the card WOULD be inserted (for other cards to move)
     const currentCards = cardsRef.current;
     const newIdx = currentCards.findIndex(c => c.type === "new");
-    if (newIdx === -1) return;
-
-    // Get card height from DOM
     const cardEls = timelineRef.current?.querySelectorAll(".card");
     if (!cardEls || cardEls.length === 0) return;
-    const cardH = cardEls[0].getBoundingClientRect().height + 20;
 
+    const cardH = cardEls[0].getBoundingClientRect().height + 16; // +gap
     const slotsMoved = Math.round(delta / cardH);
-    const targetIndex = Math.max(0, Math.min(currentCards.length - 1, newIdx + slotsMoved));
-
-    if (targetIndex !== newIdx) {
-      const reordered = [...currentCards];
-      const [moved] = reordered.splice(newIdx, 1);
-      reordered.splice(targetIndex, 0, moved);
-      cardsRef.current = reordered;
-      setCards(reordered);
-      // Adjust start so card doesn't jump
-      const overshoot = (newIdx + slotsMoved - targetIndex) * cardH;
-      startYRef.current = clientY - overshoot;
-      setDragY(overshoot);
-    }
+    const target = Math.max(0, Math.min(currentCards.length - 1, newIdx + slotsMoved));
+    setInsertIndex(target);
   }, []);
 
   const handleDragEnd = useCallback(() => {
     if (!draggingRef.current) return;
     draggingRef.current = false;
     setDragging(false);
+
+    // Commit reorder
+    const currentCards = cardsRef.current;
+    const newIdx = currentCards.findIndex(c => c.type === "new");
+
+    const cardEls = timelineRef.current?.querySelectorAll(".card");
+    const cardH = cardEls && cardEls[0]
+      ? cardEls[0].getBoundingClientRect().height + 16
+      : 180;
+
+    const delta = dragY; // won't be updated yet, use ref
+    // Actually recalculate from the last known position
+    const reordered = [...currentCards];
+    const slotsMoved = Math.round(dragYRef.current / cardH);
+    const target = Math.max(0, Math.min(reordered.length - 1, newIdx + slotsMoved));
+
+    const [moved] = reordered.splice(newIdx, 1);
+    reordered.splice(target, 0, moved);
+
+    cardsRef.current = reordered;
+    setCards(reordered);
     setDragY(0);
+    setInsertIndex(null);
   }, []);
 
-  // Attach/detach global listeners
+  // Keep a ref of dragY for use in handleDragEnd
+  const dragYRef = useRef(0);
+  useEffect(() => { dragYRef.current = dragY; }, [dragY]);
+
   useEffect(() => {
     if (dragging) {
       window.addEventListener("mousemove", handleDragMove, { passive: false });
       window.addEventListener("touchmove", handleDragMove, { passive: false });
       window.addEventListener("mouseup", handleDragEnd);
       window.addEventListener("touchend", handleDragEnd);
-    } else {
-      window.removeEventListener("mousemove", handleDragMove);
-      window.removeEventListener("touchmove", handleDragMove);
-      window.removeEventListener("mouseup", handleDragEnd);
-      window.removeEventListener("touchend", handleDragEnd);
     }
     return () => {
       window.removeEventListener("mousemove", handleDragMove);
@@ -219,6 +235,7 @@ function Game({
     const newCard = currentCards[newCardIndex];
 
     setRevealed(true);
+    revealedRef.current = true;
 
     let correct = true;
     if (left && left.year > newCard.year) correct = false;
@@ -263,10 +280,12 @@ function Game({
     return <div className="container">Waiting for players...</div>;
   }
 
+  const newCardOriginalIndex = cards.findIndex(c => c.type === "new");
+
   return (
     <div className="container">
       <h2>{currentPlayer.name}'s Turn</h2>
-      <h3>{isMyTurn ? "Your turn!" : `Waiting for ${currentPlayer.name}...`}</h3>
+      <h3>{isMyTurnRef.current ? "Your turn!" : `Waiting for ${currentPlayer.name}...`}</h3>
 
       {loading && <div className="loading-card">Loading song...</div>}
 
@@ -275,6 +294,18 @@ function Game({
           {cards.map((card, index) => {
             const isNewCard = card.type === "new";
             const isDragged = isNewCard && dragging;
+
+            // Shift other cards to make room while dragging
+            let shiftY = 0;
+            if (dragging && !isNewCard && insertIndex !== null) {
+              const origIdx = newCardOriginalIndex;
+              const cardH = timelineRef.current?.querySelector(".card")?.getBoundingClientRect().height + 16 || 196;
+              if (insertIndex < origIdx && index >= insertIndex && index < origIdx) {
+                shiftY = cardH; // shift down
+              } else if (insertIndex > origIdx && index > origIdx && index <= insertIndex) {
+                shiftY = -cardH; // shift up
+              }
+            }
 
             return (
               <div
@@ -285,21 +316,21 @@ function Game({
                   zIndex: isDragged ? 1000 : 1,
                   transform: isDragged
                     ? `translateY(${dragY}px) scale(1.04)`
-                    : "translateY(0) scale(1)",
+                    : `translateY(${shiftY}px) scale(1)`,
                   boxShadow: isDragged
-                    ? "0 24px 64px rgba(29,185,84,0.5)"
+                    ? "0 28px 70px rgba(29,185,84,0.55)"
                     : undefined,
                   transition: isDragged
-                    ? "box-shadow 0.15s ease"
-                    : "transform 0.2s ease, box-shadow 0.15s ease",
-                  cursor: isNewCard && !revealed && isMyTurn
+                    ? "box-shadow 0.15s"
+                    : "transform 0.18s ease, box-shadow 0.15s",
+                  cursor: isNewCard && !revealed && isMyTurnRef.current
                     ? (dragging ? "grabbing" : "grab")
                     : "default",
                   touchAction: "none",
-                  userSelect: "none"
+                  userSelect: "none",
                 }}
-                onMouseDown={isNewCard && !revealed && isMyTurn ? handleDragStart : undefined}
-                onTouchStart={isNewCard && !revealed && isMyTurn ? handleDragStart : undefined}
+                onMouseDown={isNewCard && !revealed && isMyTurnRef.current ? handleDragStart : undefined}
+                onTouchStart={isNewCard && !revealed && isMyTurnRef.current ? handleDragStart : undefined}
               >
                 {isNewCard ? (
                   <div
@@ -310,9 +341,7 @@ function Game({
                     `}
                   >
                     <div className="card-front new">
-                      <div>
-                        {isMyTurn ? "Drag to place" : `${currentPlayer.name} is playing...`}
-                      </div>
+                      <div>{isMyTurnRef.current ? "Drag to place" : `${currentPlayer.name} is playing...`}</div>
                     </div>
                     <div className="card-back">
                       <img src={card.cover} className="cover-large" alt="" />
@@ -333,10 +362,10 @@ function Game({
       )}
 
       <div className="action-container">
-        {isMyTurn && !revealed && !loading && (
+        {isMyTurnRef.current && !revealed && !loading && (
           <button onClick={handleReveal}>Reveal</button>
         )}
-        {isMyTurn && showNextButton && (
+        {isMyTurnRef.current && showNextButton && (
           <button onClick={nextTurn}>Next Player</button>
         )}
       </div>
