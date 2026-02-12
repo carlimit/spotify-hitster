@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import Slider from "rc-slider";
 import "rc-slider/assets/index.css";
+import axios from "axios";
 import { socket } from "../socket";
 
 function Home({
@@ -13,13 +14,20 @@ function Home({
   maxYear,
   setMaxYear,
   isHost,
-  setRoomCode
+  setRoomCode,
+  setPlaylistTracks
 }) {
   const [playerName, setPlayerName] = useState("");
   const [inputCode, setInputCode] = useState("");
   const [localRoomCode, setLocalRoomCode] = useState(null);
   const [lobbyPlayers, setLobbyPlayers] = useState([]);
   const [hasJoined, setHasJoined] = useState(false);
+
+  // Playlist mode
+  const [playlistUrl, setPlaylistUrl] = useState("");
+  const [playlistInfo, setPlaylistInfo] = useState(null); // { name, trackCount, tracks }
+  const [playlistLoading, setPlaylistLoading] = useState(false);
+  const [playlistError, setPlaylistError] = useState(null);
 
   // ============================================================
   // SOCKET LISTENERS
@@ -42,11 +50,12 @@ function Home({
       setHasJoined(true);
     });
 
-    socket.on("game_started", ({ players, selectedGenres: genres, minYear: min, maxYear: max }) => {
+    socket.on("game_started", ({ players, selectedGenres: genres, minYear: min, maxYear: max, playlistTracks }) => {
       setPlayers(players);
       if (genres && genres.length) setSelectedGenres(genres);
       if (min) setMinYear(Number(min));
       if (max) setMaxYear(Number(max));
+      if (playlistTracks) setPlaylistTracks(playlistTracks);
       setScreen("playing");
     });
 
@@ -72,9 +81,36 @@ function Home({
     socket.emit("join_game", { code: inputCode.toUpperCase(), name: playerName });
   };
 
+  const loadPlaylist = async () => {
+    if (!playlistUrl.trim()) return;
+    setPlaylistLoading(true);
+    setPlaylistError(null);
+    setPlaylistInfo(null);
+    try {
+      const res = await axios.get(`/api/playlist?url=${encodeURIComponent(playlistUrl)}`);
+      setPlaylistInfo(res.data);
+    } catch (err) {
+      setPlaylistError("Couldn't load playlist. Make sure it's a public Spotify playlist URL.");
+    } finally {
+      setPlaylistLoading(false);
+    }
+  };
+
+  const clearPlaylist = () => {
+    setPlaylistInfo(null);
+    setPlaylistUrl("");
+    setPlaylistError(null);
+  };
+
   const startGame = () => {
     if (!localRoomCode) return;
-    socket.emit("start_game", { code: localRoomCode, minYear, maxYear, selectedGenres });
+    socket.emit("start_game", {
+      code: localRoomCode,
+      minYear,
+      maxYear,
+      selectedGenres,
+      playlistTracks: playlistInfo?.tracks || null
+    });
   };
 
   const toggleGenre = genre => {
@@ -151,6 +187,44 @@ function Home({
                     </button>
                   ))}
                 </div>
+              </div>
+
+              <div className="home-section">
+                <h2>Or use a Playlist</h2>
+                {!playlistInfo ? (
+                  <>
+                    <input
+                      type="text"
+                      placeholder="Paste Spotify playlist link..."
+                      value={playlistUrl}
+                      onChange={e => setPlaylistUrl(e.target.value)}
+                      onKeyPress={e => e.key === "Enter" && loadPlaylist()}
+                    />
+                    <button
+                      onClick={loadPlaylist}
+                      disabled={playlistLoading || !playlistUrl.trim()}
+                      style={{ background: "#444" }}
+                    >
+                      {playlistLoading ? "Loading..." : "Load Playlist"}
+                    </button>
+                    {playlistError && (
+                      <p style={{ color: "#ff5555", fontSize: "13px", marginTop: "8px" }}>
+                        {playlistError}
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <div className="playlist-info">
+                    <div className="playlist-name">🎵 {playlistInfo.name}</div>
+                    <div className="playlist-count">{playlistInfo.trackCount} tracks</div>
+                    <button
+                      onClick={clearPlaylist}
+                      style={{ background: "#444", marginTop: "8px" }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="home-section">

@@ -11,7 +11,8 @@ function Game({
   maxYear,
   roomCode,
   setScreen,
-  setWinner
+  setWinner,
+  playlistTracks: initialPlaylistTracks
 }) {
   const [players, setLocalPlayers] = useState(initialPlayers);
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0);
@@ -34,6 +35,7 @@ function Game({
   const selectedGenresRef = useRef(selectedGenres);
   const minYearRef = useRef(minYear);
   const maxYearRef = useRef(maxYear);
+  const playlistTracksRef = useRef(initialPlaylistTracks || null);
   const cardsRef = useRef(cards);
   const isMyTurnRef = useRef(false);
   const revealedRef = useRef(false);
@@ -80,13 +82,15 @@ function Game({
       currentPlayerIndex: newIndex,
       selectedGenres: genres,
       minYear: min,
-      maxYear: max
+      maxYear: max,
+      playlistTracks: pt
     }) => {
       if (!newPlayers || newIndex === undefined) return;
 
       if (genres?.length) selectedGenresRef.current = genres;
       if (min) minYearRef.current = Number(min);
       if (max) maxYearRef.current = Number(max);
+      if (pt !== undefined) playlistTracksRef.current = pt;
 
       updatePlayers(newPlayers);
       setCurrentPlayerIndex(newIndex);
@@ -122,12 +126,31 @@ function Game({
   // ============================================================
 
   const generateCard = async () => {
+    const playlist = playlistTracksRef.current;
+
+    // Playlist mode — pick a random track from the loaded playlist
+    if (playlist && playlist.length > 0) {
+      const track = playlist[Math.floor(Math.random() * playlist.length)];
+      return {
+        id: Date.now(),
+        year: parseInt(track.year),
+        name: track.name,
+        artist: track.artist,
+        uri: track.uri,
+        cover: track.cover,
+        type: "new"
+      };
+    }
+
+    // Search mode — use genre/year filters
     const genres = selectedGenresRef.current;
     const min = minYearRef.current;
     const max = maxYearRef.current;
-    const randomGenre = genres[Math.floor(Math.random() * genres.length)];
+    const genre = genres.length > 0
+      ? genres[Math.floor(Math.random() * genres.length)]
+      : "";
     const res = await axios.get(
-      `/api/track?genre=${randomGenre}&minYear=${min}&maxYear=${max}`
+      `/api/track?genre=${genre}&minYear=${min}&maxYear=${max}`
     );
     return {
       id: Date.now(),

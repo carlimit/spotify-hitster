@@ -17,6 +17,7 @@ function App() {
   const [minYear, setMinYear] = useState(1990);
   const [maxYear, setMaxYear] = useState(2024);
   const [roomCode, setRoomCode] = useState(null);
+  const [playlistTracks, setPlaylistTracks] = useState(null);
 
   // ============================================================
   // 🔐 Spotify Redirect — runs on load, handles OAuth callback
@@ -108,6 +109,7 @@ function App() {
         setMaxYear={setMaxYear}
         isHost={isHost}
         setRoomCode={setRoomCode}
+        setPlaylistTracks={setPlaylistTracks}
       />
     );
   }
@@ -127,6 +129,7 @@ function App() {
         roomCode={roomCode}
         setScreen={setScreen}
         setWinner={setWinner}
+        playlistTracks={playlistTracks}
       />
     );
   }

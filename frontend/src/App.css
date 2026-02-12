@@ -468,6 +468,32 @@ button:active {
   box-shadow: 0 8px 24px rgba(29, 185, 84, 0.4);
 }
 
+/* ---------- Playlist Info ---------- */
+
+.playlist-info {
+  width: 100%;
+  background: rgba(29, 185, 84, 0.1);
+  border: 2px solid rgba(29, 185, 84, 0.3);
+  border-radius: 14px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.playlist-name {
+  font-size: 17px;
+  font-weight: 700;
+  color: #1DB954;
+  text-align: center;
+}
+
+.playlist-count {
+  font-size: 13px;
+  color: #b3b3b3;
+}
+
 /* ---------- Loading Card ---------- */
 
 .loading-card {
