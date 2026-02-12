@@ -23,7 +23,12 @@ function Game({
   const [revealed, setRevealed] = useState(false);
   const [isMyTurn, setIsMyTurn] = useState(false);
 
-  // Spotify — host plays locally, guests send signal via socket
+  // Coins — { [playerId]: { playerId, insertIndex } }
+  const [coins, setCoins] = useState({});
+  const [myCoinIndex, setMyCoinIndex] = useState(null); // where I placed my coin (null = no coin placed)
+  const [showRecognition, setShowRecognition] = useState(false); // "I know this!" button after reveal
+
+  // Spotify
   const { ready: spotifyReady, playing, togglePlay, stop } = useSpotifyPlayer(roomCode);
 
   // Drag
@@ -85,7 +90,8 @@ function Game({
       minYear: min,
       maxYear: max,
       playlistTracks: pt,
-      usedUris
+      usedUris,
+      coins: newCoins
     }) => {
       if (!newPlayers || newIndex === undefined) return;
 
@@ -105,8 +111,10 @@ function Game({
       draggingRef.current = false;
       setDragY(0);
       setInsertIndex(null);
-      stop(); // stop music on turn change
-      
+      setCoins(newCoins || {});
+      setMyCoinIndex(null);
+      setShowRecognition(false);
+      stop();
 
       const myTurn = newPlayers[newIndex]?.id === socket.id;
       isMyTurnRef.current = myTurn;
@@ -121,7 +129,19 @@ function Game({
       }
     });
 
-    return () => socket.off("turn_changed");
+    socket.on("coins_updated", ({ coins: newCoins }) => {
+      setCoins(newCoins || {});
+    });
+
+    socket.on("coins_updated_players", ({ players: newPlayers }) => {
+      updatePlayers(newPlayers);
+    });
+
+    return () => {
+      socket.off("turn_changed");
+      socket.off("coins_updated");
+      socket.off("coins_updated_players");
+    };
   }, []);
 
   // ============================================================
@@ -315,11 +335,52 @@ function Game({
     }
 
     setTimeout(() => setShowNextButton(true), 800);
+
+    // Show "I know this song!" button to spectators for 5 seconds
+    if (!isMyTurn) {
+      setShowRecognition(true);
+      setTimeout(() => setShowRecognition(false), 5000);
+    }
   };
 
+  const giveCoin = () => {
+    socket.emit("give_coin", { code: roomCode });
+  };
+
+  // ============================================================
+  // 🪙 COINS
+  // ============================================================
+
+  const placeCoin = (idx) => {
+    setMyCoinIndex(idx);
+    socket.emit("place_coin", { code: roomCode, insertIndex: idx });
+  };
+
+  const removeCoin = () => {
+    setMyCoinIndex(null);
+    socket.emit("remove_coin", { code: roomCode });
+  };
+
+  const claimRecognition = () => {
+    setShowRecognition(false);
+    socket.emit("claim_recognition", { code: roomCode });
+  };
+
+  // ============================================================
+  // ➡️ NEXT TURN — resolves coins then advances
+  // ============================================================
+
   const nextTurn = () => {
-    
-    socket.emit("next_turn", { code: roomCode });
+    const currentCards = cardsRef.current;
+    const newCardIndex = currentCards.findIndex(c => c.type === "new");
+    const newCard = newCardIndex !== -1 ? currentCards[newCardIndex] : null;
+
+    socket.emit("resolve_coins", {
+      code: roomCode,
+      activeCorrect: result === "correct",
+      activeInsertIndex: newCardIndex,
+      newCard
+    });
   };
 
   // ============================================================
@@ -331,11 +392,33 @@ function Game({
   }
 
   const newCardOriginalIndex = cards.findIndex(c => c.type === "new");
+  const myPlayer = players.find(p => p.id === socket.id);
+  const myCoins = myPlayer?.coins ?? 0;
+  const hasCoinPlaced = myCoinIndex !== null;
+
+  // Next player in turn order — they get the "give coin" button
+  const nextPlayerIndex = (currentPlayerIndex + 1) % players.length;
+  const isNextPlayer = players[nextPlayerIndex]?.id === socket.id && !isMyTurn;
+
+  // Count how many coins are on each slot
+  const coinsBySlot = {};
+  Object.values(coins).forEach(({ insertIndex: idx }) => {
+    coinsBySlot[idx] = (coinsBySlot[idx] || 0) + 1;
+  });
 
   return (
     <div className="container">
-      <h2>{currentPlayer.name}'s Turn</h2>
-      <h3>{isMyTurn ? "Your turn!" : `Waiting for ${currentPlayer.name}...`}</h3>
+      <div className="game-header">
+        <div>
+          <h2>{currentPlayer.name}'s Turn</h2>
+          <h3>{isMyTurn ? "Your turn!" : `Waiting for ${currentPlayer.name}...`}</h3>
+        </div>
+        {!isMyTurn && (
+          <div className="coin-display">
+            🪙 <span>{myCoins}</span>
+          </div>
+        )}
+      </div>
 
       {loading && <div className="loading-card">Loading song...</div>}
 
@@ -357,10 +440,34 @@ function Game({
               }
             }
 
+            // Coins sitting on the slot BEFORE this card
+            const coinsHere = coinsBySlot[index] || 0;
+            const myMyCoinHere = myCoinIndex === index;
+
             return (
-              <div
-                key={card.id}
-                className={`card ${isNewCard && revealed ? "card-expanded" : ""}`}
+              <div key={card.id} style={{ width: "100%", maxWidth: 480 }}>
+                {/* Coin slot ABOVE each card — only for spectators, before reveal */}
+                {!isMyTurn && !revealed && (
+                  <div className="coin-slot">
+                    {coinsHere > 0 && (
+                      <div className="coins-on-slot">
+                        {"🪙".repeat(Math.min(coinsHere, 5))}
+                      </div>
+                    )}
+                    {myMyCoinHere ? (
+                      <button className="coin-btn coin-placed" onClick={removeCoin} title="Pick up coin">
+                        🪙
+                      </button>
+                    ) : !hasCoinPlaced && myCoins > 0 ? (
+                      <button className="coin-btn coin-plus" onClick={() => placeCoin(index)} title="Place coin here">
+                        +
+                      </button>
+                    ) : null}
+                  </div>
+                )}
+
+                <div
+                  className={`card ${isNewCard && revealed ? "card-expanded" : ""}`}
                 style={{
                   position: "relative",
                   zIndex: isDragged ? 1000 : 1,
@@ -424,6 +531,23 @@ function Game({
                   </div>
                 )}
               </div>
+
+              {/* Coin slot AFTER last card */}
+              {index === cards.length - 1 && !isMyTurn && !revealed && (
+                <div className="coin-slot">
+                  {coinsBySlot[cards.length] > 0 && (
+                    <div className="coins-on-slot">
+                      {"🪙".repeat(Math.min(coinsBySlot[cards.length], 5))}
+                    </div>
+                  )}
+                  {myCoinIndex === cards.length ? (
+                    <button className="coin-btn coin-placed" onClick={removeCoin}>🪙</button>
+                  ) : !hasCoinPlaced && myCoins > 0 ? (
+                    <button className="coin-btn coin-plus" onClick={() => placeCoin(cards.length)}>+</button>
+                  ) : null}
+                </div>
+              )}
+            </div>
             );
           })}
         </div>
@@ -435,6 +559,16 @@ function Game({
         )}
         {isMyTurn && showNextButton && (
           <button onClick={nextTurn}>Next Player</button>
+        )}
+        {isNextPlayer && !revealed && !loading && (
+          <button className="give-coin-btn" onClick={giveCoin}>
+            🎤 Give coin to {currentPlayer.name}
+          </button>
+        )}
+        {!isMyTurn && showRecognition && (
+          <button className="recognition-btn" onClick={claimRecognition}>
+            🎵 I know this song! +1🪙
+          </button>
         )}
       </div>
     </div>

@@ -242,7 +242,8 @@ io.on("connection", (socket) => {
       return {
         ...player,
         timeline: [{ id: Date.now() + Math.random(), year: randomYear, type: "fixed" }],
-        score: 0
+        score: 0,
+        coins: 3  // start with 3 coins
       };
     });
 
@@ -291,20 +292,82 @@ io.on("connection", (socket) => {
     socket.to(code).emit("player_state", { playing });
   });
 
-  /* MARK TRACK USED — called when a card is dealt to prevent repeats */
-  socket.on("mark_used", ({ code, uri }) => {
+  /* PLACE COIN — spectator places a coin between two cards */
+  socket.on("place_coin", ({ code, insertIndex }) => {
     const game = games[code];
     if (!game) return;
-    game.usedUris.add(uri);
+    const player = game.players.find(p => p.id === socket.id);
+    if (!player || player.coins <= 0) return;
+
+    // Store coin: who placed it and where
+    if (!game.coins) game.coins = {};
+    game.coins[socket.id] = { playerId: socket.id, insertIndex };
+
+    io.to(code).emit("coins_updated", { coins: game.coins });
   });
 
-  /* NEXT TURN */
-  socket.on("next_turn", ({ code }) => {
+  /* REMOVE COIN — spectator picks their coin back up */
+  socket.on("remove_coin", ({ code }) => {
+    const game = games[code];
+    if (!game || !game.coins) return;
+    delete game.coins[socket.id];
+    io.to(code).emit("coins_updated", { coins: game.coins });
+  });
+
+  /* CLAIM RECOGNITION — spectator taps "I know this song" after reveal */
+  socket.on("claim_recognition", ({ code }) => {
+    const game = games[code];
+    if (!game) return;
+    const playerIndex = game.players.findIndex(p => p.id === socket.id);
+    if (playerIndex === -1) return;
+    game.players[playerIndex].coins = (game.players[playerIndex].coins || 0) + 1;
+    // Just give them the coin immediately — honor system
+    io.to(code).emit("coins_updated_players", { players: game.players });
+  });
+
+  /* RESOLVE COINS — called by active player when pressing Next Turn
+     activeCorrect: bool — was the active player's placement correct?
+     activeInsertIndex: number — where the active player placed the card
+     newCard: the card object that was played
+  */
+  socket.on("resolve_coins", ({ code, activeCorrect, activeInsertIndex, newCard }) => {
     const game = games[code];
     if (!game) return;
 
-    game.currentPlayerIndex =
-      (game.currentPlayerIndex + 1) % game.players.length;
+    const coins = game.coins || {};
+    const activePlayer = game.players[game.currentPlayerIndex];
+
+    // Evaluate each coin
+    Object.values(coins).forEach(({ playerId, insertIndex }) => {
+      const coinPlayerIndex = game.players.findIndex(p => p.id === playerId);
+      if (coinPlayerIndex === -1) return;
+      const coinPlayer = game.players[coinPlayerIndex];
+      const coinCorrect = insertIndex === activeInsertIndex;
+
+      if (activeCorrect && coinCorrect) {
+        // Active right, coin right → coin player gets coin back (no change)
+      } else if (activeCorrect && !coinCorrect) {
+        // Active right, coin wrong → coin destroyed
+        game.players[coinPlayerIndex].coins = Math.max(0, coinPlayer.coins - 1);
+      } else if (!activeCorrect && coinCorrect) {
+        // Active wrong, coin right → coin player gets coin back + card into their timeline
+        const cardWithFixed = { ...newCard, type: "fixed" };
+        game.players[coinPlayerIndex].timeline = [
+          ...coinPlayer.timeline,
+          cardWithFixed
+        ].sort((a, b) => a.year - b.year);
+        game.players[coinPlayerIndex].score = (coinPlayer.score || 0) + 1;
+      } else {
+        // Both wrong → coin destroyed
+        game.players[coinPlayerIndex].coins = Math.max(0, coinPlayer.coins - 1);
+      }
+    });
+
+    // Clear all coins for next round
+    game.coins = {};
+
+    // Advance turn
+    game.currentPlayerIndex = (game.currentPlayerIndex + 1) % game.players.length;
 
     io.to(code).emit("turn_changed", {
       players: game.players,
@@ -313,7 +376,35 @@ io.on("connection", (socket) => {
       minYear: game.minYear,
       maxYear: game.maxYear,
       playlistTracks: game.playlistTracks,
-      usedUris: Array.from(game.usedUris)
+      usedUris: Array.from(game.usedUris),
+      coins: {}
+    });
+  });
+
+  /* MARK TRACK USED — called when a card is dealt to prevent repeats */
+  socket.on("mark_used", ({ code, uri }) => {
+    const game = games[code];
+    if (!game) return;
+    game.usedUris.add(uri);
+  });
+
+  /* NEXT TURN — now only used as fallback, coins use resolve_coins */
+  socket.on("next_turn", ({ code }) => {
+    const game = games[code];
+    if (!game) return;
+
+    game.coins = {};
+    game.currentPlayerIndex = (game.currentPlayerIndex + 1) % game.players.length;
+
+    io.to(code).emit("turn_changed", {
+      players: game.players,
+      currentPlayerIndex: game.currentPlayerIndex,
+      selectedGenres: game.selectedGenres,
+      minYear: game.minYear,
+      maxYear: game.maxYear,
+      playlistTracks: game.playlistTracks,
+      usedUris: Array.from(game.usedUris),
+      coins: {}
     });
   });
 

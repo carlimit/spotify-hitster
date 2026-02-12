@@ -494,6 +494,112 @@ button:active {
   color: #b3b3b3;
 }
 
+/* ---------- Game Header ---------- */
+
+.game-header {
+  width: 100%;
+  max-width: 480px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.game-header h2, .game-header h3 {
+  text-align: left;
+  margin: 4px 0;
+}
+
+.coin-display {
+  font-size: 28px;
+  font-weight: 800;
+  color: #f0c040;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(240, 192, 64, 0.12);
+  border: 2px solid rgba(240, 192, 64, 0.3);
+  border-radius: 12px;
+  padding: 8px 14px;
+  flex-shrink: 0;
+}
+
+.coin-display span { font-size: 22px; }
+
+/* ---------- Coin Slots ---------- */
+
+.coin-slot {
+  width: 100%;
+  max-width: 480px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 2px 0;
+}
+
+.coins-on-slot {
+  font-size: 18px;
+  letter-spacing: 2px;
+}
+
+.coin-btn {
+  width: 36px !important;
+  height: 36px !important;
+  min-width: unset !important;
+  padding: 0 !important;
+  border-radius: 50% !important;
+  font-size: 18px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  margin: 0 !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3) !important;
+  flex-shrink: 0;
+}
+
+.coin-plus {
+  background: rgba(255,255,255,0.12) !important;
+  border: 2px dashed rgba(255,255,255,0.35) !important;
+  color: white !important;
+  font-size: 22px !important;
+  font-weight: 300 !important;
+}
+
+.coin-plus:hover {
+  background: rgba(255,255,255,0.22) !important;
+  transform: scale(1.15) !important;
+}
+
+.coin-placed {
+  background: rgba(240, 192, 64, 0.25) !important;
+  border: 2px solid rgba(240, 192, 64, 0.7) !important;
+  animation: coinPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes coinPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+.give-coin-btn {
+  background: linear-gradient(135deg, #a855f7, #7c3aed) !important;
+  box-shadow: 0 8px 24px rgba(168, 85, 247, 0.4) !important;
+}
+
+.recognition-btn {
+  background: linear-gradient(135deg, #f0c040, #e0a020) !important;
+  color: #1a1a1a !important;
+  font-weight: 700 !important;
+  animation: recognitionPop 0.3s ease;
+}
+
+@keyframes recognitionPop {
+  0% { transform: scale(0.8); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
 /* ---------- Loading Card ---------- */
 
 .loading-card {
