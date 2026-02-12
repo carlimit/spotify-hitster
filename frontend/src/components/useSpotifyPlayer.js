@@ -194,6 +194,5 @@ export function useSpotifyDirect() {
     currentUriRef.current = null;
     await pauseSDK();
   };
-
   return { ready: hasToken ? ready : false, playing, togglePlay, stop };
 }
