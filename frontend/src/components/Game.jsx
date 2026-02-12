@@ -189,29 +189,16 @@ function Game({
       values={cards}
       onReorder={setCards}
       className="timeline"
-      layoutScroll
-      style={{ position: 'relative' }}
     >
       {cards.map(card => (
         <Reorder.Item
           key={card.id}
           value={card}
-          drag={!revealed && card.type === "new"}
-          dragListener={card.type === "new" && !revealed}
-          dragElastic={0.1}
-          dragConstraints={{ top: 0, bottom: 0 }}
-          whileDrag={{ 
-            scale: 1.05,
-            zIndex: 999,
-            cursor: 'grabbing'
-          }}
+          drag={!revealed}
+          dragListener={card.type === "new"}
           className={`card ${
             card.type === "new" && revealed ? "card-expanded" : ""
           }`}
-          style={{ 
-            position: 'relative',
-            zIndex: card.type === "new" && revealed ? 100 : 1
-          }}
         >
           {card.type === "new" ? (
             <div

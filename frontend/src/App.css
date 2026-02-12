@@ -150,6 +150,13 @@ button[style*="background"] {
   list-style: none;
 }
 
+/* Force Reorder.Item to center */
+.timeline > * {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
 /* ---------- Cards ---------- */
 
 .card {
@@ -161,7 +168,6 @@ button[style*="background"] {
   transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: grab;
   touch-action: none;
-  margin: 0 auto;
   position: relative;
   z-index: 1;
 }
