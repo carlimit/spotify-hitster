@@ -79,9 +79,15 @@ function Home({
   // ============================================================
 
   const startGame = () => {
-    if (!roomCode) return;
-    socket.emit("start_game", { code: roomCode });
-  };
+      if (!gameCode) return;
+
+      socket.emit("start_game", {
+        code: gameCode,
+        minYear,
+        maxYear
+      });
+    };
+
 
   // ============================================================
   // GENRE TOGGLE
