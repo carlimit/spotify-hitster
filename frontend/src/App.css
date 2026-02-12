@@ -506,6 +506,37 @@ button[style*="background"] {
   display: block;
 }
 
+/* ---------- Home Screen Sections ---------- */
+
+.home-section {
+  width: 100%;
+  max-width: 500px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 20px auto;
+}
+
+.player-list {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.genre-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin: 12px 0;
+  max-width: 100%;
+}
+
+.start-button {
+  margin-top: 30px !important;
+}
+
 /* ---------- Responsive Adjustments ---------- */
 
 @media (max-width: 480px) {
