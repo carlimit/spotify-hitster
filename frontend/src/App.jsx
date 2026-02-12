@@ -6,7 +6,8 @@ import "./App.css";
 import { getLoginUrl } from "./spotify";
 
 function App() {
-  // ---------- GLOBAL STATE ----------
+
+  // ---------- GLOBAL ----------
   const [view, setView] = useState("start"); 
   const [isHost, setIsHost] = useState(false);
   const [token, setToken] = useState(null);
@@ -18,14 +19,20 @@ function App() {
   const [minYear, setMinYear] = useState(1990);
   const [maxYear, setMaxYear] = useState(2024);
 
-  // ---------- HANDLE SPOTIFY REDIRECT (ONLY FOR HOST) ----------
+  // ============================================================
+  // 🔐 Spotify Redirect (Host only)
+  // ============================================================
+
   useEffect(() => {
-    if (!isHost) return;
+    const storedToken = localStorage.getItem("token");
+    if (storedToken) {
+      setToken(storedToken);
+    }
 
     const params = new URLSearchParams(window.location.search);
     const code = params.get("code");
 
-    if (code) {
+    if (code && isHost) {
       const codeVerifier = localStorage.getItem("code_verifier");
 
       fetch(`/api/token?code=${code}`, {
@@ -42,7 +49,7 @@ function App() {
   }, [isHost]);
 
   // ============================================================
-  // ====================== START SCREEN ========================
+  // 🟢 START SCREEN
   // ============================================================
 
   if (view === "start") {
@@ -73,7 +80,7 @@ function App() {
   }
 
   // ============================================================
-  // ====================== HOST LOGIN ==========================
+  // 🟢 HOST LOGIN SCREEN
   // ============================================================
 
   if (view === "host-login") {
@@ -93,11 +100,12 @@ function App() {
   }
 
   // ============================================================
-  // ====================== MAIN FLOW ===========================
+  // 🟢 MAIN FLOW (Home → Game → Winner)
   // ============================================================
 
   return (
     <div>
+
       {gamePhase === "home" && (
         <Home
           setGamePhase={setGamePhase}
@@ -109,6 +117,7 @@ function App() {
           setMinYear={setMinYear}
           maxYear={maxYear}
           setMaxYear={setMaxYear}
+          isHost={isHost}
         />
       )}
 
@@ -121,13 +130,14 @@ function App() {
           setWinner={setWinner}
           minYear={minYear}
           maxYear={maxYear}
-          isHost={isHost}   // 🔥 wichtig
+          isHost={isHost}
         />
       )}
 
       {gamePhase === "winner" && (
         <Winner winner={winner} setGamePhase={setGamePhase} />
       )}
+
     </div>
   );
 }

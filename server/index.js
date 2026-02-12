@@ -127,37 +127,47 @@ io.on("connection", (socket) => {
 
   /* JOIN GAME */
   socket.on("join_game", ({ code, name }) => {
-    const game = games[code];
-    if (!game) return;
+  const game = games[code];
+  if (!game) return;
 
-    game.players.push({
-      id: socket.id,
-      name,
-      score: 0,
-      timeline: []
-    });
+  // Kein doppeltes Joinen
+  const alreadyJoined = game.players.find(p => p.id === socket.id);
+  if (alreadyJoined) return;
 
-    socket.join(code);
-    io.to(code).emit("player_list", game.players);
+  // Kein Join wenn Spiel schon gestartet
+  if (game.started) return;
+
+  game.players.push({
+    id: socket.id,
+    name,
+    score: 0,
+    timeline: []
   });
+
+  socket.join(code);
+  io.to(code).emit("player_list", game.players);
+});
+
 
   /* START GAME */
   socket.on("start_game", ({ code }) => {
-    const game = games[code];
-    if (!game) return;
+  const game = games[code];
+  if (!game) return;
 
-    if (socket.id !== game.host) return;
+  if (socket.id !== game.host) return;
+  if (game.players.length < 1) return;
 
-    game.started = true;
+  game.started = true;
 
-    io.to(code).emit("game_started", {
-      players: game.players,
-      currentPlayerIndex: game.currentPlayerIndex
-    });
-
-    const activePlayer = game.players[game.currentPlayerIndex];
-    io.to(activePlayer.id).emit("your_turn");
+  io.to(code).emit("game_started", {
+    players: game.players,
+    currentPlayerIndex: 0
   });
+
+  const activePlayer = game.players[0];
+  io.to(activePlayer.id).emit("your_turn");
+});
+
 
   /* NEXT TURN */
   socket.on("next_turn", ({ code }) => {
