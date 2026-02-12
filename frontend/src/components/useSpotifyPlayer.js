@@ -102,6 +102,13 @@ export function useSpotifyPlayer(roomCode) {
 
   const togglePlay = async (uri) => {
     if (!isHost || !sdkReady) return;
+
+    // ✅ FIX: activateElement() must be called synchronously within the user
+    // gesture handler. On iOS/Android, the browser invalidates the gesture
+    // context the moment any async work (like a fetch) happens — so audio
+    // gets blocked. This call "unlocks" the audio context before we do anything async.
+    await sdkPlayer?.activateElement();
+
     if (playingRef.current) {
       playingRef.current = false;
       setPlaying(false);
@@ -159,8 +166,12 @@ export function useSpotifyDirect() {
   }, [hasToken]);
 
   const togglePlay = async (uri) => {
-    // Don't allow play until SDK is actually ready
     if (!hasToken || !sdkReady || !sdkDeviceId) return;
+
+    // ✅ FIX: Same fix for singleplayer — activateElement() unlocks the
+    // mobile audio context synchronously before the async fetch in playUri().
+    await sdkPlayer?.activateElement();
+
     if (playingRef.current) {
       playingRef.current = false;
       setPlaying(false);
