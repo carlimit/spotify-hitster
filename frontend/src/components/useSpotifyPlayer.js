@@ -51,14 +51,31 @@ function initSDK(token, onReady) {
   }
 }
 
+// ✅ FIX: playUri now returns true/false so callers know if it succeeded
 async function playUri(uri) {
   const token = localStorage.getItem("token");
-  if (!token || !sdkDeviceId) return;
-  await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${sdkDeviceId}`, {
+  if (!token || !sdkDeviceId) return false;
+  const res = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${sdkDeviceId}`, {
     method: "PUT",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     body: JSON.stringify({ uris: [uri] })
   });
+  // 204 = success, anything else = failed
+  return res.ok;
+}
+
+// ✅ FIX: Retry helper — tries up to maxAttempts times with a delay between each.
+// Spotify often needs 1-2 retries on mobile because the device takes a moment
+// to become active after activateElement(), causing the first PUT to return 404.
+async function playUriWithRetry(uri, maxAttempts = 3, delayMs = 800) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const ok = await playUri(uri);
+    if (ok) return true;
+    if (attempt < maxAttempts) {
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
+  }
+  return false;
 }
 
 async function pauseSDK() { await sdkPlayer?.pause(); }
@@ -72,6 +89,8 @@ export function useSpotifyPlayer(roomCode) {
   const playingRef = useRef(false);
   const currentUriRef = useRef(null);
   const roomCodeRef = useRef(roomCode);
+  // ✅ FIX: Track in-flight play request to block double-taps
+  const loadingRef = useRef(false);
   useEffect(() => { roomCodeRef.current = roomCode; }, [roomCode]);
 
   useEffect(() => {
@@ -102,11 +121,9 @@ export function useSpotifyPlayer(roomCode) {
 
   const togglePlay = async (uri) => {
     if (!isHost || !sdkReady) return;
+    // ✅ FIX: Block re-taps while a play request is already in flight
+    if (loadingRef.current) return;
 
-    // ✅ FIX: activateElement() must be called synchronously within the user
-    // gesture handler. On iOS/Android, the browser invalidates the gesture
-    // context the moment any async work (like a fetch) happens — so audio
-    // gets blocked. This call "unlocks" the audio context before we do anything async.
     await sdkPlayer?.activateElement();
 
     if (playingRef.current) {
@@ -115,14 +132,28 @@ export function useSpotifyPlayer(roomCode) {
       socket.emit("player_state", { code: roomCodeRef.current, playing: false });
       await pauseSDK();
     } else {
+      loadingRef.current = true;
       playingRef.current = true;
       setPlaying(true);
       socket.emit("player_state", { code: roomCodeRef.current, playing: true });
-      if (uri && uri !== currentUriRef.current) {
-        currentUriRef.current = uri;
-        await playUri(uri);
-      } else {
-        await resumeSDK();
+
+      try {
+        if (uri && uri !== currentUriRef.current) {
+          currentUriRef.current = uri;
+          // ✅ FIX: Retry up to 3 times — on mobile the device sometimes
+          // isn't active yet, causing the first request to silently fail
+          const ok = await playUriWithRetry(uri);
+          if (!ok) {
+            // All retries failed — roll back UI state
+            playingRef.current = false;
+            setPlaying(false);
+            socket.emit("player_state", { code: roomCodeRef.current, playing: false });
+          }
+        } else {
+          await resumeSDK();
+        }
+      } finally {
+        loadingRef.current = false;
       }
     }
   };
@@ -132,6 +163,7 @@ export function useSpotifyPlayer(roomCode) {
     playingRef.current = false;
     setPlaying(false);
     currentUriRef.current = null;
+    loadingRef.current = false;
     socket.emit("player_state", { code: roomCodeRef.current, playing: false });
     await pauseSDK();
   };
@@ -147,6 +179,8 @@ export function useSpotifyDirect() {
   const playingRef = useRef(false);
   const currentUriRef = useRef(null);
   const pollRef = useRef(null);
+  // ✅ FIX: Track in-flight play request to block double-taps
+  const loadingRef = useRef(false);
 
   useEffect(() => {
     if (!hasToken) return;
@@ -167,9 +201,9 @@ export function useSpotifyDirect() {
 
   const togglePlay = async (uri) => {
     if (!hasToken || !sdkReady || !sdkDeviceId) return;
+    // ✅ FIX: Block re-taps while a play request is already in flight
+    if (loadingRef.current) return;
 
-    // ✅ FIX: Same fix for singleplayer — activateElement() unlocks the
-    // mobile audio context synchronously before the async fetch in playUri().
     await sdkPlayer?.activateElement();
 
     if (playingRef.current) {
@@ -177,13 +211,25 @@ export function useSpotifyDirect() {
       setPlaying(false);
       await pauseSDK();
     } else {
+      loadingRef.current = true;
       playingRef.current = true;
       setPlaying(true);
-      if (uri && uri !== currentUriRef.current) {
-        currentUriRef.current = uri;
-        await playUri(uri);
-      } else {
-        await resumeSDK();
+
+      try {
+        if (uri && uri !== currentUriRef.current) {
+          currentUriRef.current = uri;
+          // ✅ FIX: Retry up to 3 times with 800ms between attempts
+          const ok = await playUriWithRetry(uri);
+          if (!ok) {
+            // All retries failed — roll back UI state
+            playingRef.current = false;
+            setPlaying(false);
+          }
+        } else {
+          await resumeSDK();
+        }
+      } finally {
+        loadingRef.current = false;
       }
     }
   };
@@ -192,7 +238,9 @@ export function useSpotifyDirect() {
     playingRef.current = false;
     setPlaying(false);
     currentUriRef.current = null;
+    loadingRef.current = false;
     await pauseSDK();
   };
+
   return { ready: hasToken ? ready : false, playing, togglePlay, stop };
 }
