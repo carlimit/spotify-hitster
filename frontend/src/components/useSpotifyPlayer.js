@@ -123,16 +123,17 @@ export function useSpotifyPlayer(roomCode, isHost) {
       socket.on("pause_track", onPauseTrack);
 
       const poll = setInterval(async () => {
-        if (!sdkPlayer) return;
-        const state = await sdkPlayer.getCurrentState();
-        if (state === null) return;
-        const isPlaying = !state.paused;
-        if (playingRef.current !== isPlaying) {
-          playingRef.current = isPlaying;
-          setPlaying(isPlaying);
-          socket.emit("player_state", { code: roomCodeRef.current, playing: isPlaying });
-        }
-      }, 500);
+  if (!sdkPlayer) return;
+  if (loadingRef.current) return; // ✅ skip poll while a play request is in flight
+  const state = await sdkPlayer.getCurrentState();
+  if (state === null) return;
+  const isPlaying = !state.paused;
+  if (playingRef.current !== isPlaying) {
+    playingRef.current = isPlaying;
+    setPlaying(isPlaying);
+    socket.emit("player_state", { code: roomCodeRef.current, playing: isPlaying });
+  }
+}, 500);
 
       return () => {
         clearInterval(poll);
