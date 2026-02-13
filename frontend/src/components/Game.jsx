@@ -15,7 +15,8 @@ function Game({
   playlistTracks: initialPlaylistTracks,
   winGoal = 10,
   timerSeconds = 0,
-  t
+  t,
+  isHost  // ✅ received from App.jsx
 }) {
   const [players, setLocalPlayers] = useState(initialPlayers);
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0);
@@ -29,14 +30,14 @@ function Game({
   // Coins
   const [coins, setCoins] = useState({});
   const [myCoinIndex, setMyCoinIndex] = useState(null);
-  const [showRecognition, setShowRecognition] = useState(false);
+  const [coinGiven, setCoinGiven] = useState(false);
 
   // Timer
   const [timeLeft, setTimeLeft] = useState(null);
   const timerRef = useRef(null);
 
-  // Spotify
-  const { ready: spotifyReady, playing, togglePlay, stop } = useSpotifyPlayer(roomCode);
+  // ✅ isHost passed explicitly — not guessed from localStorage
+  const { ready: spotifyReady, playing, togglePlay, stop } = useSpotifyPlayer(roomCode, isHost);
 
   // Drag
   const [dragY, setDragY] = useState(0);
@@ -120,8 +121,7 @@ function Game({
       setInsertIndex(null);
       setCoins(newCoins || {});
       setMyCoinIndex(null);
-      setShowRecognition(false);
-      setCoinGiven(false); // ✅ reset for new turn
+      setCoinGiven(false);
       stop();
       clearInterval(timerRef.current);
       setTimeLeft(null);
@@ -147,21 +147,19 @@ function Game({
       updatePlayers(newPlayers);
     });
 
-    // ✅ NEW: Spectators receive the revealed card state from the active player
     socket.on("card_revealed", ({ result: revealResult, cards: revealedCards }) => {
       setCards(revealedCards);
       cardsRef.current = revealedCards;
       setResult(revealResult);
       setRevealed(true);
       revealedRef.current = true;
-      // ✅ REMOVED: showRecognition — players could use it to cheat coins
     });
 
     return () => {
       socket.off("turn_changed");
       socket.off("coins_updated");
       socket.off("coins_updated_players");
-      socket.off("card_revealed"); // ✅ clean up
+      socket.off("card_revealed");
     };
   }, []);
 
@@ -291,7 +289,6 @@ function Game({
       dragCardRef.current.style.zIndex = "1000";
     }
 
-    // Smooth variable-speed rAF auto-scroll
     const SCROLL_ZONE = 120;
     const MAX_SPEED = 22;
     cancelAnimationFrame(scrollIntervalRef.current);
@@ -316,7 +313,6 @@ function Game({
       if (direction !== 0) {
         const eased = Math.pow(proximity, 2);
         const speed = Math.max(1, eased * MAX_SPEED);
-
         const tick = () => {
           const tl = timelineRef.current;
           if (!tl || !draggingRef.current) return;
@@ -348,20 +344,11 @@ function Game({
 
     let fixedSlot = fixedMidpoints.length;
     for (let i = 0; i < fixedMidpoints.length; i++) {
-      if (draggedCenterY < fixedMidpoints[i].midY) {
-        fixedSlot = i;
-        break;
-      }
+      if (draggedCenterY < fixedMidpoints[i].midY) { fixedSlot = i; break; }
     }
 
-    let arraySlot;
-    if (fixedSlot <= newIdx) {
-      arraySlot = fixedSlot;
-    } else {
-      arraySlot = fixedSlot + 1;
-    }
+    let arraySlot = fixedSlot <= newIdx ? fixedSlot : fixedSlot + 1;
     arraySlot = Math.max(0, Math.min(currentCards.length, arraySlot));
-
     insertIndexRef.current = arraySlot;
     setInsertIndex(prev => prev === arraySlot ? prev : arraySlot);
   }, []);
@@ -437,7 +424,6 @@ function Game({
     const revealResult = correct ? "correct" : "wrong";
     setResult(revealResult);
 
-    // ✅ NEW: Broadcast the reveal to all spectators so they see the card too
     socket.emit("reveal_card", {
       code: roomCode,
       result: revealResult,
@@ -475,17 +461,14 @@ function Game({
     setTimeout(() => setShowNextButton(true), 800);
   };
 
-  // ✅ FIX: Track whether coin has been given so button disappears after press
-  const [coinGiven, setCoinGiven] = useState(false);
+  // ============================================================
+  // 🪙 COINS
+  // ============================================================
 
   const giveCoin = () => {
     setCoinGiven(true);
     socket.emit("give_coin", { code: roomCode });
   };
-
-  // ============================================================
-  // 🪙 COINS
-  // ============================================================
 
   const placeCoin = (idx) => {
     setMyCoinIndex(idx);
@@ -497,8 +480,6 @@ function Game({
     socket.emit("remove_coin", { code: roomCode });
   };
 
-
-
   // ============================================================
   // ➡️ NEXT TURN
   // ============================================================
@@ -507,7 +488,6 @@ function Game({
     const currentCards = cardsRef.current;
     const newCardIndex = currentCards.findIndex(c => c.type === "new");
     const newCard = newCardIndex !== -1 ? currentCards[newCardIndex] : null;
-
     socket.emit("resolve_coins", {
       code: roomCode,
       activeCorrect: result === "correct",
@@ -528,7 +508,6 @@ function Game({
   const myPlayer = players.find(p => p.id === socket.id);
   const myCoins = myPlayer?.coins ?? 0;
   const hasCoinPlaced = myCoinIndex !== null;
-
   const nextPlayerIndex = (currentPlayerIndex + 1) % players.length;
   const isNextPlayer = players[nextPlayerIndex]?.id === socket.id && !isMyTurn;
 
@@ -582,7 +561,6 @@ function Game({
 
             return (
               <div key={card.id} style={{ width: "100%", maxWidth: 480 }}>
-                {/* Coin slot ABOVE each card */}
                 {!isMyTurn && !revealed && (
                   <div className="coin-slot">
                     {coinsHere - (myMyCoinHere ? 1 : 0) > 0 && (
@@ -598,15 +576,9 @@ function Game({
                   </div>
                 )}
 
-                {/* Touch wrapper for draggable new card */}
                 {isNewCard && !revealed && isMyTurn ? (
                   <div
-                    style={{
-                      padding: "20px",
-                      margin: "-20px",
-                      touchAction: "none",
-                      userSelect: "none",
-                    }}
+                    style={{ padding: "20px", margin: "-20px", touchAction: "none", userSelect: "none" }}
                     onMouseDown={handleDragStart}
                     onTouchStart={handleDragStart}
                   >
@@ -623,12 +595,7 @@ function Game({
                         touchAction: "none",
                       }}
                     >
-                      <div
-                        className={`card-inner
-                          ${result === "correct" ? "result-correct" : ""}
-                          ${result === "wrong" ? "result-wrong" : ""}
-                        `}
-                      >
+                      <div className={`card-inner ${result === "correct" ? "result-correct" : ""} ${result === "wrong" ? "result-wrong" : ""}`}>
                         <div className="card-front new">
                           <button
                             className="play-button"
@@ -640,9 +607,7 @@ function Game({
                           >
                             {playing ? "⏸" : "▶"}
                           </button>
-                          <div className="drag-hint">
-                            {t?.dragToPlace || "Drag to place"}
-                          </div>
+                          <div className="drag-hint">{t?.dragToPlace || "Drag to place"}</div>
                         </div>
                         <div className="card-back">
                           <img src={card.cover} className="cover-large" alt="" />
@@ -667,12 +632,7 @@ function Game({
                     }}
                   >
                     {isNewCard ? (
-                      <div
-                        className={`card-inner flipped
-                          ${result === "correct" ? "result-correct" : ""}
-                          ${result === "wrong" ? "result-wrong" : ""}
-                        `}
-                      >
+                      <div className={`card-inner flipped ${result === "correct" ? "result-correct" : ""} ${result === "wrong" ? "result-wrong" : ""}`}>
                         <div className="card-front new">
                           <button
                             className="play-button"
@@ -684,9 +644,7 @@ function Game({
                           >
                             {playing ? "⏸" : "▶"}
                           </button>
-                          <div className="drag-hint">
-                            {t?.isPlaying(currentPlayer.name) || `${currentPlayer.name} is playing...`}
-                          </div>
+                          <div className="drag-hint">{t?.isPlaying(currentPlayer.name) || `${currentPlayer.name} is playing...`}</div>
                         </div>
                         <div className="card-back">
                           <img src={card.cover} className="cover-large" alt="" />
@@ -703,7 +661,6 @@ function Game({
                   </div>
                 )}
 
-                {/* Coin slot AFTER last card */}
                 {index === cards.length - 1 && !isMyTurn && !revealed && (
                   <div className="coin-slot">
                     {(() => {
@@ -730,7 +687,6 @@ function Game({
         </div>
       )}
 
-      {/* ✅ FIX: sticky so buttons are always visible without scrolling */}
       <div className="action-container" style={{
         position: "sticky",
         bottom: 0,
@@ -744,13 +700,11 @@ function Game({
         {isMyTurn && showNextButton && (
           <button onClick={nextTurn}>{t?.nextPlayer || "Next Player"}</button>
         )}
-        {/* ✅ FIX: hide give coin button after it's been pressed */}
         {isNextPlayer && !revealed && !loading && !coinGiven && (
           <button className="give-coin-btn" onClick={giveCoin}>
             {t?.giveCoin(currentPlayer.name) || `🎤 Give coin to ${currentPlayer.name}`}
           </button>
         )}
-        {/* ✅ REMOVED: "I know this song" button — players could use it to cheat */}
       </div>
     </div>
   );

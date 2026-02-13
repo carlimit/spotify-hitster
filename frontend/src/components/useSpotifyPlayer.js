@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { socket } from "../socket";
 
 // ── Shared SDK — one instance for the entire app lifetime ──
-// Only initialized on the HOST's device. Non-hosts never touch the SDK.
 let sdkPlayer = null;
 let sdkDeviceId = null;
 let sdkReady = false;
@@ -52,7 +51,6 @@ function initSDK(token, onReady) {
   }
 }
 
-// Plays a URI on the host's SDK device
 async function playUri(uri) {
   const token = localStorage.getItem("token");
   if (!token || !sdkDeviceId) return false;
@@ -64,7 +62,6 @@ async function playUri(uri) {
   return res.ok;
 }
 
-// Retry wrapper — mobile devices sometimes need a moment before the request succeeds
 async function playUriWithRetry(uri, maxAttempts = 3, delayMs = 800) {
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const ok = await playUri(uri);
@@ -80,13 +77,9 @@ async function pauseSDK() { await sdkPlayer?.pause(); }
 async function resumeSDK() { await sdkPlayer?.resume(); }
 
 // ── MULTIPLAYER hook ──
-//
-// HOST   (has Spotify token) → initializes SDK, plays audio locally,
-//                               listens for play_track/pause_track from server
-//
-// NON-HOST (no token needed) → emits play_track/pause_track socket events,
-//                               server forwards them to host, host's SDK plays
-//
+// isHost prop is passed explicitly from App.jsx via Game.jsx
+// HOST   → initializes SDK, plays audio locally, listens for play_track/pause_track
+// NON-HOST → emits socket events, host's SDK plays the audio
 export function useSpotifyPlayer(roomCode, isHost) {
   const [ready, setReady] = useState(false);
   const [playing, setPlaying] = useState(false);
@@ -98,12 +91,8 @@ export function useSpotifyPlayer(roomCode, isHost) {
 
   useEffect(() => {
     if (isHost) {
-      // ── HOST: initialize SDK so audio plays on this device ──
       initSDK(localStorage.getItem("token"), () => setReady(true));
 
-      // ✅ HOST: listen for play/pause commands forwarded from non-host active players
-      // Flow: non-host taps play → emits play_track → server forwards to host socket
-      //       → host SDK actually plays the audio here
       const onPlayTrack = async ({ uri }) => {
         if (!sdkReady) return;
         await sdkPlayer?.activateElement();
@@ -133,7 +122,6 @@ export function useSpotifyPlayer(roomCode, isHost) {
       socket.on("play_track", onPlayTrack);
       socket.on("pause_track", onPauseTrack);
 
-      // Poll SDK state and broadcast to all players
       const poll = setInterval(async () => {
         if (!sdkPlayer) return;
         const state = await sdkPlayer.getCurrentState();
@@ -152,7 +140,6 @@ export function useSpotifyPlayer(roomCode, isHost) {
         socket.off("pause_track", onPauseTrack);
       };
     } else {
-      // ── NON-HOST: just listen for play state broadcasts ──
       const handler = ({ playing: p }) => setPlaying(p);
       socket.on("player_state", handler);
       return () => socket.off("player_state", handler);
@@ -161,12 +148,9 @@ export function useSpotifyPlayer(roomCode, isHost) {
 
   const togglePlay = async (uri) => {
     if (isHost) {
-      // ── HOST: play directly via SDK on this device ──
       if (!sdkReady) return;
       if (loadingRef.current) return;
-
       await sdkPlayer?.activateElement();
-
       if (playingRef.current) {
         playingRef.current = false;
         setPlaying(false);
@@ -194,7 +178,6 @@ export function useSpotifyPlayer(roomCode, isHost) {
         }
       }
     } else {
-      // ── NON-HOST (active player): emit to server, host's SDK plays it ──
       if (playing) {
         setPlaying(false);
         socket.emit("pause_track", { code: roomCodeRef.current });
@@ -219,12 +202,10 @@ export function useSpotifyPlayer(roomCode, isHost) {
     }
   };
 
-  // Non-hosts: ready is always true — they can press play any time,
-  // the button just triggers a socket emit rather than SDK playback
   return { ready: isHost ? ready : true, playing, togglePlay, stop };
 }
 
-// ── SINGLEPLAYER hook — always plays on current device, unchanged ──
+// ── SINGLEPLAYER hook — always plays on current device ──
 export function useSpotifyDirect() {
   const [ready, setReady] = useState(sdkReady);
   const [playing, setPlaying] = useState(false);
@@ -254,9 +235,7 @@ export function useSpotifyDirect() {
   const togglePlay = async (uri) => {
     if (!hasToken || !sdkReady || !sdkDeviceId) return;
     if (loadingRef.current) return;
-
     await sdkPlayer?.activateElement();
-
     if (playingRef.current) {
       playingRef.current = false;
       setPlaying(false);
