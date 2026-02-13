@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { socket } from "../socket";
 import { useSpotifyPlayer } from "./useSpotifyPlayer";
@@ -315,14 +315,13 @@ function Game({
 
   const isHorizontal = () => isHorizontalRef.current;
 
-  const handleDragStart = useCallback((e) => {
+  const handleDragStart = (e) => {
     if (revealedRef.current || !isMyTurnRef.current) return;
     e.stopPropagation();
     const h = isHorizontalRef.current;
     const w = window.innerWidth;
     const land = window.matchMedia("(orientation: landscape)").matches;
     console.log("🟢 dragStart — horizontal:", h, "w:", w, "landscape:", land);
-    // Show debug on screen
     const el = document.getElementById("drag-debug");
     if (el) el.textContent = `horizontal:${h} w:${w} land:${land}`;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
@@ -331,10 +330,10 @@ function Game({
     startXRef.current = clientX;
     draggingRef.current = false;
     dragActiveRef.current = true;
-  }, []);
+  };
 
-  const handleDragMove = useCallback((e) => {
-    if (!dragActiveRef.current) return; // not our touch
+  const handleDragMove = (e) => {
+    if (!dragActiveRef.current) return;
 
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
@@ -345,7 +344,7 @@ function Game({
     if (!draggingRef.current) {
       const primary = horizontal ? Math.abs(deltaX) : Math.abs(deltaY);
       const secondary = horizontal ? Math.abs(deltaY) : Math.abs(deltaX);
-      console.log("🔵 move — horizontal:", horizontal, "deltaX:", Math.round(deltaX), "deltaY:", Math.round(deltaY), "primary:", Math.round(primary), "secondary:", Math.round(secondary));
+      console.log("🔵 move — horizontal:", horizontal, "deltaX:", Math.round(deltaX), "deltaY:", Math.round(deltaY));
       if (primary < 4) return;
       if (secondary > primary * 1.5) {
         console.log("❌ cancelled — wrong axis");
@@ -452,11 +451,11 @@ function Game({
     arraySlot = Math.max(0, Math.min(currentCards.length, arraySlot));
     insertIndexRef.current = arraySlot;
     setInsertIndex(prev => prev === arraySlot ? prev : arraySlot);
-  }, []);
+  };
 
   const insertIndexRef = useRef(null);
 
-  const handleDragEnd = useCallback(() => {
+  const handleDragEnd = () => {
     if (!dragActiveRef.current) return;
     dragActiveRef.current = false;
 
@@ -485,7 +484,7 @@ function Game({
     insertIndexRef.current = null;
     startYRef.current = 0;
     startXRef.current = 0;
-  }, []);
+  };
 
   useEffect(() => {
     window.addEventListener("mousemove", handleDragMove, { passive: false });
