@@ -540,6 +540,14 @@ function Game({
 
   return (
     <div className="container">
+      <div style={{
+  background: "#333", color: "#fff", fontSize: 11,
+  padding: "6px 10px", marginBottom: 8, wordBreak: "break-all"
+}}>
+  isHost: {String(!!localStorage.getItem("token"))} |
+  sdkReady: {String(spotifyReady)} |
+  myId: {socket.id?.slice(0,6)}
+</div>
       <div className="game-header">
         <div>
           <h2>{currentPlayer.name}'s Turn</h2>
