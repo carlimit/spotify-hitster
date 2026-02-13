@@ -5,6 +5,7 @@ import { useSpotifyPlayer } from "./useSpotifyPlayer";
 
 function Game({
   players: initialPlayers,
+  isHost,
   setPlayers,
   selectedGenres,
   minYear,
@@ -36,7 +37,7 @@ function Game({
   const timerRef = useRef(null);
 
   // Spotify
-  const { ready: spotifyReady, playing, togglePlay, stop } = useSpotifyPlayer(roomCode);
+  const { ready: spotifyReady, playing, togglePlay, stop } = useSpotifyPlayer(roomCode, isHost);
 
   // Drag
   const [dragY, setDragY] = useState(0);
@@ -72,6 +73,9 @@ function Game({
   // ============================================================
 
   useEffect(() => {
+    if (!isHost) {
+      localStorage.removeItem("token");
+    }
     const myTurn = players[0]?.id === socket.id;
     isMyTurnRef.current = myTurn;
     setIsMyTurn(myTurn);

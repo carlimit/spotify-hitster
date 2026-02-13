@@ -87,10 +87,9 @@ async function resumeSDK() { await sdkPlayer?.resume(); }
 // NON-HOST (no token needed) → emits play_track/pause_track socket events,
 //                               server forwards them to host, host's SDK plays
 //
-export function useSpotifyPlayer(roomCode) {
+export function useSpotifyPlayer(roomCode, isHost) {
   const [ready, setReady] = useState(false);
   const [playing, setPlaying] = useState(false);
-  const isHost = !!localStorage.getItem("token");
   const playingRef = useRef(false);
   const currentUriRef = useRef(null);
   const roomCodeRef = useRef(roomCode);

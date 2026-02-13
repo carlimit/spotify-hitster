@@ -180,6 +180,7 @@ function App() {
         roomCode={roomCode} setScreen={setScreen} setWinner={setWinner}
         playlistTracks={playlistTracks}
         winGoal={winGoal} timerSeconds={timerSeconds}
+        isHost={isHost}
       />
     );
   }
