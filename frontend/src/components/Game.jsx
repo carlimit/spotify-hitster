@@ -345,9 +345,10 @@ function Game({
     if (!draggingRef.current) {
       const primary = horizontal ? Math.abs(deltaX) : Math.abs(deltaY);
       const secondary = horizontal ? Math.abs(deltaY) : Math.abs(deltaX);
-      if (primary < 4) return; // not moved enough yet
+      console.log("🔵 move — horizontal:", horizontal, "deltaX:", Math.round(deltaX), "deltaY:", Math.round(deltaY), "primary:", Math.round(primary), "secondary:", Math.round(secondary));
+      if (primary < 4) return;
       if (secondary > primary * 1.5) {
-        // Moving in wrong axis — cancel this drag
+        console.log("❌ cancelled — wrong axis");
         dragActiveRef.current = false;
         return;
       }
