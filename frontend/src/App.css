@@ -466,29 +466,19 @@ button:active {
 
 .action-container {
   position: fixed;
-  bottom: 0;
+  bottom: 24px;
   left: 0;
   right: 0;
-  padding: 16px 16px max(16px, env(safe-area-inset-bottom));
-  background: linear-gradient(to top, rgba(10,10,10,0.98) 60%, transparent);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
   z-index: 200;
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  pointer-events: none;
 }
 
 .action-container button {
-  width: 100%;
-  max-width: 480px;
-  padding: 18px;
-  font-size: 18px;
-  font-weight: 700;
-  border-radius: 16px;
-  margin: 0;
-  letter-spacing: 0.3px;
-  text-transform: uppercase;
-  box-shadow: 0 8px 24px rgba(29, 185, 84, 0.4);
+  pointer-events: auto;
 }
 
 /* ---------- Timer ---------- */

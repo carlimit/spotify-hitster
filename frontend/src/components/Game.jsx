@@ -687,26 +687,15 @@ function Game({
         </div>
       )}
 
-      <div className="action-container" style={{
-        position: "fixed",
-        bottom: "24px",
-        left: 0,
-        right: 0,
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        gap: "10px",
-        zIndex: 100,
-        pointerEvents: "none",
-      }}>
+      <div className="action-container">
         {isMyTurn && !revealed && !loading && (
-          <button style={{ pointerEvents: "auto" }} onClick={handleReveal}>{t?.reveal || "Reveal"}</button>
+          <button onClick={handleReveal}>{t?.reveal || "Reveal"}</button>
         )}
         {isMyTurn && showNextButton && (
-          <button style={{ pointerEvents: "auto" }} onClick={nextTurn}>{t?.nextPlayer || "Next Player"}</button>
+          <button onClick={nextTurn}>{t?.nextPlayer || "Next Player"}</button>
         )}
         {isNextPlayer && !revealed && !loading && !coinGiven && (
-          <button style={{ pointerEvents: "auto" }} className="give-coin-btn" onClick={giveCoin}>
+          <button className="give-coin-btn" onClick={giveCoin}>
             {t?.giveCoin(currentPlayer.name) || `🎤 Give coin to ${currentPlayer.name}`}
           </button>
         )}
