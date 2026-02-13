@@ -838,3 +838,7 @@ button:active {
     transition-duration: 0.01ms !important;
   }
 }
+
+* {
+  touch-action: manipulation;
+}

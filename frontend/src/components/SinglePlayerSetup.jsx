@@ -16,6 +16,9 @@ function SinglePlayerSetup({ t,
   const [playlistLoading, setPlaylistLoading] = useState(false);
   const [playlistError, setPlaylistError] = useState(null);
 
+  // ✅ FIX: Check if already logged in — hides the login banner after OAuth redirect
+  const [loggedIn, setLoggedIn] = useState(!!localStorage.getItem("token"));
+
   const toggleGenre = (g) => {
     setGenres(prev => prev.includes(g) ? prev.filter(x => x !== g) : [...prev, g]);
   };
@@ -42,6 +45,11 @@ function SinglePlayerSetup({ t,
     window.location.href = url;
   };
 
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    setLoggedIn(false);
+  };
+
   return (
     <div className="container">
       <h1>{ t?.soloTitle || "Solo Mode" }</h1>
@@ -49,17 +57,26 @@ function SinglePlayerSetup({ t,
         {t?.soloDesc || "Place as many songs as you can correctly. See how long your streak goes!"}
       </p>
 
-      {/* Always show login button — ensures a fresh token every time */}
-      <div className="spotify-login-banner">
-        <p>{t?.spotifyNeeded || "Login with Spotify to play music while you guess."}</p>
-        <button
-          style={{ background: "#1DB954" }}
-          disabled={!loginUrl}
-          onClick={handleLogin}
-        >
-          {loginUrl ? (t?.loginWithSpotify || "Login with Spotify") : "…"}
-        </button>
-      </div>
+      {/* ✅ FIX: Show "connected" state if already logged in, login prompt if not */}
+      {loggedIn ? (
+        <div className="spotify-login-banner">
+          <p>✅ {t?.spotifyConnected || "Spotify connected!"}</p>
+          <button style={{ background: "#444", fontSize: 13 }} onClick={handleLogout}>
+            {t?.logout || "Log out"}
+          </button>
+        </div>
+      ) : (
+        <div className="spotify-login-banner">
+          <p>{t?.spotifyNeeded || "Login with Spotify to play music while you guess."}</p>
+          <button
+            style={{ background: "#1DB954" }}
+            disabled={!loginUrl}
+            onClick={handleLogin}
+          >
+            {loginUrl ? (t?.loginWithSpotify || "Login with Spotify") : "…"}
+          </button>
+        </div>
+      )}
 
       <div className="home-section">
         <h2>{ t?.genres || "Genres" }</h2>
@@ -129,11 +146,11 @@ function SinglePlayerSetup({ t,
       </div>
 
       <button className="start-button" onClick={() => setScreen("singleplayer")}>
-        Start Solo Game
+        {t?.startSolo || "Start Solo Game"}
       </button>
 
       <button style={{ background: "transparent", color: "#b3b3b3", marginTop: 12 }} onClick={() => setScreen("start")}>
-        ← Back
+        {t?.back || "← Back"}
       </button>
     </div>
   );
