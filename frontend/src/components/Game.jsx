@@ -690,8 +690,8 @@ function Game({
       <div className="action-container" style={{
         position: "sticky",
         bottom: 0,
-        background: "#121212",
-        padding: "12px 0 20px",
+        background: "linear-gradient(to bottom, transparent, #121212 35%)",
+        padding: "32px 0 20px",
         zIndex: 100,
       }}>
         {isMyTurn && !revealed && !loading && (
