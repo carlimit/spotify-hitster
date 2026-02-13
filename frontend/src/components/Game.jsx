@@ -5,6 +5,7 @@ import { useSpotifyPlayer } from "./useSpotifyPlayer";
 
 function Game({
   players: initialPlayers,
+  isHost,
   setPlayers,
   selectedGenres,
   minYear,
@@ -36,7 +37,7 @@ function Game({
   const timerRef = useRef(null);
 
   // Spotify
-  const { ready: spotifyReady, playing, togglePlay, stop } = useSpotifyPlayer(roomCode);
+  const { ready: spotifyReady, playing, togglePlay, stop } = useSpotifyPlayer(roomCode, isHost);
 
   // Drag
   const [dragY, setDragY] = useState(0);
@@ -72,6 +73,9 @@ function Game({
   // ============================================================
 
   useEffect(() => {
+    if (!isHost) {
+      localStorage.removeItem("token");
+    }
     const myTurn = players[0]?.id === socket.id;
     isMyTurnRef.current = myTurn;
     setIsMyTurn(myTurn);
@@ -121,7 +125,6 @@ function Game({
       setCoins(newCoins || {});
       setMyCoinIndex(null);
       setShowRecognition(false);
-      setCoinGiven(false); // ✅ reset for new turn
       stop();
       clearInterval(timerRef.current);
       setTimeLeft(null);
@@ -154,7 +157,10 @@ function Game({
       setResult(revealResult);
       setRevealed(true);
       revealedRef.current = true;
-      // ✅ REMOVED: showRecognition — players could use it to cheat coins
+
+      // Show recognition button to spectators for 5 seconds after reveal
+      setShowRecognition(true);
+      setTimeout(() => setShowRecognition(false), 5000);
     });
 
     return () => {
@@ -475,11 +481,7 @@ function Game({
     setTimeout(() => setShowNextButton(true), 800);
   };
 
-  // ✅ FIX: Track whether coin has been given so button disappears after press
-  const [coinGiven, setCoinGiven] = useState(false);
-
   const giveCoin = () => {
-    setCoinGiven(true);
     socket.emit("give_coin", { code: roomCode });
   };
 
@@ -497,7 +499,10 @@ function Game({
     socket.emit("remove_coin", { code: roomCode });
   };
 
-
+  const claimRecognition = () => {
+    setShowRecognition(false);
+    socket.emit("claim_recognition", { code: roomCode });
+  };
 
   // ============================================================
   // ➡️ NEXT TURN
@@ -730,27 +735,23 @@ function Game({
         </div>
       )}
 
-      {/* ✅ FIX: sticky so buttons are always visible without scrolling */}
-      <div className="action-container" style={{
-        position: "sticky",
-        bottom: 0,
-        background: "#121212",
-        padding: "12px 0 20px",
-        zIndex: 100,
-      }}>
+      <div className="action-container">
         {isMyTurn && !revealed && !loading && (
           <button onClick={handleReveal}>{t?.reveal || "Reveal"}</button>
         )}
         {isMyTurn && showNextButton && (
           <button onClick={nextTurn}>{t?.nextPlayer || "Next Player"}</button>
         )}
-        {/* ✅ FIX: hide give coin button after it's been pressed */}
-        {isNextPlayer && !revealed && !loading && !coinGiven && (
+        {isNextPlayer && !revealed && !loading && (
           <button className="give-coin-btn" onClick={giveCoin}>
             {t?.giveCoin(currentPlayer.name) || `🎤 Give coin to ${currentPlayer.name}`}
           </button>
         )}
-        {/* ✅ REMOVED: "I know this song" button — players could use it to cheat */}
+        {!isMyTurn && showRecognition && (
+          <button className="recognition-btn" onClick={claimRecognition}>
+            {t?.iKnowThisSong || "🎵 I know this song! +1🪙"}
+          </button>
+        )}
       </div>
     </div>
   );
