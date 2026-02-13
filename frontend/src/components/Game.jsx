@@ -539,7 +539,7 @@ function Game({
       )}
 
       {!loading && (
-        <div className="timeline" ref={timelineRef}>
+        <div className="timeline" ref={timelineRef} style={{ paddingBottom: "100px" }}>
           {cards.map((card, index) => {
             const isNewCard = card.type === "new";
             const isDragged = isNewCard && dragging;
@@ -688,20 +688,25 @@ function Game({
       )}
 
       <div className="action-container" style={{
-        position: "sticky",
-        bottom: 0,
-        background: "linear-gradient(to bottom, transparent, #121212 35%)",
-        padding: "32px 0 20px",
+        position: "fixed",
+        bottom: "24px",
+        left: 0,
+        right: 0,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: "10px",
         zIndex: 100,
+        pointerEvents: "none",
       }}>
         {isMyTurn && !revealed && !loading && (
-          <button onClick={handleReveal}>{t?.reveal || "Reveal"}</button>
+          <button style={{ pointerEvents: "auto" }} onClick={handleReveal}>{t?.reveal || "Reveal"}</button>
         )}
         {isMyTurn && showNextButton && (
-          <button onClick={nextTurn}>{t?.nextPlayer || "Next Player"}</button>
+          <button style={{ pointerEvents: "auto" }} onClick={nextTurn}>{t?.nextPlayer || "Next Player"}</button>
         )}
         {isNextPlayer && !revealed && !loading && !coinGiven && (
-          <button className="give-coin-btn" onClick={giveCoin}>
+          <button style={{ pointerEvents: "auto" }} className="give-coin-btn" onClick={giveCoin}>
             {t?.giveCoin(currentPlayer.name) || `🎤 Give coin to ${currentPlayer.name}`}
           </button>
         )}
