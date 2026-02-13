@@ -299,7 +299,7 @@ function Game({
 
   // Read horizontal mode directly from window — no stale ref issues
   const isHorizontal = () =>
-    window.innerWidth >= 768 && window.matchMedia("(orientation: landscape)").matches;
+  window.innerWidth > window.innerHeight && window.innerWidth >= 768;
 
   const handleDragStart = (e) => {
     if (revealedRef.current || !isMyTurnRef.current) return;
