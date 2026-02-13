@@ -326,6 +326,7 @@ function Game({
     const deltaY = clientY - startYRef.current;
     const deltaX = clientX - startXRef.current;
     const horizontal = isHorizontal();
+    console.log("🔴 MOVE horizontal:", horizontal, "dX:", Math.round(deltaX), "dY:", Math.round(deltaY));
 
     if (!draggingRef.current) {
       const primary = horizontal ? Math.abs(deltaX) : Math.abs(deltaY);
@@ -472,20 +473,28 @@ function Game({
     startXRef.current = 0;
   };
 
+  // Store handlers in refs so window listeners always call the latest version
+  const handleDragMoveRef = useRef(null);
+  const handleDragEndRef = useRef(null);
+  handleDragMoveRef.current = handleDragMove;
+  handleDragEndRef.current = handleDragEnd;
+
   useEffect(() => {
-    window.addEventListener("mousemove", handleDragMove, { passive: false });
-    window.addEventListener("touchmove", handleDragMove, { passive: false });
-    window.addEventListener("mouseup", handleDragEnd);
-    window.addEventListener("touchend", handleDragEnd);
-    window.addEventListener("touchcancel", handleDragEnd);
+    const onMove = (e) => handleDragMoveRef.current(e);
+    const onEnd = (e) => handleDragEndRef.current(e);
+    window.addEventListener("mousemove", onMove, { passive: false });
+    window.addEventListener("touchmove", onMove, { passive: false });
+    window.addEventListener("mouseup", onEnd);
+    window.addEventListener("touchend", onEnd);
+    window.addEventListener("touchcancel", onEnd);
     return () => {
-      window.removeEventListener("mousemove", handleDragMove);
-      window.removeEventListener("touchmove", handleDragMove);
-      window.removeEventListener("mouseup", handleDragEnd);
-      window.removeEventListener("touchend", handleDragEnd);
-      window.removeEventListener("touchcancel", handleDragEnd);
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("touchmove", onMove);
+      window.removeEventListener("mouseup", onEnd);
+      window.removeEventListener("touchend", onEnd);
+      window.removeEventListener("touchcancel", onEnd);
     };
-  }, [handleDragMove, handleDragEnd]);
+  }, []);
 
   // ============================================================
   // 🧠 REVEAL
