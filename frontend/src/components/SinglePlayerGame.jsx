@@ -87,6 +87,7 @@ function SinglePlayerGame({ t,
     return () => clearInterval(timerRef.current);
   }, []);
 
+  // ✅ scrollIntervalRef now holds a rAF id instead of an interval id
   const scrollIntervalRef = useRef(null);
 
   const loadCard = async (existingTimeline) => {
@@ -192,6 +193,8 @@ function SinglePlayerGame({ t,
   // ── Drag ──
   const handleDragStart = useCallback((e) => {
     if (revealedRef.current) return;
+    // Stop the event here so it doesn't bubble to the page
+    e.stopPropagation();
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     startYRef.current = clientY;
@@ -209,15 +212,16 @@ function SinglePlayerGame({ t,
       const deltaX = clientX - startXRef.current;
 
       if (!draggingRef.current) {
-        const movedEnough = Math.abs(deltaY) >= 8;
+        // ✅ FIX: Lowered from 8px to 3px — claims the gesture faster on iOS
+        // before the browser decides to scroll the page instead
+        const movedEnough = Math.abs(deltaY) >= 3;
         const isVertical = Math.abs(deltaY) > Math.abs(deltaX);
         if (!movedEnough) return;
-        if (!isVertical) { startYRef.current = 0; return; } // horizontal — let scroll happen
+        if (!isVertical) { startYRef.current = 0; return; }
         draggingRef.current = true;
         setDragging(true);
       }
 
-      // Only block scroll AFTER confirmed vertical drag
       if (e.cancelable) e.preventDefault();
 
       dragYRef.current = deltaY;
@@ -228,24 +232,43 @@ function SinglePlayerGame({ t,
         dragCardRef.current.style.zIndex = "1000";
       }
 
-      // Auto-scroll: only when timeline overflows AND finger is at edge
-      const SCROLL_ZONE = 80;
-      const SCROLL_SPEED = 6;
-      clearInterval(scrollIntervalRef.current);
+      // ✅ FIX: Smooth variable-speed rAF auto-scroll instead of setInterval
+      const SCROLL_ZONE = 120;
+      const MAX_SPEED = 22;
+      cancelAnimationFrame(scrollIntervalRef.current);
 
       const timeline = timelineRef.current;
       if (timeline) {
         const tlRect = timeline.getBoundingClientRect();
-        if (clientY < SCROLL_ZONE && tlRect.top < 0) {
-          scrollIntervalRef.current = setInterval(() => {
-            window.scrollBy(0, -SCROLL_SPEED);
-            if ((timelineRef.current?.getBoundingClientRect().top ?? 0) >= 0) clearInterval(scrollIntervalRef.current);
-          }, 16);
-        } else if (clientY > window.innerHeight - SCROLL_ZONE && tlRect.bottom > window.innerHeight) {
-          scrollIntervalRef.current = setInterval(() => {
-            window.scrollBy(0, SCROLL_SPEED);
-            if ((timelineRef.current?.getBoundingClientRect().bottom ?? 0) <= window.innerHeight) clearInterval(scrollIntervalRef.current);
-          }, 16);
+        const timelineOverflowsTop = tlRect.top < 0;
+        const timelineOverflowsBottom = tlRect.bottom > window.innerHeight;
+
+        let direction = 0;
+        let proximity = 0;
+
+        if (clientY < SCROLL_ZONE && timelineOverflowsTop) {
+          direction = -1;
+          proximity = 1 - (clientY / SCROLL_ZONE);
+        } else if (clientY > window.innerHeight - SCROLL_ZONE && timelineOverflowsBottom) {
+          direction = 1;
+          proximity = 1 - ((window.innerHeight - clientY) / SCROLL_ZONE);
+        }
+
+        if (direction !== 0) {
+          // Ease-in: square the proximity so it starts gentle and ramps up
+          const eased = Math.pow(proximity, 2);
+          const speed = Math.max(1, eased * MAX_SPEED);
+
+          const tick = () => {
+            const tl = timelineRef.current;
+            if (!tl || !draggingRef.current) return;
+            const r = tl.getBoundingClientRect();
+            if (direction === -1 && r.top >= 0) return;
+            if (direction === 1 && r.bottom <= window.innerHeight) return;
+            window.scrollBy(0, direction * speed);
+            scrollIntervalRef.current = requestAnimationFrame(tick);
+          };
+          scrollIntervalRef.current = requestAnimationFrame(tick);
         }
       }
 
@@ -283,7 +306,9 @@ function SinglePlayerGame({ t,
 
       if (!draggingRef.current) return;
       draggingRef.current = false;
-      clearInterval(scrollIntervalRef.current);
+
+      // ✅ FIX: cancelAnimationFrame instead of clearInterval
+      cancelAnimationFrame(scrollIntervalRef.current);
 
       if (dragCardRef.current) {
         dragCardRef.current.style.transform = "";
@@ -393,51 +418,102 @@ function SinglePlayerGame({ t,
 
             return (
               <div key={card.id} style={{ width: "100%", maxWidth: 480 }}>
-                <div
-                  ref={isNewCard ? dragCardRef : null}
-                  className={`card ${isNewCard && revealed ? "card-expanded" : ""}`}
-                  style={{
-                    position: "relative",
-                    zIndex: isDragged ? 1000 : 1,
-                    transform: isDragged ? undefined : `translateY(${shiftY}px) scale(1)`,
-                    transition: isDragged ? "none" : "transform 0.18s ease",
-                    cursor: isNewCard && !revealed ? (dragging ? "grabbing" : "grab") : "default",
-                    touchAction: isNewCard && !revealed ? "none" : "auto",
-                    userSelect: "none"
-                  }}
-                  onMouseDown={isNewCard && !revealed ? handleDragStart : undefined}
-                  onTouchStart={isNewCard && !revealed ? handleDragStart : undefined}
-                >
-                  {isNewCard ? (
-                    <div className={`card-inner ${revealed ? "flipped" : ""} ${result === "correct" ? "result-correct" : ""} ${result === "wrong" ? "result-wrong" : ""}`}>
-                      <div className="card-front new">
-                        {localStorage.getItem("token") && (
-                          <button
-                            className="play-button"
-                            onClick={e => { e.stopPropagation(); togglePlay(card.uri); }}
-                            onMouseDown={e => e.stopPropagation()}
-                            onTouchStart={e => e.stopPropagation()}
-                            disabled={!spotifyReady}
-                            title={spotifyReady ? "Play / Pause" : "Connecting to Spotify..."}
-                          >
-                            {playing ? "⏸" : "▶"}
-                          </button>
-                        )}
-                        <div className="drag-hint">Drag to place</div>
-                      </div>
-                      <div className="card-back">
-                        <img src={card.cover} className="cover-large" alt="" />
-                        <div className="revealed-year">{card.year}</div>
-                        <strong>{card.artist}</strong>
-                        <div className="song-title">{card.name}</div>
+                {/* ✅ FIX: Oversized invisible touch wrapper — 20px padding on all sides
+                    catches touches that land just outside the visible card edge.
+                    touch-action: none prevents the browser stealing the gesture. */}
+                {isNewCard && !revealed ? (
+                  <div
+                    style={{
+                      padding: "20px",
+                      margin: "-20px",
+                      touchAction: "none",
+                      userSelect: "none",
+                    }}
+                    onMouseDown={handleDragStart}
+                    onTouchStart={handleDragStart}
+                  >
+                    <div
+                      ref={dragCardRef}
+                      className={`card ${revealed ? "card-expanded" : ""}`}
+                      style={{
+                        position: "relative",
+                        zIndex: isDragged ? 1000 : 1,
+                        transform: isDragged ? undefined : `translateY(${shiftY}px) scale(1)`,
+                        transition: isDragged ? "none" : "transform 0.18s ease",
+                        cursor: dragging ? "grabbing" : "grab",
+                        userSelect: "none",
+                        touchAction: "none",
+                      }}
+                    >
+                      <div className={`card-inner ${result === "correct" ? "result-correct" : ""} ${result === "wrong" ? "result-wrong" : ""}`}>
+                        <div className="card-front new">
+                          {localStorage.getItem("token") && (
+                            <button
+                              className="play-button"
+                              onClick={e => { e.stopPropagation(); togglePlay(card.uri); }}
+                              onMouseDown={e => e.stopPropagation()}
+                              onTouchStart={e => e.stopPropagation()}
+                              disabled={!spotifyReady}
+                              title={spotifyReady ? "Play / Pause" : "Connecting to Spotify..."}
+                            >
+                              {playing ? "⏸" : "▶"}
+                            </button>
+                          )}
+                          <div className="drag-hint">Drag to place</div>
+                        </div>
+                        <div className="card-back">
+                          <img src={card.cover} className="cover-large" alt="" />
+                          <div className="revealed-year">{card.year}</div>
+                          <strong>{card.artist}</strong>
+                          <div className="song-title">{card.name}</div>
+                        </div>
                       </div>
                     </div>
-                  ) : (
-                    <div className="card-front fixed">
-                      <div>{card.year}</div>
-                    </div>
-                  )}
-                </div>
+                  </div>
+                ) : (
+                  <div
+                    ref={isNewCard ? dragCardRef : null}
+                    className={`card ${isNewCard && revealed ? "card-expanded" : ""}`}
+                    style={{
+                      position: "relative",
+                      zIndex: 1,
+                      transform: `translateY(${shiftY}px) scale(1)`,
+                      transition: "transform 0.18s ease",
+                      cursor: "default",
+                      userSelect: "none",
+                    }}
+                  >
+                    {isNewCard ? (
+                      <div className={`card-inner flipped ${result === "correct" ? "result-correct" : ""} ${result === "wrong" ? "result-wrong" : ""}`}>
+                        <div className="card-front new">
+                          {localStorage.getItem("token") && (
+                            <button
+                              className="play-button"
+                              onClick={e => { e.stopPropagation(); togglePlay(card.uri); }}
+                              onMouseDown={e => e.stopPropagation()}
+                              onTouchStart={e => e.stopPropagation()}
+                              disabled={!spotifyReady}
+                              title={spotifyReady ? "Play / Pause" : "Connecting to Spotify..."}
+                            >
+                              {playing ? "⏸" : "▶"}
+                            </button>
+                          )}
+                          <div className="drag-hint">Drag to place</div>
+                        </div>
+                        <div className="card-back">
+                          <img src={card.cover} className="cover-large" alt="" />
+                          <div className="revealed-year">{card.year}</div>
+                          <strong>{card.artist}</strong>
+                          <div className="song-title">{card.name}</div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="card-front fixed">
+                        <div>{card.year}</div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })}

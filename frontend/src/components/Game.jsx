@@ -28,8 +28,8 @@ function Game({
 
   // Coins — { [playerId]: { playerId, insertIndex } }
   const [coins, setCoins] = useState({});
-  const [myCoinIndex, setMyCoinIndex] = useState(null); // where I placed my coin (null = no coin placed)
-  const [showRecognition, setShowRecognition] = useState(false); // "I know this!" button after reveal
+  const [myCoinIndex, setMyCoinIndex] = useState(null);
+  const [showRecognition, setShowRecognition] = useState(false);
 
   // Timer
   const [timeLeft, setTimeLeft] = useState(null);
@@ -160,17 +160,12 @@ function Game({
   const generateCard = async () => {
     const playlist = playlistTracksRef.current;
 
-    // Playlist mode — pick a random unused track
     if (playlist && playlist.length > 0) {
       const unused = playlist.filter(t => !usedUrisRef.current.has(t.uri));
-      // If somehow all tracks used, reset and use full list
       const pool = unused.length > 0 ? unused : playlist;
       const track = pool[Math.floor(Math.random() * pool.length)];
-
-      // Mark as used locally and tell server
       usedUrisRef.current.add(track.uri);
       socket.emit("mark_used", { code: roomCode, uri: track.uri });
-
       return {
         id: Date.now(),
         year: parseInt(track.year),
@@ -182,7 +177,6 @@ function Game({
       };
     }
 
-    // Search mode — use genre/year filters
     const genres = selectedGenresRef.current;
     const min = minYearRef.current;
     const max = maxYearRef.current;
@@ -192,11 +186,8 @@ function Game({
     const res = await axios.get(
       `/api/track?genre=${genre}&minYear=${min}&maxYear=${max}`
     );
-
-    // Mark as used to prevent repeats in search mode too
     usedUrisRef.current.add(res.data.uri);
     socket.emit("mark_used", { code: roomCode, uri: res.data.uri });
-
     return {
       id: Date.now(),
       year: parseInt(res.data.year),
@@ -216,7 +207,6 @@ function Game({
     setTimeLeft(null);
     try {
       const newCard = await generateCard();
-      // Insert in middle of timeline so less dragging needed on average
       const timeline = player.timeline;
       const midIdx = Math.floor(timeline.length / 2);
       const newCards = [
@@ -256,6 +246,8 @@ function Game({
 
   const handleDragStart = useCallback((e) => {
     if (revealedRef.current || !isMyTurnRef.current) return;
+    // Stop bubbling so the page doesn't also handle this touch
+    e.stopPropagation();
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     startYRef.current = clientY;
@@ -272,13 +264,13 @@ function Game({
     const deltaX = clientX - startXRef.current;
 
     if (!draggingRef.current) {
-      if (Math.abs(deltaY) < 8) return;
-      if (Math.abs(deltaX) > Math.abs(deltaY)) { startYRef.current = 0; return; } // horizontal swipe — abort
+      // ✅ FIX: Lowered from 8px to 3px — claims gesture faster before iOS scrolls
+      if (Math.abs(deltaY) < 3) return;
+      if (Math.abs(deltaX) > Math.abs(deltaY)) { startYRef.current = 0; return; }
       draggingRef.current = true;
       setDragging(true);
     }
 
-    // Only block scroll AFTER drag is confirmed vertical
     if (e.cancelable) e.preventDefault();
 
     dragYRef.current = deltaY;
@@ -289,10 +281,10 @@ function Game({
       dragCardRef.current.style.zIndex = "1000";
     }
 
-    // Auto-scroll: only when timeline overflows viewport AND finger is at edge
-    const SCROLL_ZONE = 80;
-    const SCROLL_SPEED = 6;
-    clearInterval(scrollIntervalRef.current);
+    // Auto-scroll: smooth variable-speed rAF loop
+    const SCROLL_ZONE = 120;
+    const MAX_SPEED = 22;
+    cancelAnimationFrame(scrollIntervalRef.current);
 
     const timeline = timelineRef.current;
     if (timeline) {
@@ -300,27 +292,34 @@ function Game({
       const timelineOverflowsTop = tlRect.top < 0;
       const timelineOverflowsBottom = tlRect.bottom > window.innerHeight;
 
+      let direction = 0;
+      let proximity = 0;
+
       if (clientY < SCROLL_ZONE && timelineOverflowsTop) {
-        scrollIntervalRef.current = setInterval(() => {
-          window.scrollBy(0, -SCROLL_SPEED);
-          // Stop if timeline top is now visible
-          if (timelineRef.current?.getBoundingClientRect().top >= 0) {
-            clearInterval(scrollIntervalRef.current);
-          }
-        }, 16);
+        direction = -1;
+        proximity = 1 - (clientY / SCROLL_ZONE);
       } else if (clientY > window.innerHeight - SCROLL_ZONE && timelineOverflowsBottom) {
-        scrollIntervalRef.current = setInterval(() => {
-          window.scrollBy(0, SCROLL_SPEED);
-          // Stop if timeline bottom is now visible
-          if (timelineRef.current?.getBoundingClientRect().bottom <= window.innerHeight) {
-            clearInterval(scrollIntervalRef.current);
-          }
-        }, 16);
+        direction = 1;
+        proximity = 1 - ((window.innerHeight - clientY) / SCROLL_ZONE);
+      }
+
+      if (direction !== 0) {
+        const eased = Math.pow(proximity, 2);
+        const speed = Math.max(1, eased * MAX_SPEED);
+
+        const tick = () => {
+          const tl = timelineRef.current;
+          if (!tl || !draggingRef.current) return;
+          const r = tl.getBoundingClientRect();
+          if (direction === -1 && r.top >= 0) return;
+          if (direction === 1 && r.bottom <= window.innerHeight) return;
+          window.scrollBy(0, direction * speed);
+          scrollIntervalRef.current = requestAnimationFrame(tick);
+        };
+        scrollIntervalRef.current = requestAnimationFrame(tick);
       }
     }
 
-    // Compute target slot using ONLY fixed card positions
-    // slot = 0 means "before all fixed cards", slot = fixedCards.length means "after all"
     const currentCards = cardsRef.current;
     const newIdx = currentCards.findIndex(c => c.type === "new");
     if (!dragCardRef.current || !timelineRef.current) return;
@@ -328,9 +327,8 @@ function Game({
     const draggedRect = dragCardRef.current.getBoundingClientRect();
     const draggedCenterY = draggedRect.top + draggedRect.height / 2;
 
-    // Get all card elements and map them to fixed-card midpoints only
     const allCardEls = timelineRef.current.querySelectorAll(".card");
-    const fixedMidpoints = []; // {midY, originalIndex}
+    const fixedMidpoints = [];
     currentCards.forEach((c, i) => {
       if (c.type !== "new" && allCardEls[i]) {
         const r = allCardEls[i].getBoundingClientRect();
@@ -338,9 +336,7 @@ function Game({
       }
     });
 
-    // Find which gap between fixed cards the dragged center falls into
-    // slot = how many fixed cards are ABOVE the dragged center
-    let fixedSlot = fixedMidpoints.length; // default: after all fixed cards
+    let fixedSlot = fixedMidpoints.length;
     for (let i = 0; i < fixedMidpoints.length; i++) {
       if (draggedCenterY < fixedMidpoints[i].midY) {
         fixedSlot = i;
@@ -348,12 +344,6 @@ function Game({
       }
     }
 
-    // Convert fixedSlot to array index: fixedSlot=0 → before first card
-    // The fixed cards that are before the new card occupy indices 0..newIdx-1
-    // The fixed cards after occupy newIdx+1..n
-    // fixedSlot=0 → slot 0 in array
-    // fixedSlot=k where k <= newIdx → slot k (insert before the k-th card)
-    // fixedSlot=k where k > newIdx-1 → slot k+1 (skip over the new card's position)
     let arraySlot;
     if (fixedSlot <= newIdx) {
       arraySlot = fixedSlot;
@@ -375,9 +365,8 @@ function Game({
 
     if (!draggingRef.current) return;
     draggingRef.current = false;
-    clearInterval(scrollIntervalRef.current);
+    cancelAnimationFrame(scrollIntervalRef.current);
 
-    // Reset card DOM style before React takes over
     if (dragCardRef.current) {
       dragCardRef.current.style.transform = "";
       dragCardRef.current.style.boxShadow = "";
@@ -388,9 +377,6 @@ function Game({
     const newIdx = currentCards.findIndex(c => c.type === "new");
     const arraySlot = insertIndexRef.current !== null ? insertIndexRef.current : newIdx;
 
-    // arraySlot is the desired position in the original array
-    // splice(newIdx, 1) removes the card; indices after newIdx shift down by 1
-    // so if arraySlot > newIdx, the actual insert position is arraySlot - 1
     const reordered = [...currentCards];
     const [moved] = reordered.splice(newIdx, 1);
     const insertAt = arraySlot > newIdx ? arraySlot - 1 : arraySlot;
@@ -433,7 +419,6 @@ function Game({
 
     setRevealed(true);
     revealedRef.current = true;
-    
 
     let correct = true;
     if (left && left.year > newCard.year) correct = false;
@@ -472,7 +457,6 @@ function Game({
 
     setTimeout(() => setShowNextButton(true), 800);
 
-    // Show "I know this song!" button to spectators for 5 seconds
     if (!isMyTurn) {
       setShowRecognition(true);
       setTimeout(() => setShowRecognition(false), 5000);
@@ -503,7 +487,7 @@ function Game({
   };
 
   // ============================================================
-  // ➡️ NEXT TURN — resolves coins then advances
+  // ➡️ NEXT TURN
   // ============================================================
 
   const nextTurn = () => {
@@ -532,11 +516,9 @@ function Game({
   const myCoins = myPlayer?.coins ?? 0;
   const hasCoinPlaced = myCoinIndex !== null;
 
-  // Next player in turn order — they get the "give coin" button
   const nextPlayerIndex = (currentPlayerIndex + 1) % players.length;
   const isNextPlayer = players[nextPlayerIndex]?.id === socket.id && !isMyTurn;
 
-  // Count how many coins are on each slot
   const coinsBySlot = {};
   Object.values(coins).forEach(({ insertIndex: idx }) => {
     coinsBySlot[idx] = (coinsBySlot[idx] || 0) + 1;
@@ -556,7 +538,7 @@ function Game({
         )}
       </div>
 
-      {loading && <div className="loading-card">`${t?.loadingSong || "Loading song..."}`</div>}
+      {loading && <div className="loading-card">{t?.loadingSong || "Loading song..."}</div>}
 
       {timeLeft !== null && isMyTurn && (
         <div className={`timer-display ${timeLeft <= 5 ? "timer-urgent" : ""}`}>
@@ -575,126 +557,163 @@ function Game({
               const origIdx = newCardOriginalIndex;
               const cardEls = timelineRef.current?.querySelectorAll(".card");
               const cardH = (cardEls?.[0]?.getBoundingClientRect().height || 180) + 16;
-              // Cards between insertIndex and origIdx need to shift to make room
-              // Dragging UP: insertIndex < origIdx → cards at [insertIndex..origIdx-1] shift down
               if (insertIndex <= origIdx && index >= insertIndex && index < origIdx) {
                 shiftY = cardH;
-              }
-              // Dragging DOWN: insertIndex > origIdx+1 → cards at [origIdx+1..insertIndex-1] shift up
-              else if (insertIndex > origIdx + 1 && index > origIdx && index < insertIndex) {
+              } else if (insertIndex > origIdx + 1 && index > origIdx && index < insertIndex) {
                 shiftY = -cardH;
               }
             }
 
-            // Coins sitting on the slot BEFORE this card
             const coinsHere = coinsBySlot[index] || 0;
             const myMyCoinHere = myCoinIndex === index;
 
             return (
               <div key={card.id} style={{ width: "100%", maxWidth: 480 }}>
-                {/* Coin slot ABOVE each card — only for spectators, before reveal */}
+                {/* Coin slot ABOVE each card */}
                 {!isMyTurn && !revealed && (
                   <div className="coin-slot">
-                    {/* Show other players' coins but not your own (your button IS the coin) */}
                     {coinsHere - (myMyCoinHere ? 1 : 0) > 0 && (
                       <div className="coins-on-slot">
                         {"🪙".repeat(Math.min(coinsHere - (myMyCoinHere ? 1 : 0), 5))}
                       </div>
                     )}
                     {myMyCoinHere ? (
-                      <button className="coin-btn coin-placed" onClick={removeCoin} title="Pick up coin">
-                        🪙
-                      </button>
+                      <button className="coin-btn coin-placed" onClick={removeCoin} title="Pick up coin">🪙</button>
                     ) : !hasCoinPlaced && myCoins > 0 ? (
-                      <button className="coin-btn coin-plus" onClick={() => placeCoin(index)} title="Place coin here">
-                        +
-                      </button>
+                      <button className="coin-btn coin-plus" onClick={() => placeCoin(index)} title="Place coin here">+</button>
                     ) : null}
                   </div>
                 )}
 
-                <div
-                  ref={isNewCard ? dragCardRef : null}
-                  className={`card ${isNewCard && revealed ? "card-expanded" : ""}`}
-                style={{
-                  position: "relative",
-                  zIndex: isDragged ? 1000 : 1,
-                  transform: isDragged ? undefined : `translateY(${shiftY}px) scale(1)`,
-                  transition: isDragged ? "none" : "transform 0.18s ease",
-                  cursor: isNewCard && !revealed && isMyTurn
-                    ? (dragging ? "grabbing" : "grab")
-                    : "default",
-                  touchAction: isNewCard && !revealed && isMyTurn ? "none" : "auto",
-                  userSelect: "none",
-                }}
-                onMouseDown={isNewCard && !revealed && isMyTurn ? handleDragStart : undefined}
-                onTouchStart={isNewCard && !revealed && isMyTurn ? handleDragStart : undefined}
-              >
-                {isNewCard ? (
+                {/* ✅ FIX: Oversized invisible touch wrapper for the draggable new card.
+                    20px padding + negative margin = larger hit area without affecting layout.
+                    touch-action: none prevents iOS stealing the gesture at the card edges. */}
+                {isNewCard && !revealed && isMyTurn ? (
                   <div
-                    className={`card-inner
-                      ${revealed ? "flipped" : ""}
-                      ${result === "correct" ? "result-correct" : ""}
-                      ${result === "wrong" ? "result-wrong" : ""}
-                    `}
+                    style={{
+                      padding: "20px",
+                      margin: "-20px",
+                      touchAction: "none",
+                      userSelect: "none",
+                    }}
+                    onMouseDown={handleDragStart}
+                    onTouchStart={handleDragStart}
                   >
-                    {/* FRONT */}
-                    <div className="card-front new">
-                      <button
-                          className="play-button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            togglePlay(card.uri);
-                          }}
-                          onMouseDown={e => e.stopPropagation()}
-                          onTouchStart={e => e.stopPropagation()}
-                          disabled={!spotifyReady}
-                          title={spotifyReady ? "Play / Pause" : "Connecting to Spotify..."}
-                        >
-                          {playing ? "⏸" : "▶"}
-                        </button>
-                      <div className="drag-hint">
-                        {isMyTurn ? (t?.dragToPlace || "Drag to place") : (t?.isPlaying(currentPlayer.name) || `${currentPlayer.name} is playing...`)}
+                    <div
+                      ref={dragCardRef}
+                      className="card"
+                      style={{
+                        position: "relative",
+                        zIndex: isDragged ? 1000 : 1,
+                        transform: isDragged ? undefined : `translateY(${shiftY}px) scale(1)`,
+                        transition: isDragged ? "none" : "transform 0.18s ease",
+                        cursor: dragging ? "grabbing" : "grab",
+                        userSelect: "none",
+                        touchAction: "none",
+                      }}
+                    >
+                      <div
+                        className={`card-inner
+                          ${result === "correct" ? "result-correct" : ""}
+                          ${result === "wrong" ? "result-wrong" : ""}
+                        `}
+                      >
+                        <div className="card-front new">
+                          <button
+                            className="play-button"
+                            onClick={(e) => { e.stopPropagation(); togglePlay(card.uri); }}
+                            onMouseDown={e => e.stopPropagation()}
+                            onTouchStart={e => e.stopPropagation()}
+                            disabled={!spotifyReady}
+                            title={spotifyReady ? "Play / Pause" : "Connecting to Spotify..."}
+                          >
+                            {playing ? "⏸" : "▶"}
+                          </button>
+                          <div className="drag-hint">
+                            {t?.dragToPlace || "Drag to place"}
+                          </div>
+                        </div>
+                        <div className="card-back">
+                          <img src={card.cover} className="cover-large" alt="" />
+                          <div className="revealed-year">{card.year}</div>
+                          <strong>{card.artist}</strong>
+                          <div className="song-title">{card.name}</div>
+                        </div>
                       </div>
-                    </div>
-
-                    {/* BACK */}
-                    <div className="card-back">
-                      <img src={card.cover} className="cover-large" alt="" />
-                      <div className="revealed-year">{card.year}</div>
-                      <strong>{card.artist}</strong>
-                      <div className="song-title">{card.name}</div>
                     </div>
                   </div>
                 ) : (
-                  <div className="card-front fixed">
-                    <div>{card.year}</div>
+                  <div
+                    ref={isNewCard ? dragCardRef : null}
+                    className={`card ${isNewCard && revealed ? "card-expanded" : ""}`}
+                    style={{
+                      position: "relative",
+                      zIndex: 1,
+                      transform: `translateY(${shiftY}px) scale(1)`,
+                      transition: "transform 0.18s ease",
+                      cursor: "default",
+                      userSelect: "none",
+                    }}
+                  >
+                    {isNewCard ? (
+                      <div
+                        className={`card-inner flipped
+                          ${result === "correct" ? "result-correct" : ""}
+                          ${result === "wrong" ? "result-wrong" : ""}
+                        `}
+                      >
+                        <div className="card-front new">
+                          <button
+                            className="play-button"
+                            onClick={(e) => { e.stopPropagation(); togglePlay(card.uri); }}
+                            onMouseDown={e => e.stopPropagation()}
+                            onTouchStart={e => e.stopPropagation()}
+                            disabled={!spotifyReady}
+                            title={spotifyReady ? "Play / Pause" : "Connecting to Spotify..."}
+                          >
+                            {playing ? "⏸" : "▶"}
+                          </button>
+                          <div className="drag-hint">
+                            {t?.isPlaying(currentPlayer.name) || `${currentPlayer.name} is playing...`}
+                          </div>
+                        </div>
+                        <div className="card-back">
+                          <img src={card.cover} className="cover-large" alt="" />
+                          <div className="revealed-year">{card.year}</div>
+                          <strong>{card.artist}</strong>
+                          <div className="song-title">{card.name}</div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="card-front fixed">
+                        <div>{card.year}</div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Coin slot AFTER last card */}
+                {index === cards.length - 1 && !isMyTurn && !revealed && (
+                  <div className="coin-slot">
+                    {(() => {
+                      const bottomSlot = cards.length;
+                      const bottomCoins = coinsBySlot[bottomSlot] || 0;
+                      const myBottomCoin = myCoinIndex === bottomSlot;
+                      const othersCoins = bottomCoins - (myBottomCoin ? 1 : 0);
+                      return <>
+                        {othersCoins > 0 && (
+                          <div className="coins-on-slot">{"🪙".repeat(Math.min(othersCoins, 5))}</div>
+                        )}
+                        {myBottomCoin ? (
+                          <button className="coin-btn coin-placed" onClick={removeCoin}>🪙</button>
+                        ) : !hasCoinPlaced && myCoins > 0 ? (
+                          <button className="coin-btn coin-plus" onClick={() => placeCoin(bottomSlot)}>+</button>
+                        ) : null}
+                      </>;
+                    })()}
                   </div>
                 )}
               </div>
-
-              {/* Coin slot AFTER last card */}
-              {index === cards.length - 1 && !isMyTurn && !revealed && (
-                <div className="coin-slot">
-                  {(() => {
-                    const bottomSlot = cards.length;
-                    const bottomCoins = coinsBySlot[bottomSlot] || 0;
-                    const myBottomCoin = myCoinIndex === bottomSlot;
-                    const othersCoins = bottomCoins - (myBottomCoin ? 1 : 0);
-                    return <>
-                      {othersCoins > 0 && (
-                        <div className="coins-on-slot">{"🪙".repeat(Math.min(othersCoins, 5))}</div>
-                      )}
-                      {myBottomCoin ? (
-                        <button className="coin-btn coin-placed" onClick={removeCoin}>🪙</button>
-                      ) : !hasCoinPlaced && myCoins > 0 ? (
-                        <button className="coin-btn coin-plus" onClick={() => placeCoin(bottomSlot)}>+</button>
-                      ) : null}
-                    </>;
-                  })()}
-                </div>
-              )}
-            </div>
             );
           })}
         </div>
@@ -702,19 +721,19 @@ function Game({
 
       <div className="action-container">
         {isMyTurn && !revealed && !loading && (
-          <button onClick={handleReveal}>{ t?.reveal || "Reveal" }</button>
+          <button onClick={handleReveal}>{t?.reveal || "Reveal"}</button>
         )}
         {isMyTurn && showNextButton && (
-          <button onClick={nextTurn}>{ t?.nextPlayer || "Next Player" }</button>
+          <button onClick={nextTurn}>{t?.nextPlayer || "Next Player"}</button>
         )}
         {isNextPlayer && !revealed && !loading && (
           <button className="give-coin-btn" onClick={giveCoin}>
-            { t?.giveCoin(currentPlayer.name) || `🎤 Give coin to ${currentPlayer.name}` }
+            {t?.giveCoin(currentPlayer.name) || `🎤 Give coin to ${currentPlayer.name}`}
           </button>
         )}
         {!isMyTurn && showRecognition && (
           <button className="recognition-btn" onClick={claimRecognition}>
-            { t?.iKnowThisSong || "🎵 I know this song! +1🪙" }
+            {t?.iKnowThisSong || "🎵 I know this song! +1🪙"}
           </button>
         )}
       </div>
