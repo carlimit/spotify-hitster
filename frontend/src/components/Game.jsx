@@ -3,6 +3,17 @@ import axios from "axios";
 import { socket } from "../socket";
 import { useSpotifyPlayer } from "./useSpotifyPlayer";
 
+// ✅ FIX: Session persistence — save/restore game state so soft-close doesn't lose progress
+function saveSession(data) {
+  try { sessionStorage.setItem("hitster_session", JSON.stringify(data)); } catch {}
+}
+function loadSession() {
+  try { return JSON.parse(sessionStorage.getItem("hitster_session")); } catch { return null; }
+}
+function clearSession() {
+  try { sessionStorage.removeItem("hitster_session"); } catch {}
+}
+
 function Game({
   players: initialPlayers,
   setPlayers,
@@ -16,7 +27,7 @@ function Game({
   winGoal = 10,
   timerSeconds = 0,
   t,
-  isHost  // ✅ received from App.jsx
+  isHost
 }) {
   const [players, setLocalPlayers] = useState(initialPlayers);
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0);
@@ -36,7 +47,9 @@ function Game({
   const [timeLeft, setTimeLeft] = useState(null);
   const timerRef = useRef(null);
 
-  // ✅ isHost passed explicitly — not guessed from localStorage
+  // ✅ Card overview mode
+  const [overviewMode, setOverviewMode] = useState(false);
+
   const { ready: spotifyReady, playing, togglePlay, stop } = useSpotifyPlayer(roomCode, isHost);
 
   // Drag
@@ -57,6 +70,7 @@ function Game({
   const draggingRef = useRef(false);
   const startYRef = useRef(0);
   const timelineRef = useRef(null);
+  const newCardRef = useRef(null); // ✅ ref for auto-scroll to revealed card
 
   useEffect(() => { selectedGenresRef.current = selectedGenres; }, [selectedGenres]);
   useEffect(() => { minYearRef.current = minYear; }, [minYear]);
@@ -69,10 +83,19 @@ function Game({
   const currentPlayer = players[currentPlayerIndex];
 
   // ============================================================
-  // 🚀 ON MOUNT
+  // 🚀 ON MOUNT — restore session if soft-closed
   // ============================================================
 
   useEffect(() => {
+    // ✅ Try to restore session on remount (soft close / background)
+    const session = loadSession();
+    if (session && session.roomCode === roomCode) {
+      setLocalPlayers(session.players || initialPlayers);
+      setCurrentPlayerIndex(session.currentPlayerIndex || 0);
+      usedUrisRef.current = new Set(session.usedUris || []);
+      if (session.playlistTracks) playlistTracksRef.current = session.playlistTracks;
+    }
+
     const myTurn = players[0]?.id === socket.id;
     isMyTurnRef.current = myTurn;
     setIsMyTurn(myTurn);
@@ -86,8 +109,19 @@ function Game({
     }
   }, []);
 
+  // ✅ Save session whenever key state changes
+  useEffect(() => {
+    saveSession({
+      roomCode,
+      players,
+      currentPlayerIndex,
+      usedUris: Array.from(usedUrisRef.current),
+      playlistTracks: playlistTracksRef.current,
+    });
+  }, [players, currentPlayerIndex]);
+
   // ============================================================
-  // 🎮 SOCKET — turn_changed + card_revealed
+  // 🎮 SOCKET
   // ============================================================
 
   useEffect(() => {
@@ -107,6 +141,7 @@ function Game({
       if (min) minYearRef.current = Number(min);
       if (max) maxYearRef.current = Number(max);
       if (pt !== undefined) playlistTracksRef.current = pt;
+      // ✅ FIX: Always sync usedUris from server — server is authoritative
       if (usedUris) usedUrisRef.current = new Set(usedUris);
 
       updatePlayers(newPlayers);
@@ -122,6 +157,7 @@ function Game({
       setCoins(newCoins || {});
       setMyCoinIndex(null);
       setCoinGiven(false);
+      setOverviewMode(false);
       stop();
       clearInterval(timerRef.current);
       setTimeLeft(null);
@@ -153,6 +189,10 @@ function Game({
       setResult(revealResult);
       setRevealed(true);
       revealedRef.current = true;
+      // ✅ Auto-scroll to revealed card for spectators too
+      setTimeout(() => {
+        newCardRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 300);
     });
 
     return () => {
@@ -170,8 +210,10 @@ function Game({
   const generateCard = async () => {
     const playlist = playlistTracksRef.current;
 
+    // ✅ FIX: ONLY use playlist tracks when playlist mode is active — no fallback to genre search
     if (playlist && playlist.length > 0) {
       const unused = playlist.filter(t => !usedUrisRef.current.has(t.uri));
+      // If all used, reset and reuse (better than mixing in random tracks)
       const pool = unused.length > 0 ? unused : playlist;
       const track = pool[Math.floor(Math.random() * pool.length)];
       usedUrisRef.current.add(track.uri);
@@ -187,14 +229,13 @@ function Game({
       };
     }
 
+    // No playlist — use genre/year search, pass usedUris to server to avoid repeats
     const genres = selectedGenresRef.current;
     const min = minYearRef.current;
     const max = maxYearRef.current;
-    const genre = genres.length > 0
-      ? genres[Math.floor(Math.random() * genres.length)]
-      : "";
+    const genre = genres.length > 0 ? genres[Math.floor(Math.random() * genres.length)] : "";
     const res = await axios.get(
-      `/api/track?genre=${genre}&minYear=${min}&maxYear=${max}`
+      `/api/track?genre=${genre}&minYear=${min}&maxYear=${max}&usedUris=${encodeURIComponent(JSON.stringify(Array.from(usedUrisRef.current)))}`
     );
     usedUrisRef.current.add(res.data.uri);
     socket.emit("mark_used", { code: roomCode, uri: res.data.uri });
@@ -280,7 +321,6 @@ function Game({
     }
 
     if (e.cancelable) e.preventDefault();
-
     dragYRef.current = deltaY;
 
     if (dragCardRef.current) {
@@ -296,23 +336,17 @@ function Game({
     const timeline = timelineRef.current;
     if (timeline) {
       const tlRect = timeline.getBoundingClientRect();
-      const timelineOverflowsTop = tlRect.top < 0;
-      const timelineOverflowsBottom = tlRect.bottom > window.innerHeight;
-
       let direction = 0;
       let proximity = 0;
-
-      if (clientY < SCROLL_ZONE && timelineOverflowsTop) {
+      if (clientY < SCROLL_ZONE && tlRect.top < 0) {
         direction = -1;
         proximity = 1 - (clientY / SCROLL_ZONE);
-      } else if (clientY > window.innerHeight - SCROLL_ZONE && timelineOverflowsBottom) {
+      } else if (clientY > window.innerHeight - SCROLL_ZONE && tlRect.bottom > window.innerHeight) {
         direction = 1;
         proximity = 1 - ((window.innerHeight - clientY) / SCROLL_ZONE);
       }
-
       if (direction !== 0) {
-        const eased = Math.pow(proximity, 2);
-        const speed = Math.max(1, eased * MAX_SPEED);
+        const speed = Math.max(1, Math.pow(proximity, 2) * MAX_SPEED);
         const tick = () => {
           const tl = timelineRef.current;
           if (!tl || !draggingRef.current) return;
@@ -332,7 +366,6 @@ function Game({
 
     const draggedRect = dragCardRef.current.getBoundingClientRect();
     const draggedCenterY = draggedRect.top + draggedRect.height / 2;
-
     const allCardEls = timelineRef.current.querySelectorAll(".card");
     const fixedMidpoints = [];
     currentCards.forEach((c, i) => {
@@ -346,7 +379,6 @@ function Game({
     for (let i = 0; i < fixedMidpoints.length; i++) {
       if (draggedCenterY < fixedMidpoints[i].midY) { fixedSlot = i; break; }
     }
-
     let arraySlot = fixedSlot <= newIdx ? fixedSlot : fixedSlot + 1;
     arraySlot = Math.max(0, Math.min(currentCards.length, arraySlot));
     insertIndexRef.current = arraySlot;
@@ -359,7 +391,6 @@ function Game({
     if (startYRef.current === 0) return;
     startYRef.current = 0;
     startXRef.current = 0;
-
     if (!draggingRef.current) return;
     draggingRef.current = false;
     cancelAnimationFrame(scrollIntervalRef.current);
@@ -373,7 +404,6 @@ function Game({
     const currentCards = cardsRef.current;
     const newIdx = currentCards.findIndex(c => c.type === "new");
     const arraySlot = insertIndexRef.current !== null ? insertIndexRef.current : newIdx;
-
     const reordered = [...currentCards];
     const [moved] = reordered.splice(newIdx, 1);
     const insertAt = arraySlot > newIdx ? arraySlot - 1 : arraySlot;
@@ -424,11 +454,12 @@ function Game({
     const revealResult = correct ? "correct" : "wrong";
     setResult(revealResult);
 
-    socket.emit("reveal_card", {
-      code: roomCode,
-      result: revealResult,
-      cards: currentCards
-    });
+    socket.emit("reveal_card", { code: roomCode, result: revealResult, cards: currentCards });
+
+    // ✅ Auto-scroll to revealed card
+    setTimeout(() => {
+      newCardRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 300);
 
     if (!correct) {
       setTimeout(() => setShowNextButton(true), 800);
@@ -453,6 +484,7 @@ function Game({
     });
 
     if (updatedPlayers[currentPlayerIndex].score >= winGoal) {
+      clearSession();
       setWinner(updatedPlayers[currentPlayerIndex]);
       setScreen("winner");
       return;
@@ -500,21 +532,56 @@ function Game({
   // UI
   // ============================================================
 
-  if (!currentPlayer) {
-    return <div className="container">Waiting for players...</div>;
-  }
+  if (!currentPlayer) return <div className="container">Waiting for players...</div>;
 
   const newCardOriginalIndex = cards.findIndex(c => c.type === "new");
   const myPlayer = players.find(p => p.id === socket.id);
   const myCoins = myPlayer?.coins ?? 0;
   const hasCoinPlaced = myCoinIndex !== null;
   const nextPlayerIndex = (currentPlayerIndex + 1) % players.length;
+  // ✅ FIX: Give coin only shown AFTER reveal
   const isNextPlayer = players[nextPlayerIndex]?.id === socket.id && !isMyTurn;
 
   const coinsBySlot = {};
   Object.values(coins).forEach(({ insertIndex: idx }) => {
     coinsBySlot[idx] = (coinsBySlot[idx] || 0) + 1;
   });
+
+  // ✅ Overview mode: show all fixed cards in a compact grid
+  if (overviewMode) {
+    const myTimeline = myPlayer?.timeline || [];
+    return (
+      <div className="container">
+        <div style={{ width: "100%", maxWidth: 480, display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <h2 style={{ margin: 0 }}>My Timeline</h2>
+          <button onClick={() => setOverviewMode(false)} style={{ minWidth: "unset", padding: "8px 16px", fontSize: 14 }}>✕ Close</button>
+        </div>
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(3, 1fr)",
+          gap: 10,
+          width: "100%",
+          maxWidth: 480,
+          paddingBottom: 40
+        }}>
+          {myTimeline.sort((a, b) => a.year - b.year).map(card => (
+            <div key={card.id} style={{
+              background: "#2a2a2a",
+              borderRadius: 12,
+              padding: "12px 8px",
+              textAlign: "center",
+              border: "2px solid #333",
+              fontSize: 22,
+              fontWeight: 800,
+              color: "#1DB954"
+            }}>
+              {card.year}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="container">
@@ -523,19 +590,24 @@ function Game({
           <h2>{currentPlayer.name}'s Turn</h2>
           <h3>{isMyTurn ? t?.yourTurn || "Your turn!" : t?.waitingFor(currentPlayer.name) || `Waiting for ${currentPlayer.name}...`}</h3>
         </div>
-        {!isMyTurn && (
-          <div className="coin-display">
-            🪙 <span>{myCoins}</span>
-          </div>
-        )}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+          {!isMyTurn && (
+            <div className="coin-display">🪙 <span>{myCoins}</span></div>
+          )}
+          {/* ✅ Overview button */}
+          <button
+            onClick={() => setOverviewMode(true)}
+            style={{ minWidth: "unset", padding: "6px 12px", fontSize: 12, background: "#333", boxShadow: "none", margin: 0 }}
+          >
+            📋 My Cards
+          </button>
+        </div>
       </div>
 
       {loading && <div className="loading-card">{t?.loadingSong || "Loading song..."}</div>}
 
       {timeLeft !== null && isMyTurn && (
-        <div className={`timer-display ${timeLeft <= 5 ? "timer-urgent" : ""}`}>
-          {timeLeft}s
-        </div>
+        <div className={`timer-display ${timeLeft <= 5 ? "timer-urgent" : ""}`}>{timeLeft}s</div>
       )}
 
       {!loading && (
@@ -549,11 +621,8 @@ function Game({
               const origIdx = newCardOriginalIndex;
               const cardEls = timelineRef.current?.querySelectorAll(".card");
               const cardH = (cardEls?.[0]?.getBoundingClientRect().height || 180) + 16;
-              if (insertIndex <= origIdx && index >= insertIndex && index < origIdx) {
-                shiftY = cardH;
-              } else if (insertIndex > origIdx + 1 && index > origIdx && index < insertIndex) {
-                shiftY = -cardH;
-              }
+              if (insertIndex <= origIdx && index >= insertIndex && index < origIdx) shiftY = cardH;
+              else if (insertIndex > origIdx + 1 && index > origIdx && index < insertIndex) shiftY = -cardH;
             }
 
             const coinsHere = coinsBySlot[index] || 0;
@@ -561,6 +630,7 @@ function Game({
 
             return (
               <div key={card.id} style={{ width: "100%", maxWidth: 480 }}>
+                {/* ✅ FIX: Coin slots only shown to spectators, only BEFORE reveal */}
                 {!isMyTurn && !revealed && (
                   <div className="coin-slot">
                     {coinsHere - (myMyCoinHere ? 1 : 0) > 0 && (
@@ -583,7 +653,7 @@ function Game({
                     onTouchStart={handleDragStart}
                   >
                     <div
-                      ref={dragCardRef}
+                      ref={(el) => { dragCardRef.current = el; newCardRef.current = el; }}
                       className="card"
                       style={{
                         position: "relative",
@@ -620,7 +690,7 @@ function Game({
                   </div>
                 ) : (
                   <div
-                    ref={isNewCard ? dragCardRef : null}
+                    ref={isNewCard ? (el) => { newCardRef.current = el; } : null}
                     className={`card ${isNewCard && revealed ? "card-expanded" : ""}`}
                     style={{
                       position: "relative",
@@ -634,13 +704,13 @@ function Game({
                     {isNewCard ? (
                       <div className={`card-inner flipped ${result === "correct" ? "result-correct" : ""} ${result === "wrong" ? "result-wrong" : ""}`}>
                         <div className="card-front new">
+                          {/* ✅ FIX: Non-host play button — always enabled, routes via socket */}
                           <button
                             className="play-button"
                             onClick={(e) => { e.stopPropagation(); togglePlay(card.uri); }}
                             onMouseDown={e => e.stopPropagation()}
                             onTouchStart={e => e.stopPropagation()}
-                            disabled={!spotifyReady}
-                            title={spotifyReady ? "Play / Pause" : "Connecting to Spotify..."}
+                            title="Play / Pause"
                           >
                             {playing ? "⏸" : "▶"}
                           </button>
@@ -694,7 +764,8 @@ function Game({
         {isMyTurn && showNextButton && (
           <button onClick={nextTurn}>{t?.nextPlayer || "Next Player"}</button>
         )}
-        {isNextPlayer && !revealed && !loading && !coinGiven && (
+        {/* ✅ FIX: Give coin only shown AFTER reveal */}
+        {isNextPlayer && revealed && !coinGiven && (
           <button className="give-coin-btn" onClick={giveCoin}>
             {t?.giveCoin(currentPlayer.name) || `🎤 Give coin to ${currentPlayer.name}`}
           </button>

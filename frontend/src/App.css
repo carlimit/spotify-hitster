@@ -842,3 +842,53 @@ button:active {
 * {
   touch-action: manipulation;
 }
+
+/* ---------- iPad / Landscape Layout ---------- */
+
+@media (min-width: 768px) and (orientation: landscape) {
+  .container {
+    max-width: 1100px;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 24px;
+    padding: 24px 32px 120px 32px;
+  }
+
+  .game-header {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .timeline {
+    max-width: 480px;
+    flex: 1 1 480px;
+  }
+
+  .action-container {
+    bottom: 24px;
+  }
+
+  .card {
+    max-width: 440px;
+  }
+
+  .home-section {
+    max-width: 420px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .container {
+    max-width: 1200px;
+  }
+
+  .timeline {
+    max-width: 560px;
+  }
+
+  .card {
+    max-width: 520px;
+  }
+}
