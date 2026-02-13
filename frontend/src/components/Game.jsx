@@ -297,28 +297,14 @@ function Game({
   const startXRef = useRef(0);
   const dragActiveRef = useRef(false); // true once finger is down, regardless of axis
 
-  // Track horizontal mode as a ref so drag handlers always have current value
-  const isHorizontalRef = useRef(false);
-  useEffect(() => {
-    const check = () => {
-      isHorizontalRef.current = window.innerWidth >= 768 &&
-        window.matchMedia("(orientation: landscape)").matches;
-    };
-    check();
-    window.addEventListener("resize", check);
-    window.addEventListener("orientationchange", check);
-    return () => {
-      window.removeEventListener("resize", check);
-      window.removeEventListener("orientationchange", check);
-    };
-  }, []);
-
-  const isHorizontal = () => isHorizontalRef.current;
+  // Read horizontal mode directly from window — no stale ref issues
+  const isHorizontal = () =>
+    window.innerWidth >= 768 && window.matchMedia("(orientation: landscape)").matches;
 
   const handleDragStart = (e) => {
     if (revealedRef.current || !isMyTurnRef.current) return;
     e.stopPropagation();
-    const h = isHorizontalRef.current;
+    const h = isHorizontal();
     const w = window.innerWidth;
     const land = window.matchMedia("(orientation: landscape)").matches;
     console.log("🟢 dragStart — horizontal:", h, "w:", w, "landscape:", land);
@@ -698,7 +684,6 @@ function Game({
             const isNewCard = card.type === "new";
             const isDragged = isNewCard && dragging;
             const horizontal = isHorizontal();
-
             let shiftY = 0;
             let shiftX = 0;
             if (dragging && !isNewCard && insertIndex !== null) {
@@ -741,7 +726,7 @@ function Game({
                     style={{ padding: "20px", margin: "-20px", touchAction: "none", userSelect: "none" }}
                     onMouseDown={handleDragStart}
                     onTouchStart={(e) => {
-                      e.preventDefault(); // must be here synchronously to block browser scroll steal
+                      e.preventDefault();
                       handleDragStart(e);
                     }}
                     onTouchMove={(e) => e.preventDefault()}
