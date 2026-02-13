@@ -843,52 +843,42 @@ button:active {
   touch-action: manipulation;
 }
 
-/* ---------- iPad / Landscape Layout ---------- */
+/* ---------- iPad Landscape: Horizontal Timeline ---------- */
 
 @media (min-width: 768px) and (orientation: landscape) {
-  .container {
-    max-width: 1100px;
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: flex-start;
-    justify-content: center;
-    gap: 24px;
-    padding: 24px 32px 120px 32px;
-  }
-
-  .game-header {
+  .timeline {
+    flex-direction: row !important;
+    overflow-x: auto;
+    overflow-y: hidden;
+    align-items: center;
+    gap: 12px;
+    padding: 20px 24px 120px 24px !important;
     width: 100%;
     max-width: 100%;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
   }
 
-  .timeline {
-    max-width: 480px;
-    flex: 1 1 480px;
-  }
-
-  .action-container {
-    bottom: 24px;
-  }
-
-  .card {
-    max-width: 440px;
-  }
-
-  .home-section {
-    max-width: 420px;
-  }
-}
-
-@media (min-width: 1024px) {
-  .container {
-    max-width: 1200px;
-  }
-
-  .timeline {
-    max-width: 560px;
+  .timeline > div {
+    flex-shrink: 0;
+    width: 260px;
+    scroll-snap-align: center;
   }
 
   .card {
-    max-width: 520px;
+    max-width: 260px !important;
+    min-height: 160px !important;
+  }
+
+  .card-expanded {
+    height: 340px !important;
+    min-height: 340px !important;
+  }
+
+  .coin-slot {
+    flex-direction: column;
+    width: 36px;
+    height: 100%;
+    align-self: stretch;
   }
 }

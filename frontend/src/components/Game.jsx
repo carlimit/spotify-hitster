@@ -27,6 +27,7 @@ function Game({
   winGoal = 10,
   timerSeconds = 0,
   t,
+  lang,
   isHost
 }) {
   const [players, setLocalPlayers] = useState(initialPlayers);
@@ -289,11 +290,19 @@ function Game({
   };
 
   // ============================================================
-  // 👆 DRAG
+  // 👆 DRAG — supports both vertical (phone) and horizontal (iPad landscape)
   // ============================================================
 
   const dragCardRef = useRef(null);
   const startXRef = useRef(0);
+
+  // Detect if timeline is currently horizontal (iPad landscape)
+  const isHorizontal = () => {
+    const tl = timelineRef.current;
+    if (!tl) return false;
+    const style = window.getComputedStyle(tl);
+    return style.flexDirection === "row";
+  };
 
   const handleDragStart = useCallback((e) => {
     if (revealedRef.current || !isMyTurnRef.current) return;
@@ -306,29 +315,37 @@ function Game({
   }, []);
 
   const handleDragMove = useCallback((e) => {
-    if (startYRef.current === 0) return;
+    if (startYRef.current === 0 && startXRef.current === 0) return;
 
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const deltaY = clientY - startYRef.current;
     const deltaX = clientX - startXRef.current;
+    const horizontal = isHorizontal();
 
     if (!draggingRef.current) {
-      if (Math.abs(deltaY) < 3) return;
-      if (Math.abs(deltaX) > Math.abs(deltaY)) { startYRef.current = 0; return; }
+      const primary = horizontal ? Math.abs(deltaX) : Math.abs(deltaY);
+      const secondary = horizontal ? Math.abs(deltaY) : Math.abs(deltaX);
+      if (primary < 3) return;
+      // If moving in wrong axis, cancel
+      if (secondary > primary) { startYRef.current = 0; startXRef.current = 0; return; }
       draggingRef.current = true;
       setDragging(true);
     }
 
     if (e.cancelable) e.preventDefault();
-    dragYRef.current = deltaY;
 
     if (dragCardRef.current) {
-      dragCardRef.current.style.transform = `translateY(${deltaY}px) scale(1.04)`;
+      if (horizontal) {
+        dragCardRef.current.style.transform = `translateX(${deltaX}px) scale(1.04)`;
+      } else {
+        dragCardRef.current.style.transform = `translateY(${deltaY}px) scale(1.04)`;
+      }
       dragCardRef.current.style.boxShadow = "0 28px 70px rgba(29,185,84,0.55)";
       dragCardRef.current.style.zIndex = "1000";
     }
 
+    // Auto-scroll edge detection
     const SCROLL_ZONE = 120;
     const MAX_SPEED = 22;
     cancelAnimationFrame(scrollIntervalRef.current);
@@ -338,46 +355,78 @@ function Game({
       const tlRect = timeline.getBoundingClientRect();
       let direction = 0;
       let proximity = 0;
-      if (clientY < SCROLL_ZONE && tlRect.top < 0) {
-        direction = -1;
-        proximity = 1 - (clientY / SCROLL_ZONE);
-      } else if (clientY > window.innerHeight - SCROLL_ZONE && tlRect.bottom > window.innerHeight) {
-        direction = 1;
-        proximity = 1 - ((window.innerHeight - clientY) / SCROLL_ZONE);
-      }
-      if (direction !== 0) {
-        const speed = Math.max(1, Math.pow(proximity, 2) * MAX_SPEED);
-        const tick = () => {
-          const tl = timelineRef.current;
-          if (!tl || !draggingRef.current) return;
-          const r = tl.getBoundingClientRect();
-          if (direction === -1 && r.top >= 0) return;
-          if (direction === 1 && r.bottom <= window.innerHeight) return;
-          window.scrollBy(0, direction * speed);
+
+      if (horizontal) {
+        // Horizontal auto-scroll within the timeline element
+        if (clientX < tlRect.left + SCROLL_ZONE) {
+          direction = -1;
+          proximity = 1 - ((clientX - tlRect.left) / SCROLL_ZONE);
+        } else if (clientX > tlRect.right - SCROLL_ZONE) {
+          direction = 1;
+          proximity = 1 - ((tlRect.right - clientX) / SCROLL_ZONE);
+        }
+        if (direction !== 0) {
+          const speed = Math.max(1, Math.pow(proximity, 2) * MAX_SPEED);
+          const tick = () => {
+            const tl = timelineRef.current;
+            if (!tl || !draggingRef.current) return;
+            tl.scrollLeft += direction * speed;
+            scrollIntervalRef.current = requestAnimationFrame(tick);
+          };
           scrollIntervalRef.current = requestAnimationFrame(tick);
-        };
-        scrollIntervalRef.current = requestAnimationFrame(tick);
+        }
+      } else {
+        // Vertical auto-scroll of the page
+        if (clientY < SCROLL_ZONE && tlRect.top < 0) {
+          direction = -1;
+          proximity = 1 - (clientY / SCROLL_ZONE);
+        } else if (clientY > window.innerHeight - SCROLL_ZONE && tlRect.bottom > window.innerHeight) {
+          direction = 1;
+          proximity = 1 - ((window.innerHeight - clientY) / SCROLL_ZONE);
+        }
+        if (direction !== 0) {
+          const speed = Math.max(1, Math.pow(proximity, 2) * MAX_SPEED);
+          const tick = () => {
+            const tl = timelineRef.current;
+            if (!tl || !draggingRef.current) return;
+            const r = tl.getBoundingClientRect();
+            if (direction === -1 && r.top >= 0) return;
+            if (direction === 1 && r.bottom <= window.innerHeight) return;
+            window.scrollBy(0, direction * speed);
+            scrollIntervalRef.current = requestAnimationFrame(tick);
+          };
+          scrollIntervalRef.current = requestAnimationFrame(tick);
+        }
       }
     }
 
+    // Calculate insert position
     const currentCards = cardsRef.current;
     const newIdx = currentCards.findIndex(c => c.type === "new");
     if (!dragCardRef.current || !timelineRef.current) return;
 
     const draggedRect = dragCardRef.current.getBoundingClientRect();
-    const draggedCenterY = draggedRect.top + draggedRect.height / 2;
     const allCardEls = timelineRef.current.querySelectorAll(".card");
     const fixedMidpoints = [];
+
     currentCards.forEach((c, i) => {
       if (c.type !== "new" && allCardEls[i]) {
         const r = allCardEls[i].getBoundingClientRect();
-        fixedMidpoints.push({ midY: r.top + r.height / 2, originalIndex: i });
+        if (horizontal) {
+          fixedMidpoints.push({ mid: r.left + r.width / 2, originalIndex: i });
+        } else {
+          fixedMidpoints.push({ mid: r.top + r.height / 2, originalIndex: i });
+        }
       }
     });
 
+    const draggedCenter = horizontal
+      ? draggedRect.left + draggedRect.width / 2
+      : draggedRect.top + draggedRect.height / 2;
+
     let fixedSlot = fixedMidpoints.length;
     for (let i = 0; i < fixedMidpoints.length; i++) {
-      if (draggedCenterY < fixedMidpoints[i].midY) { fixedSlot = i; break; }
+      if (draggedCenter < fixedMidpoints[i].mid) { fixedSlot = i; break; }
     }
     let arraySlot = fixedSlot <= newIdx ? fixedSlot : fixedSlot + 1;
     arraySlot = Math.max(0, Math.min(currentCards.length, arraySlot));
@@ -388,7 +437,7 @@ function Game({
   const insertIndexRef = useRef(null);
 
   const handleDragEnd = useCallback(() => {
-    if (startYRef.current === 0) return;
+    if (startYRef.current === 0 && startXRef.current === 0) return;
     startYRef.current = 0;
     startXRef.current = 0;
     if (!draggingRef.current) return;
@@ -587,14 +636,26 @@ function Game({
     <div className="container">
       <div className="game-header">
         <div>
-          <h2>{currentPlayer.name}'s Turn</h2>
+          {/* ✅ Home button — confirms before leaving */}
+          <button
+            onClick={() => {
+              if (window.confirm(lang === "de" ? "Spiel wirklich verlassen?" : "Leave the game?")) {
+                clearSession();
+                stop();
+                setScreen("start");
+              }
+            }}
+            style={{ minWidth: "unset", padding: "6px 12px", fontSize: 13, background: "#333", boxShadow: "none", margin: "0 0 6px 0" }}
+          >
+            🏠
+          </button>
+          <h2 style={{ margin: 0 }}>{currentPlayer.name}'s Turn</h2>
           <h3>{isMyTurn ? t?.yourTurn || "Your turn!" : t?.waitingFor(currentPlayer.name) || `Waiting for ${currentPlayer.name}...`}</h3>
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
           {!isMyTurn && (
             <div className="coin-display">🪙 <span>{myCoins}</span></div>
           )}
-          {/* ✅ Overview button */}
           <button
             onClick={() => setOverviewMode(true)}
             style={{ minWidth: "unset", padding: "6px 12px", fontSize: 12, background: "#333", boxShadow: "none", margin: 0 }}
@@ -615,14 +676,22 @@ function Game({
           {cards.map((card, index) => {
             const isNewCard = card.type === "new";
             const isDragged = isNewCard && dragging;
+            const horizontal = isHorizontal();
 
             let shiftY = 0;
+            let shiftX = 0;
             if (dragging && !isNewCard && insertIndex !== null) {
               const origIdx = newCardOriginalIndex;
               const cardEls = timelineRef.current?.querySelectorAll(".card");
-              const cardH = (cardEls?.[0]?.getBoundingClientRect().height || 180) + 16;
-              if (insertIndex <= origIdx && index >= insertIndex && index < origIdx) shiftY = cardH;
-              else if (insertIndex > origIdx + 1 && index > origIdx && index < insertIndex) shiftY = -cardH;
+              if (horizontal) {
+                const cardW = (cardEls?.[0]?.getBoundingClientRect().width || 260) + 12;
+                if (insertIndex <= origIdx && index >= insertIndex && index < origIdx) shiftX = cardW;
+                else if (insertIndex > origIdx + 1 && index > origIdx && index < insertIndex) shiftX = -cardW;
+              } else {
+                const cardH = (cardEls?.[0]?.getBoundingClientRect().height || 180) + 16;
+                if (insertIndex <= origIdx && index >= insertIndex && index < origIdx) shiftY = cardH;
+                else if (insertIndex > origIdx + 1 && index > origIdx && index < insertIndex) shiftY = -cardH;
+              }
             }
 
             const coinsHere = coinsBySlot[index] || 0;
@@ -658,7 +727,7 @@ function Game({
                       style={{
                         position: "relative",
                         zIndex: isDragged ? 1000 : 1,
-                        transform: isDragged ? undefined : `translateY(${shiftY}px) scale(1)`,
+                      transform: isDragged ? undefined : `translate(${shiftX}px, ${shiftY}px) scale(1)`,
                         transition: isDragged ? "none" : "transform 0.18s ease",
                         cursor: dragging ? "grabbing" : "grab",
                         userSelect: "none",
@@ -695,7 +764,7 @@ function Game({
                     style={{
                       position: "relative",
                       zIndex: 1,
-                      transform: `translateY(${shiftY}px) scale(1)`,
+                      transform: `translate(${shiftX}px, ${shiftY}px) scale(1)`,
                       transition: "transform 0.18s ease",
                       cursor: "default",
                       userSelect: "none",

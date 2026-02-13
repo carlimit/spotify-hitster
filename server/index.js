@@ -41,11 +41,28 @@ async function getSpotifyToken() {
 }
 
 /* =========================================
+   🎵 YEAR HELPER
+   Spotify's release_date can be a re-release date.
+   We always use the earliest/original year by preferring
+   the album's release_date and stripping to just the year.
+========================================= */
+function extractYear(track) {
+  const date = track.album?.release_date || "";
+  // Always just take the 4-digit year — earliest available date
+  return date.substring(0, 4);
+}
+
+/* =========================================
    🎵 TRACK ENDPOINT
 ========================================= */
 
 app.get("/api/track", async (req, res) => {
-  const { genre, minYear, maxYear } = req.query;
+  const { genre, minYear, maxYear, usedUris } = req.query;
+
+  // Parse used URIs from query so server can exclude them
+  let used = new Set();
+  try { if (usedUris) used = new Set(JSON.parse(usedUris)); } catch {}
+
   try {
     const genreFilter = (genre && genre !== "undefined") ? `genre:${genre} ` : "";
     const query = `${genreFilter}year:${minYear}-${maxYear}`;
@@ -59,18 +76,26 @@ app.get("/api/track", async (req, res) => {
     let tracks = response.data.tracks?.items || [];
     if (!tracks.length) return res.status(404).json({ error: "No tracks found" });
 
-    const popular = tracks.filter(t => t.popularity > 40);
-    const pool = popular.length >= 5 ? popular : tracks;
-    const randomTrack = pool[Math.floor(Math.random() * pool.length)];
+    // ✅ FIX: Filter out already-used URIs to prevent repeats
+    const unused = tracks.filter(t => !used.has(t.uri));
+    const pool = unused.length >= 3 ? unused : tracks; // fallback if almost everything used
+
+    // ✅ FIX: Prefer popular tracks, but don't require it
+    const popular = pool.filter(t => t.popularity > 40);
+    const candidates = popular.length >= 3 ? popular : pool;
+
+    // ✅ FIX: Pick randomly from candidates
+    const randomTrack = candidates[Math.floor(Math.random() * candidates.length)];
 
     res.json({
       name: randomTrack.name,
       artist: randomTrack.artists[0].name,
-      year: randomTrack.album.release_date.substring(0, 4),
+      year: extractYear(randomTrack),  // ✅ use helper
       uri: randomTrack.uri,
       cover: randomTrack.album.images[0]?.url
     });
   } catch (err) {
+    console.error("Track error:", err.message);
     res.status(500).json({ error: "Spotify error" });
   }
 });
@@ -132,7 +157,7 @@ app.get("/api/playlist", async (req, res) => {
       tracks: tracks.map(t => ({
         name: t.name,
         artist: t.artists[0].name,
-        year: t.album.release_date.substring(0, 4),
+        year: extractYear(t),  // ✅ use helper
         uri: t.uri,
         cover: t.album.images?.[0]?.url,
         popularity: t.popularity
@@ -161,53 +186,33 @@ function generateCode() {
 io.on("connection", (socket) => {
   console.log("User connected:", socket.id);
 
-  /* CREATE GAME */
   socket.on("create_game", ({ name }) => {
     const code = generateCode();
-
     games[code] = {
       host: socket.id,
-      players: [
-        {
-          id: socket.id,
-          name,
-          score: 0,
-          timeline: []
-        }
-      ],
+      players: [{ id: socket.id, name, score: 0, timeline: [] }],
       currentPlayerIndex: 0,
       started: false,
       minYear: 1990,
       maxYear: 2024
     };
-
     socket.join(code);
     socket.emit("game_created", { code });
     io.to(code).emit("player_list", games[code].players);
   });
 
-  /* JOIN GAME */
   socket.on("join_game", ({ code, name }) => {
     const game = games[code];
     if (!game) return socket.emit("error", { message: "Game not found" });
-
     const alreadyJoined = game.players.find(p => p.id === socket.id);
     if (alreadyJoined) return;
     if (game.started) return socket.emit("error", { message: "Game already started" });
-
-    game.players.push({
-      id: socket.id,
-      name,
-      score: 0,
-      timeline: []
-    });
-
+    game.players.push({ id: socket.id, name, score: 0, timeline: [] });
     socket.join(code);
     socket.emit("joined_success", { code });
     io.to(code).emit("player_list", game.players);
   });
 
-  /* START GAME */
   socket.on("start_game", ({ code, minYear, maxYear, selectedGenres, playlistTracks, winGoal, timerSeconds }) => {
     const game = games[code];
     if (!game) return;
@@ -215,7 +220,7 @@ io.on("connection", (socket) => {
     game.started = true;
     game.selectedGenres = selectedGenres || [];
     game.playlistTracks = playlistTracks || null;
-    game.usedUris = new Set();
+    game.usedUris = new Set(); // ✅ authoritative used URIs on server
     game.currentPlayerIndex = 0;
     game.winGoal = winGoal || 10;
     game.timerSeconds = timerSeconds || 0;
@@ -230,8 +235,7 @@ io.on("connection", (socket) => {
     }
 
     game.players = game.players.map(player => {
-      const randomYear =
-        Math.floor(Math.random() * (game.maxYear - game.minYear + 1)) + game.minYear;
+      const randomYear = Math.floor(Math.random() * (game.maxYear - game.minYear + 1)) + game.minYear;
       return {
         ...player,
         timeline: [{ id: Date.now() + Math.random(), year: randomYear, type: "fixed" }],
@@ -252,48 +256,39 @@ io.on("connection", (socket) => {
     });
   });
 
-  /* UPDATE TIMELINE */
   socket.on("update_timeline", ({ code, timeline, score }) => {
     const game = games[code];
     if (!game) return;
-
     const playerIndex = game.players.findIndex(p => p.id === socket.id);
     if (playerIndex === -1) return;
-
     game.players[playerIndex].timeline = timeline;
     game.players[playerIndex].score = score;
   });
 
-  /* ✅ NEW: REVEAL CARD — active player broadcasts the revealed card + result to spectators */
   socket.on("reveal_card", ({ code, result, cards }) => {
     const game = games[code];
     if (!game) return;
-    // Send to everyone in the room EXCEPT the active player who sent it
     socket.to(code).emit("card_revealed", { result, cards });
   });
 
-  /* PLAY TRACK */
   socket.on("play_track", ({ code, uri }) => {
     const game = games[code];
     if (!game) return;
     io.to(game.host).emit("play_track", { uri });
   });
 
-  /* PAUSE TRACK */
   socket.on("pause_track", ({ code }) => {
     const game = games[code];
     if (!game) return;
     io.to(game.host).emit("pause_track");
   });
 
-  /* PLAYER STATE */
   socket.on("player_state", ({ code, playing }) => {
     const game = games[code];
     if (!game) return;
     socket.to(code).emit("player_state", { playing });
   });
 
-  /* GIVE COIN */
   socket.on("give_coin", ({ code }) => {
     const game = games[code];
     if (!game) return;
@@ -303,20 +298,16 @@ io.on("connection", (socket) => {
     io.to(code).emit("coins_updated_players", { players: game.players });
   });
 
-  /* PLACE COIN */
   socket.on("place_coin", ({ code, insertIndex }) => {
     const game = games[code];
     if (!game) return;
     const player = game.players.find(p => p.id === socket.id);
     if (!player || player.coins <= 0) return;
-
     if (!game.coins) game.coins = {};
     game.coins[socket.id] = { playerId: socket.id, insertIndex };
-
     io.to(code).emit("coins_updated", { coins: game.coins });
   });
 
-  /* REMOVE COIN */
   socket.on("remove_coin", ({ code }) => {
     const game = games[code];
     if (!game || !game.coins) return;
@@ -324,7 +315,6 @@ io.on("connection", (socket) => {
     io.to(code).emit("coins_updated", { coins: game.coins });
   });
 
-  /* CLAIM RECOGNITION */
   socket.on("claim_recognition", ({ code }) => {
     const game = games[code];
     if (!game) return;
@@ -334,13 +324,11 @@ io.on("connection", (socket) => {
     io.to(code).emit("coins_updated_players", { players: game.players });
   });
 
-  /* RESOLVE COINS */
   socket.on("resolve_coins", ({ code, activeCorrect, activeInsertIndex, newCard }) => {
     const game = games[code];
     if (!game) return;
 
     const coins = game.coins || {};
-
     const activePlayer = game.players[game.currentPlayerIndex];
     const fixedCards = activePlayer.timeline
       .filter(c => c.type === "fixed")
@@ -357,17 +345,15 @@ io.on("connection", (socket) => {
       const coinPlayerIndex = game.players.findIndex(p => p.id === playerId);
       if (coinPlayerIndex === -1) return;
       const coinPlayer = game.players[coinPlayerIndex];
-
       const coinCorrect = isSlotCorrect(insertIndex);
 
       if (activeCorrect && coinCorrect) {
-        // Both right — coin returned, no change
+        // both right — coin returned
       } else if (activeCorrect && !coinCorrect) {
         game.players[coinPlayerIndex].coins = Math.max(0, (coinPlayer.coins || 0) - 1);
       } else if (!activeCorrect && coinCorrect) {
         const cardWithFixed = { ...newCard, type: "fixed" };
-        const newTimeline = [...coinPlayer.timeline, cardWithFixed]
-          .sort((a, b) => a.year - b.year);
+        const newTimeline = [...coinPlayer.timeline, cardWithFixed].sort((a, b) => a.year - b.year);
         game.players[coinPlayerIndex].timeline = newTimeline;
         game.players[coinPlayerIndex].score = (coinPlayer.score || 0) + 1;
       } else {
@@ -385,26 +371,23 @@ io.on("connection", (socket) => {
       minYear: game.minYear,
       maxYear: game.maxYear,
       playlistTracks: game.playlistTracks,
-      usedUris: Array.from(game.usedUris),
+      usedUris: Array.from(game.usedUris), // ✅ send authoritative used list
       coins: {}
     });
   });
 
-  /* MARK TRACK USED */
+  // ✅ FIX: Server owns usedUris — client just reports, server records
   socket.on("mark_used", ({ code, uri }) => {
     const game = games[code];
     if (!game) return;
     game.usedUris.add(uri);
   });
 
-  /* NEXT TURN — fallback */
   socket.on("next_turn", ({ code }) => {
     const game = games[code];
     if (!game) return;
-
     game.coins = {};
     game.currentPlayerIndex = (game.currentPlayerIndex + 1) % game.players.length;
-
     io.to(code).emit("turn_changed", {
       players: game.players,
       currentPlayerIndex: game.currentPlayerIndex,
@@ -422,10 +405,7 @@ io.on("connection", (socket) => {
   });
 });
 
-/* ========================================= */
-
 const PORT = process.env.PORT || 3001;
-
 server.listen(PORT, async () => {
   await getSpotifyToken();
   console.log("Server running on port " + PORT);

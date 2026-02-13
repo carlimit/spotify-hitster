@@ -191,6 +191,7 @@ function App() {
         playlistTracks={playlistTracks}
         winGoal={winGoal} timerSeconds={timerSeconds}
         isHost={isHost}
+        lang={lang}
       />
     );
   }
