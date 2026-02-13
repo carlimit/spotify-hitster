@@ -318,7 +318,13 @@ function Game({
   const handleDragStart = useCallback((e) => {
     if (revealedRef.current || !isMyTurnRef.current) return;
     e.stopPropagation();
-    console.log("🟢 dragStart — horizontal:", isHorizontalRef.current, "w:", window.innerWidth, "landscape:", window.matchMedia("(orientation: landscape)").matches);
+    const h = isHorizontalRef.current;
+    const w = window.innerWidth;
+    const land = window.matchMedia("(orientation: landscape)").matches;
+    console.log("🟢 dragStart — horizontal:", h, "w:", w, "landscape:", land);
+    // Show debug on screen
+    const el = document.getElementById("drag-debug");
+    if (el) el.textContent = `horizontal:${h} w:${w} land:${land}`;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     startYRef.current = clientY;
@@ -852,13 +858,20 @@ function Game({
         {isMyTurn && showNextButton && (
           <button onClick={nextTurn}>{t?.nextPlayer || "Next Player"}</button>
         )}
-        {/* ✅ FIX: Give coin only shown AFTER reveal */}
         {isNextPlayer && revealed && !coinGiven && (
           <button className="give-coin-btn" onClick={giveCoin}>
             {t?.giveCoin(currentPlayer.name) || `🎤 Give coin to ${currentPlayer.name}`}
           </button>
         )}
       </div>
+
+      {/* 🐛 TEMP DEBUG — remove after testing */}
+      <div id="drag-debug" style={{
+        position: "fixed", top: 8, left: "50%", transform: "translateX(-50%)",
+        background: "rgba(0,0,0,0.8)", color: "#1DB954", padding: "4px 12px",
+        borderRadius: 8, fontSize: 12, zIndex: 9999, pointerEvents: "none"
+      }}>tap card to debug</div>
+
     </div>
   );
 }
