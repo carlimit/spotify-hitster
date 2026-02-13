@@ -318,12 +318,13 @@ function Game({
   const handleDragStart = useCallback((e) => {
     if (revealedRef.current || !isMyTurnRef.current) return;
     e.stopPropagation();
+    console.log("🟢 dragStart — horizontal:", isHorizontalRef.current, "w:", window.innerWidth, "landscape:", window.matchMedia("(orientation: landscape)").matches);
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     startYRef.current = clientY;
     startXRef.current = clientX;
     draggingRef.current = false;
-    dragActiveRef.current = true; // finger is down
+    dragActiveRef.current = true;
   }, []);
 
   const handleDragMove = useCallback((e) => {
@@ -733,7 +734,11 @@ function Game({
                   <div
                     style={{ padding: "20px", margin: "-20px", touchAction: "none", userSelect: "none" }}
                     onMouseDown={handleDragStart}
-                    onTouchStart={handleDragStart}
+                    onTouchStart={(e) => {
+                      e.preventDefault(); // must be here synchronously to block browser scroll steal
+                      handleDragStart(e);
+                    }}
+                    onTouchMove={(e) => e.preventDefault()}
                   >
                     <div
                       ref={(el) => { dragCardRef.current = el; newCardRef.current = el; }}
