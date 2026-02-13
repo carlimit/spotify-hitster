@@ -295,6 +295,7 @@ function Game({
 
   const dragCardRef = useRef(null);
   const startXRef = useRef(0);
+  const dragActiveRef = useRef(false); // true once finger is down, regardless of axis
 
   // Track horizontal mode as a ref so drag handlers always have current value
   const isHorizontalRef = useRef(false);
@@ -312,7 +313,6 @@ function Game({
     };
   }, []);
 
-  // Detect if timeline is currently horizontal (iPad landscape)
   const isHorizontal = () => isHorizontalRef.current;
 
   const handleDragStart = useCallback((e) => {
@@ -323,23 +323,27 @@ function Game({
     startYRef.current = clientY;
     startXRef.current = clientX;
     draggingRef.current = false;
+    dragActiveRef.current = true; // finger is down
   }, []);
 
   const handleDragMove = useCallback((e) => {
-    if (startYRef.current === 0 && startXRef.current === 0) return;
+    if (!dragActiveRef.current) return; // not our touch
 
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const deltaY = clientY - startYRef.current;
     const deltaX = clientX - startXRef.current;
-    const horizontal = isHorizontal();
+    const horizontal = isHorizontalRef.current;
 
     if (!draggingRef.current) {
       const primary = horizontal ? Math.abs(deltaX) : Math.abs(deltaY);
       const secondary = horizontal ? Math.abs(deltaY) : Math.abs(deltaX);
-      if (primary < 3) return;
-      // If moving in wrong axis, cancel
-      if (secondary > primary) { startYRef.current = 0; startXRef.current = 0; return; }
+      if (primary < 4) return; // not moved enough yet
+      if (secondary > primary * 1.5) {
+        // Moving in wrong axis — cancel this drag
+        dragActiveRef.current = false;
+        return;
+      }
       draggingRef.current = true;
       setDragging(true);
     }
@@ -368,7 +372,6 @@ function Game({
       let proximity = 0;
 
       if (horizontal) {
-        // Horizontal auto-scroll within the timeline element
         if (clientX < tlRect.left + SCROLL_ZONE) {
           direction = -1;
           proximity = 1 - ((clientX - tlRect.left) / SCROLL_ZONE);
@@ -387,7 +390,6 @@ function Game({
           scrollIntervalRef.current = requestAnimationFrame(tick);
         }
       } else {
-        // Vertical auto-scroll of the page
         if (clientY < SCROLL_ZONE && tlRect.top < 0) {
           direction = -1;
           proximity = 1 - (clientY / SCROLL_ZONE);
@@ -423,11 +425,10 @@ function Game({
     currentCards.forEach((c, i) => {
       if (c.type !== "new" && allCardEls[i]) {
         const r = allCardEls[i].getBoundingClientRect();
-        if (horizontal) {
-          fixedMidpoints.push({ mid: r.left + r.width / 2, originalIndex: i });
-        } else {
-          fixedMidpoints.push({ mid: r.top + r.height / 2, originalIndex: i });
-        }
+        fixedMidpoints.push({
+          mid: horizontal ? r.left + r.width / 2 : r.top + r.height / 2,
+          originalIndex: i
+        });
       }
     });
 
@@ -448,9 +449,9 @@ function Game({
   const insertIndexRef = useRef(null);
 
   const handleDragEnd = useCallback(() => {
-    if (startYRef.current === 0 && startXRef.current === 0) return;
-    startYRef.current = 0;
-    startXRef.current = 0;
+    if (!dragActiveRef.current) return;
+    dragActiveRef.current = false;
+
     if (!draggingRef.current) return;
     draggingRef.current = false;
     cancelAnimationFrame(scrollIntervalRef.current);
@@ -474,6 +475,8 @@ function Game({
     setDragY(0);
     setInsertIndex(null);
     insertIndexRef.current = null;
+    startYRef.current = 0;
+    startXRef.current = 0;
   }, []);
 
   useEffect(() => {
