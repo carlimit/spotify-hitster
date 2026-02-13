@@ -848,37 +848,66 @@ button:active {
 @media (min-width: 768px) and (orientation: landscape) {
   .timeline {
     flex-direction: row !important;
-    overflow-x: auto;
-    overflow-y: hidden;
-    align-items: center;
-    gap: 12px;
-    padding: 20px 24px 120px 24px !important;
-    width: 100%;
-    max-width: 100%;
+    overflow-x: auto !important;
+    overflow-y: visible !important;
+    align-items: center !important;
+    gap: 12px !important;
+    padding: 20px 32px 120px 32px !important;
+    width: 100% !important;
+    max-width: 100% !important;
     scroll-snap-type: x mandatory;
     -webkit-overflow-scrolling: touch;
   }
 
+  /* Each card wrapper in horizontal mode */
   .timeline > div {
-    flex-shrink: 0;
-    width: 260px;
-    scroll-snap-align: center;
+    flex-shrink: 0 !important;
+    width: 220px !important;
+    max-width: 220px !important;
   }
 
-  .card {
-    max-width: 260px !important;
-    min-height: 160px !important;
+  /* Cards stay iPhone-sized */
+  .timeline .card {
+    width: 220px !important;
+    max-width: 220px !important;
+    min-height: 140px !important;
+    aspect-ratio: 5 / 3 !important;
   }
 
-  .card-expanded {
-    height: 340px !important;
-    min-height: 340px !important;
+  /* Revealed card: square 1:1 format */
+  .card-expanded-horizontal {
+    aspect-ratio: 1 / 1 !important;
+    width: 220px !important;
+    height: 220px !important;
+    min-height: 220px !important;
   }
 
+  /* Cover image smaller in square card */
+  .card-expanded-horizontal .cover-large {
+    max-width: 120px !important;
+    margin-bottom: 6px !important;
+  }
+
+  /* Smaller text in compact revealed card */
+  .card-expanded-horizontal .revealed-year {
+    font-size: 28px !important;
+    margin-bottom: 2px !important;
+  }
+
+  .card-expanded-horizontal .card-back strong {
+    font-size: 12px !important;
+  }
+
+  .card-expanded-horizontal .song-title {
+    font-size: 11px !important;
+  }
+
+  /* Coin slots vertical in horizontal timeline */
   .coin-slot {
-    flex-direction: column;
-    width: 36px;
-    height: 100%;
-    align-self: stretch;
+    flex-direction: column !important;
+    width: 36px !important;
+    height: auto !important;
+    align-self: center !important;
+    margin: 0 !important;
   }
 }

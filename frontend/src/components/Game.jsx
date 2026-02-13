@@ -296,13 +296,24 @@ function Game({
   const dragCardRef = useRef(null);
   const startXRef = useRef(0);
 
+  // Track horizontal mode as a ref so drag handlers always have current value
+  const isHorizontalRef = useRef(false);
+  useEffect(() => {
+    const check = () => {
+      isHorizontalRef.current = window.innerWidth >= 768 &&
+        window.matchMedia("(orientation: landscape)").matches;
+    };
+    check();
+    window.addEventListener("resize", check);
+    window.addEventListener("orientationchange", check);
+    return () => {
+      window.removeEventListener("resize", check);
+      window.removeEventListener("orientationchange", check);
+    };
+  }, []);
+
   // Detect if timeline is currently horizontal (iPad landscape)
-  const isHorizontal = () => {
-    const tl = timelineRef.current;
-    if (!tl) return false;
-    const style = window.getComputedStyle(tl);
-    return style.flexDirection === "row";
-  };
+  const isHorizontal = () => isHorizontalRef.current;
 
   const handleDragStart = useCallback((e) => {
     if (revealedRef.current || !isMyTurnRef.current) return;
@@ -698,7 +709,7 @@ function Game({
             const myMyCoinHere = myCoinIndex === index;
 
             return (
-              <div key={card.id} style={{ width: "100%", maxWidth: 480 }}>
+              <div key={card.id} style={{ width: horizontal ? "auto" : "100%", maxWidth: horizontal ? "none" : 480, flexShrink: 0 }}>
                 {/* ✅ FIX: Coin slots only shown to spectators, only BEFORE reveal */}
                 {!isMyTurn && !revealed && (
                   <div className="coin-slot">
@@ -760,7 +771,7 @@ function Game({
                 ) : (
                   <div
                     ref={isNewCard ? (el) => { newCardRef.current = el; } : null}
-                    className={`card ${isNewCard && revealed ? "card-expanded" : ""}`}
+                    className={`card ${isNewCard && revealed ? (horizontal ? "card-expanded-horizontal" : "card-expanded") : ""}`}
                     style={{
                       position: "relative",
                       zIndex: 1,
