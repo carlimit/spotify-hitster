@@ -325,7 +325,7 @@ function Game({
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const deltaY = clientY - startYRef.current;
     const deltaX = clientX - startXRef.current;
-    const horizontal = isHorizontalRef.current;
+    const horizontal = isHorizontal();
 
     if (!draggingRef.current) {
       const primary = horizontal ? Math.abs(deltaX) : Math.abs(deltaY);
