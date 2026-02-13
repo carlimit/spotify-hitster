@@ -479,6 +479,16 @@ button:active {
 
 .action-container button {
   pointer-events: auto;
+  width: 100%;
+  max-width: 480px;
+  padding: 22px;
+  font-size: 20px;
+  font-weight: 700;
+  border-radius: 16px;
+  margin: 0;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  box-shadow: 0 8px 24px rgba(29, 185, 84, 0.4);
 }
 
 /* ---------- Timer ---------- */
