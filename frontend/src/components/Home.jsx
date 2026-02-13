@@ -29,7 +29,7 @@ function Home({ t, lang,
 
   // Playlist mode
   const [playlistUrl, setPlaylistUrl] = useState("");
-  const [playlistInfo, setPlaylistInfo] = useState(null); // { name, trackCount, tracks }
+  const [playlistInfo, setPlaylistInfo] = useState(null);
   const [playlistLoading, setPlaylistLoading] = useState(false);
   const [playlistError, setPlaylistError] = useState(null);
 
@@ -38,6 +38,9 @@ function Home({ t, lang,
   // ============================================================
 
   useEffect(() => {
+    // ✅ Ensure socket is connected on mount (may have dropped after OAuth redirect)
+    if (!socket.connected) socket.connect();
+
     socket.on("player_list", players => {
       setLobbyPlayers(players);
     });
@@ -75,14 +78,26 @@ function Home({ t, lang,
   // ACTIONS
   // ============================================================
 
+  // ✅ If socket isn't connected at the moment of tap, reconnect first
+  // then emit once connected — prevents silent failures on mobile
   const createGame = () => {
     if (!playerName.trim()) return;
-    socket.emit("create_game", { name: playerName });
+    if (!socket.connected) {
+      socket.connect();
+      socket.once("connect", () => socket.emit("create_game", { name: playerName }));
+    } else {
+      socket.emit("create_game", { name: playerName });
+    }
   };
 
   const joinGame = () => {
     if (!playerName.trim() || !inputCode.trim()) return;
-    socket.emit("join_game", { code: inputCode.toUpperCase(), name: playerName });
+    if (!socket.connected) {
+      socket.connect();
+      socket.once("connect", () => socket.emit("join_game", { code: inputCode.toUpperCase(), name: playerName }));
+    } else {
+      socket.emit("join_game", { code: inputCode.toUpperCase(), name: playerName });
+    }
   };
 
   const loadPlaylist = async () => {
