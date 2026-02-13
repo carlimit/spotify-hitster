@@ -26,7 +26,7 @@ function Game({
   const [revealed, setRevealed] = useState(false);
   const [isMyTurn, setIsMyTurn] = useState(false);
 
-  // Coins — { [playerId]: { playerId, insertIndex } }
+  // Coins
   const [coins, setCoins] = useState({});
   const [myCoinIndex, setMyCoinIndex] = useState(null);
   const [showRecognition, setShowRecognition] = useState(false);
@@ -43,7 +43,7 @@ function Game({
   const [dragging, setDragging] = useState(false);
   const [insertIndex, setInsertIndex] = useState(null);
 
-  // Refs — always fresh values inside callbacks
+  // Refs
   const selectedGenresRef = useRef(selectedGenres);
   const minYearRef = useRef(minYear);
   const maxYearRef = useRef(maxYear);
@@ -86,7 +86,7 @@ function Game({
   }, []);
 
   // ============================================================
-  // 🎮 SOCKET — turn_changed
+  // 🎮 SOCKET — turn_changed + card_revealed
   // ============================================================
 
   useEffect(() => {
@@ -146,10 +146,24 @@ function Game({
       updatePlayers(newPlayers);
     });
 
+    // ✅ NEW: Spectators receive the revealed card state from the active player
+    socket.on("card_revealed", ({ result: revealResult, cards: revealedCards }) => {
+      setCards(revealedCards);
+      cardsRef.current = revealedCards;
+      setResult(revealResult);
+      setRevealed(true);
+      revealedRef.current = true;
+
+      // Show recognition button to spectators for 5 seconds after reveal
+      setShowRecognition(true);
+      setTimeout(() => setShowRecognition(false), 5000);
+    });
+
     return () => {
       socket.off("turn_changed");
       socket.off("coins_updated");
       socket.off("coins_updated_players");
+      socket.off("card_revealed"); // ✅ clean up
     };
   }, []);
 
@@ -238,7 +252,7 @@ function Game({
   };
 
   // ============================================================
-  // 👆 DRAG — card stays exactly with finger
+  // 👆 DRAG
   // ============================================================
 
   const dragCardRef = useRef(null);
@@ -246,7 +260,6 @@ function Game({
 
   const handleDragStart = useCallback((e) => {
     if (revealedRef.current || !isMyTurnRef.current) return;
-    // Stop bubbling so the page doesn't also handle this touch
     e.stopPropagation();
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
@@ -264,7 +277,6 @@ function Game({
     const deltaX = clientX - startXRef.current;
 
     if (!draggingRef.current) {
-      // ✅ FIX: Lowered from 8px to 3px — claims gesture faster before iOS scrolls
       if (Math.abs(deltaY) < 3) return;
       if (Math.abs(deltaX) > Math.abs(deltaY)) { startYRef.current = 0; return; }
       draggingRef.current = true;
@@ -281,7 +293,7 @@ function Game({
       dragCardRef.current.style.zIndex = "1000";
     }
 
-    // Auto-scroll: smooth variable-speed rAF loop
+    // Smooth variable-speed rAF auto-scroll
     const SCROLL_ZONE = 120;
     const MAX_SPEED = 22;
     cancelAnimationFrame(scrollIntervalRef.current);
@@ -424,13 +436,20 @@ function Game({
     if (left && left.year > newCard.year) correct = false;
     if (right && right.year < newCard.year) correct = false;
 
+    const revealResult = correct ? "correct" : "wrong";
+    setResult(revealResult);
+
+    // ✅ NEW: Broadcast the reveal to all spectators so they see the card too
+    socket.emit("reveal_card", {
+      code: roomCode,
+      result: revealResult,
+      cards: currentCards
+    });
+
     if (!correct) {
-      setResult("wrong");
       setTimeout(() => setShowNextButton(true), 800);
       return;
     }
-
-    setResult("correct");
 
     const updatedTimeline = currentCards.map(c =>
       c.id === newCard.id ? { ...c, type: "fixed" } : c
@@ -456,11 +475,6 @@ function Game({
     }
 
     setTimeout(() => setShowNextButton(true), 800);
-
-    if (!isMyTurn) {
-      setShowRecognition(true);
-      setTimeout(() => setShowRecognition(false), 5000);
-    }
   };
 
   const giveCoin = () => {
@@ -585,9 +599,7 @@ function Game({
                   </div>
                 )}
 
-                {/* ✅ FIX: Oversized invisible touch wrapper for the draggable new card.
-                    20px padding + negative margin = larger hit area without affecting layout.
-                    touch-action: none prevents iOS stealing the gesture at the card edges. */}
+                {/* Touch wrapper for draggable new card */}
                 {isNewCard && !revealed && isMyTurn ? (
                   <div
                     style={{
