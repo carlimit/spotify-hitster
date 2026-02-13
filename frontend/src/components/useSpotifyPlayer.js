@@ -252,7 +252,6 @@ export function useSpotifyDirect() {
   }, [hasToken]);
 
   const togglePlay = async (uri) => {
-    console.log("togglePlay — isHost:", isHost, "token:", !!localStorage.getItem("token"), "sdkReady:", sdkReady);
     if (!hasToken || !sdkReady || !sdkDeviceId) return;
     if (loadingRef.current) return;
 
