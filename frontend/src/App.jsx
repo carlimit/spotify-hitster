@@ -8,6 +8,7 @@ import "./App.css";
 import { getLoginUrl } from "./spotify";
 import { socket } from "./socket";
 import translations from "./translations";
+import HowToPlay from "./components/HowToPlay";
 
 function App() {
 
@@ -24,6 +25,7 @@ function App() {
   const [loginUrl, setLoginUrl] = useState(null);
   const [singleLoginUrl, setSingleLoginUrl] = useState(null);
   const [loginError, setLoginError] = useState(null);
+  const [showHowToPlay, setShowHowToPlay] = useState(false);
 
   // Pre-compute login URL immediately so button tap is instant (no async gap)
   useEffect(() => {
@@ -123,6 +125,14 @@ function App() {
         <button style={{ marginTop: "15px", background: "#1a472a" }} onClick={() => setScreen("singleplayer-setup")}>
           {t.soloMode}
         </button>
+        <button
+  style={{ marginTop: "15px", background: "transparent", border: "1px solid #555", color: "#aaa" }}
+  onClick={() => setShowHowToPlay(true)}
+>
+  {lang === "de" ? "📖 Spielanleitung" : "📖 How to Play"}
+</button>
+
+{showHowToPlay && <HowToPlay lang={lang} onClose={() => setShowHowToPlay(false)} />}
       </div>
     );
   }
