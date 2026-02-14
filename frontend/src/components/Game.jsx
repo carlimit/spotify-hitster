@@ -88,29 +88,30 @@ function Game({
   // ============================================================
 
   useEffect(() => {
-  const session = loadSession();
-  if (session && session.roomCode === roomCode) {
-    setLocalPlayers(session.players || initialPlayers);
-    setCurrentPlayerIndex(session.currentPlayerIndex || 0);
-    usedUrisRef.current = new Set(session.usedUris || []);
-    if (session.playlistTracks) playlistTracksRef.current = session.playlistTracks;
-  } else {
-    // ✅ NEW: Initialize from props if no session
-    if (initialPlaylistTracks) playlistTracksRef.current = initialPlaylistTracks;
-  }
+    // ✅ Try to restore session on remount (soft close / background)
+    const session = loadSession();
+    if (session && session.roomCode === roomCode) {
+      setLocalPlayers(session.players || initialPlayers);
+      setCurrentPlayerIndex(session.currentPlayerIndex || 0);
+      usedUrisRef.current = new Set(session.usedUris || []);
+      if (session.playlistTracks) playlistTracksRef.current = session.playlistTracks;
+    } else {
+      // ✅ NEW: Initialize from props if no session
+      if (initialPlaylistTracks) playlistTracksRef.current = initialPlaylistTracks;
+    }
 
-  const myTurn = players[0]?.id === socket.id;
-  isMyTurnRef.current = myTurn;
-  setIsMyTurn(myTurn);
+    const myTurn = players[0]?.id === socket.id;
+    isMyTurnRef.current = myTurn;
+    setIsMyTurn(myTurn);
 
-  if (myTurn) {
-    loadNewCard(players[0]);
-  } else {
-    const c = players[0]?.timeline || [];
-    setCards(c);
-    cardsRef.current = c;
-  }
-}, []);
+    if (myTurn) {
+      loadNewCard(players[0]);
+    } else {
+      const c = players[0]?.timeline || [];
+      setCards(c);
+      cardsRef.current = c;
+    }
+  }, []);
 
   // ✅ Save session whenever key state changes
   useEffect(() => {
@@ -212,6 +213,7 @@ function Game({
 
   const generateCard = async () => {
     const playlist = playlistTracksRef.current;
+
     // ✅ FIX: ONLY use playlist tracks when playlist mode is active — no fallback to genre search
     if (playlist && playlist.length > 0) {
       const unused = playlist.filter(t => !usedUrisRef.current.has(t.uri));
@@ -308,6 +310,7 @@ function Game({
     const h = isHorizontal();
     const w = window.innerWidth;
     const land = window.matchMedia("(orientation: landscape)").matches;
+    console.log("🟢 dragStart — horizontal:", h, "w:", w, "landscape:", land);
     const el = document.getElementById("drag-debug");
     if (el) el.textContent = `horizontal:${h} w:${w} land:${land}`;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
@@ -326,13 +329,16 @@ function Game({
     const deltaY = clientY - startYRef.current;
     const deltaX = clientX - startXRef.current;
     const horizontal = isHorizontal();
-  
+    console.log("🔴 MOVE horizontal:", horizontal, "dX:", Math.round(deltaX), "dY:", Math.round(deltaY));
+
     if (!draggingRef.current) {
       const primary = horizontal ? Math.abs(deltaX) : Math.abs(deltaY);
       const secondary = horizontal ? Math.abs(deltaY) : Math.abs(deltaX);
-          if (primary < 4) return;
+      console.log("🔵 move — horizontal:", horizontal, "deltaX:", Math.round(deltaX), "deltaY:", Math.round(deltaY));
+      if (primary < 4) return;
       if (secondary > primary * 1.5) {
-           dragActiveRef.current = false;
+        console.log("❌ cancelled — wrong axis");
+        dragActiveRef.current = false;
         return;
       }
       draggingRef.current = true;
@@ -739,7 +745,7 @@ function Game({
                   >
                     <div
                       ref={(el) => { dragCardRef.current = el; newCardRef.current = el; }}
-                      className="card"
+                      className={`card new-card-unrevealed`}
                       style={{
                         position: "relative",
                         zIndex: isDragged ? 1000 : 1,
@@ -776,7 +782,7 @@ function Game({
                 ) : (
                   <div
                     ref={isNewCard ? (el) => { newCardRef.current = el; } : null}
-                    className={`card ${isNewCard && revealed ? (horizontal ? "card-expanded-horizontal" : "card-expanded") : ""}`}
+                    className={`card ${isNewCard ? "new-card-unrevealed" : "small-fixed"} ${isNewCard && revealed ? (horizontal ? "card-expanded-horizontal" : "card-expanded") : ""}`}
                     style={{
                       position: "relative",
                       zIndex: 1,
@@ -855,6 +861,13 @@ function Game({
           </button>
         )}
       </div>
+
+      {/* 🐛 TEMP DEBUG — remove after testing */}
+      <div id="drag-debug" style={{
+        position: "fixed", top: 8, left: "50%", transform: "translateX(-50%)",
+        background: "rgba(0,0,0,0.8)", color: "#1DB954", padding: "4px 12px",
+        borderRadius: 8, fontSize: 12, zIndex: 9999, pointerEvents: "none"
+      }}>tap card to debug</div>
 
     </div>
   );

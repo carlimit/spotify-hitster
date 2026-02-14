@@ -449,7 +449,7 @@ function SinglePlayerGame({ t,
                   >
                     <div
                       ref={dragCardRef}
-                      className={`card ${revealed ? (horizontal ? "card-expanded-horizontal" : "card-expanded") : ""}`}
+                      className={`card new-card-unrevealed ${revealed ? (horizontal ? "card-expanded-horizontal" : "card-expanded") : ""}`}
                       style={{
                         position: "relative",
                         zIndex: isDragged ? 1000 : 1,
@@ -488,7 +488,7 @@ function SinglePlayerGame({ t,
                 ) : (
                   <div
                     ref={isNewCard ? dragCardRef : null}
-                    className={`card ${isNewCard && revealed ? (horizontal ? "card-expanded-horizontal" : "card-expanded") : ""}`}
+                    className={`card ${isNewCard ? "new-card-unrevealed" : "small-fixed"} ${isNewCard && revealed ? (horizontal ? "card-expanded-horizontal" : "card-expanded") : ""}`}
                     style={{
                       position: "relative",
                       zIndex: 1,

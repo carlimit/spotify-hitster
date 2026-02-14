@@ -213,6 +213,14 @@ button:active {
   padding: 0;
 }
 
+/* ✅ All card wrappers centered */
+.timeline > div {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+}
+
 .card {
   width: 100%;
   max-width: 480px;
@@ -223,7 +231,20 @@ button:active {
   perspective: 1200px;
 }
 
-/* ✅ FIX: Revealed cards auto-expand to fit content */
+/* ✅ Small fixed year cards - compact */
+.card.small-fixed {
+  max-width: 280px !important;
+  min-height: 120px !important;
+}
+
+/* ✅ New draggable card - LARGER and prominent */
+.card.new-card-unrevealed {
+  max-width: 480px !important;
+  min-height: 240px !important;
+  aspect-ratio: 2 / 1 !important;
+}
+
+/* ✅ Revealed cards auto-expand to fit content */
 .card-expanded {
   aspect-ratio: unset !important;
   height: auto !important;
@@ -244,6 +265,16 @@ button:active {
     max-width: 100%;
     min-height: 160px;
     border-radius: 16px;
+  }
+  
+  .card.small-fixed {
+    max-width: 240px !important;
+    min-height: 100px !important;
+  }
+  
+  .card.new-card-unrevealed {
+    max-width: 100% !important;
+    min-height: 200px !important;
   }
 }
 
@@ -276,7 +307,7 @@ button:active {
   overflow: hidden;
 }
 
-/* ✅ FIX: When flipped, card-back becomes relative and can expand */
+/* ✅ When flipped, card-back becomes relative and can expand */
 .card-inner.flipped .card-back {
   position: relative !important;
   inset: unset !important;
@@ -300,6 +331,11 @@ button:active {
   box-shadow: 0 4px 16px rgba(0,0,0,0.4);
 }
 
+/* ✅ Smaller font for compact fixed cards */
+.card.small-fixed .card-front.fixed {
+  font-size: clamp(24px, 6vw, 38px) !important;
+}
+
 .card-front.fixed::before {
   content: '';
   position: absolute;
@@ -309,20 +345,20 @@ button:active {
 }
 
 .play-button {
-  width: 72px;
-  height: 72px;
+  width: 80px;
+  height: 80px;
   border-radius: 50%;
   background: rgba(0, 0, 0, 0.35);
   border: 3px solid rgba(255, 255, 255, 0.7) !important;
   color: white;
-  font-size: 28px;
+  font-size: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   backdrop-filter: blur(8px);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
-  margin: 0 0 12px 0 !important;
+  margin: 0 0 16px 0 !important;
   min-width: unset !important;
   padding: 0 !important;
   transition: transform 0.15s ease, background 0.15s ease !important;
@@ -344,7 +380,7 @@ button:active {
 }
 
 .drag-hint {
-  font-size: 15px;
+  font-size: 17px;
   font-weight: 700;
   color: rgba(255, 255, 255, 0.95);
   text-transform: uppercase;
@@ -840,8 +876,9 @@ button:active {
 
   .timeline > div {
     flex-shrink: 0 !important;
-    width: 220px !important;
-    max-width: 220px !important;
+    width: auto !important;
+    max-width: none !important;
+    justify-content: center;
   }
 
   .timeline .card {
@@ -849,6 +886,18 @@ button:active {
     max-width: 220px !important;
     min-height: 140px !important;
     aspect-ratio: 5 / 3 !important;
+  }
+  
+  .timeline .card.small-fixed {
+    width: 180px !important;
+    max-width: 180px !important;
+    min-height: 100px !important;
+  }
+  
+  .timeline .card.new-card-unrevealed {
+    width: 280px !important;
+    max-width: 280px !important;
+    min-height: 180px !important;
   }
 
   .coin-slot {
