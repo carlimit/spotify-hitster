@@ -213,6 +213,13 @@ function Game({
   const generateCard = async () => {
     const playlist = playlistTracksRef.current;
 
+  // 🐛 TEMP DEBUG - expose to console
+  window.DEBUG_PLAYLIST = playlist;
+  window.DEBUG_INITIAL = initialPlaylistTracks;
+  console.log("🎲 generateCard - playlist:", playlist?.length || 0, "tracks");
+  console.log("🎲 generateCard - initialPlaylistTracks:", initialPlaylistTracks?.length || 0, "tracks");
+
+
     // ✅ FIX: ONLY use playlist tracks when playlist mode is active — no fallback to genre search
     if (playlist && playlist.length > 0) {
       const unused = playlist.filter(t => !usedUrisRef.current.has(t.uri));
