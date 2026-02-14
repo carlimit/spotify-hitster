@@ -223,19 +223,20 @@ button:active {
   perspective: 1200px;
 }
 
+/* ✅ FIX: Revealed cards auto-expand to fit content */
 .card-expanded {
   aspect-ratio: unset !important;
-  height: 480px !important;
-  min-height: 480px !important;
-  max-height: 480px !important;
+  height: auto !important;
+  min-height: auto !important;
+  max-height: none !important;
 }
 
 .card-expanded-horizontal {
-  aspect-ratio: 1 / 1 !important;
+  aspect-ratio: unset !important;
   width: 220px !important;
-  height: 220px !important;
-  min-height: 220px !important;
-  max-height: 220px !important;
+  height: auto !important;
+  min-height: auto !important;
+  max-height: none !important;
 }
 
 @media (max-width: 480px) {
@@ -243,11 +244,6 @@ button:active {
     max-width: 100%;
     min-height: 160px;
     border-radius: 16px;
-  }
-  .card-expanded {
-    height: 420px !important;
-    min-height: 420px !important;
-    max-height: 420px !important;
   }
 }
 
@@ -261,6 +257,7 @@ button:active {
 
 .card-inner.flipped {
   transform: rotateY(180deg);
+  height: auto !important;
 }
 
 .card-front,
@@ -277,6 +274,20 @@ button:active {
   width: 100%;
   height: 100%;
   overflow: hidden;
+}
+
+/* ✅ FIX: When flipped, card-back becomes relative and can expand */
+.card-inner.flipped .card-back {
+  position: relative !important;
+  inset: unset !important;
+  height: auto !important;
+  min-height: auto !important;
+  overflow: visible !important;
+  padding: 20px;
+}
+
+.card-inner.flipped .card-front {
+  display: none;
 }
 
 .card-front.fixed {
@@ -363,36 +374,10 @@ button:active {
   background: linear-gradient(135deg, #242424, #181818);
   border: 2px solid #333;
   transform: rotateY(180deg);
-  padding: 16px;
+  padding: 20px;
   box-shadow: 0 12px 40px rgba(0,0,0,0.6);
-  gap: 6px;
+  gap: 8px;
   justify-content: flex-start;
-  overflow-y: auto !important;
-  overflow-x: hidden;
-}
-
-/* ✅ Fix scrollbar on revealed cards */
-.card-expanded .card-back,
-.card-expanded-horizontal .card-back {
-  overflow-y: auto !important;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(29, 185, 84, 0.5) transparent;
-}
-
-.card-expanded .card-back::-webkit-scrollbar,
-.card-expanded-horizontal .card-back::-webkit-scrollbar {
-  width: 6px;
-}
-
-.card-expanded .card-back::-webkit-scrollbar-track,
-.card-expanded-horizontal .card-back::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.card-expanded .card-back::-webkit-scrollbar-thumb,
-.card-expanded-horizontal .card-back::-webkit-scrollbar-thumb {
-  background: rgba(29, 185, 84, 0.5);
-  border-radius: 10px;
 }
 
 .cover-large {
@@ -401,14 +386,14 @@ button:active {
   aspect-ratio: 1;
   object-fit: cover;
   border-radius: 10px;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
   box-shadow: 0 6px 20px rgba(0,0,0,0.5);
   flex-shrink: 0;
 }
 
 .card-expanded-horizontal .cover-large {
-  max-width: 140px;
-  margin-bottom: 4px;
+  max-width: 160px;
+  margin-bottom: 6px;
 }
 
 @media (max-width: 480px) {
@@ -425,32 +410,33 @@ button:active {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  line-height: 1;
-  margin-bottom: 6px;
+  line-height: 1.1;
+  margin-bottom: 8px;
   flex-shrink: 0;
 }
 
 .card-expanded-horizontal .revealed-year {
-  font-size: 28px !important;
-  margin-bottom: 2px !important;
+  font-size: 24px !important;
+  margin-bottom: 4px !important;
 }
 
 .card-back strong {
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 700;
   text-align: center;
   color: white;
   line-height: 1.3;
   flex-shrink: 0;
   width: 100%;
+  margin-bottom: 4px;
 }
 
 .card-expanded-horizontal .card-back strong {
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .song-title {
-  font-size: 14px;
+  font-size: 15px;
   color: #aaa;
   text-align: center;
   line-height: 1.4;
@@ -461,6 +447,7 @@ button:active {
 
 .card-expanded-horizontal .song-title {
   font-size: 11px !important;
+  line-height: 1.3 !important;
 }
 
 .result-correct .card-back {
