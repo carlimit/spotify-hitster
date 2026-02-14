@@ -216,7 +216,7 @@ function App() {
         setScreen={setScreen}
         selectedGenres={singlePlayerGenres}
         minYear={singlePlayerMinYear} maxYear={singlePlayerMaxYear}
-        playlistTracks={singlePlayerPlaylist}
+        playlistTracks={singlePlayerPlaylist?.tracks || null}
         timerSeconds={timerSeconds}
       />
     );

@@ -212,14 +212,6 @@ function Game({
 
   const generateCard = async () => {
     const playlist = playlistTracksRef.current;
-
-  // 🐛 TEMP DEBUG - expose to console
-  window.DEBUG_PLAYLIST = playlist;
-  window.DEBUG_INITIAL = initialPlaylistTracks;
-  console.log("🎲 generateCard - playlist:", playlist?.length || 0, "tracks");
-  console.log("🎲 generateCard - initialPlaylistTracks:", initialPlaylistTracks?.length || 0, "tracks");
-
-
     // ✅ FIX: ONLY use playlist tracks when playlist mode is active — no fallback to genre search
     if (playlist && playlist.length > 0) {
       const unused = playlist.filter(t => !usedUrisRef.current.has(t.uri));
@@ -316,7 +308,6 @@ function Game({
     const h = isHorizontal();
     const w = window.innerWidth;
     const land = window.matchMedia("(orientation: landscape)").matches;
-    console.log("🟢 dragStart — horizontal:", h, "w:", w, "landscape:", land);
     const el = document.getElementById("drag-debug");
     if (el) el.textContent = `horizontal:${h} w:${w} land:${land}`;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
@@ -335,16 +326,13 @@ function Game({
     const deltaY = clientY - startYRef.current;
     const deltaX = clientX - startXRef.current;
     const horizontal = isHorizontal();
-    console.log("🔴 MOVE horizontal:", horizontal, "dX:", Math.round(deltaX), "dY:", Math.round(deltaY));
-
+  
     if (!draggingRef.current) {
       const primary = horizontal ? Math.abs(deltaX) : Math.abs(deltaY);
       const secondary = horizontal ? Math.abs(deltaY) : Math.abs(deltaX);
-      console.log("🔵 move — horizontal:", horizontal, "deltaX:", Math.round(deltaX), "deltaY:", Math.round(deltaY));
-      if (primary < 4) return;
+          if (primary < 4) return;
       if (secondary > primary * 1.5) {
-        console.log("❌ cancelled — wrong axis");
-        dragActiveRef.current = false;
+           dragActiveRef.current = false;
         return;
       }
       draggingRef.current = true;
@@ -867,13 +855,6 @@ function Game({
           </button>
         )}
       </div>
-
-      {/* 🐛 TEMP DEBUG — remove after testing */}
-      <div id="drag-debug" style={{
-        position: "fixed", top: 8, left: "50%", transform: "translateX(-50%)",
-        background: "rgba(0,0,0,0.8)", color: "#1DB954", padding: "4px 12px",
-        borderRadius: 8, fontSize: 12, zIndex: 9999, pointerEvents: "none"
-      }}>tap card to debug</div>
 
     </div>
   );
