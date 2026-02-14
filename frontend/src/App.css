@@ -231,17 +231,17 @@ button:active {
   perspective: 1200px;
 }
 
-/* ✅ Small fixed year cards - compact */
+/* ✅ Fixed year cards - LARGER */
 .card.small-fixed {
-  max-width: 280px !important;
-  min-height: 120px !important;
+  max-width: 480px !important;
+  min-height: 180px !important;
 }
 
-/* ✅ New draggable card - LARGER and prominent */
+/* ✅ New draggable card - SMALLER and compact */
 .card.new-card-unrevealed {
-  max-width: 480px !important;
-  min-height: 240px !important;
-  aspect-ratio: 2 / 1 !important;
+  max-width: 280px !important;
+  min-height: 120px !important;
+  aspect-ratio: 5 / 3 !important;
 }
 
 /* ✅ Revealed cards auto-expand to fit content */
@@ -268,13 +268,13 @@ button:active {
   }
   
   .card.small-fixed {
-    max-width: 240px !important;
-    min-height: 100px !important;
+    max-width: 100% !important;
+    min-height: 160px !important;
   }
   
   .card.new-card-unrevealed {
-    max-width: 100% !important;
-    min-height: 200px !important;
+    max-width: 240px !important;
+    min-height: 100px !important;
   }
 }
 
@@ -331,11 +331,6 @@ button:active {
   box-shadow: 0 4px 16px rgba(0,0,0,0.4);
 }
 
-/* ✅ Smaller font for compact fixed cards */
-.card.small-fixed .card-front.fixed {
-  font-size: clamp(24px, 6vw, 38px) !important;
-}
-
 .card-front.fixed::before {
   content: '';
   position: absolute;
@@ -345,24 +340,32 @@ button:active {
 }
 
 .play-button {
-  width: 80px;
-  height: 80px;
+  width: 72px;
+  height: 72px;
   border-radius: 50%;
   background: rgba(0, 0, 0, 0.35);
   border: 3px solid rgba(255, 255, 255, 0.7) !important;
   color: white;
-  font-size: 32px;
+  font-size: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   backdrop-filter: blur(8px);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
-  margin: 0 0 16px 0 !important;
+  margin: 0 0 12px 0 !important;
   min-width: unset !important;
   padding: 0 !important;
   transition: transform 0.15s ease, background 0.15s ease !important;
   flex-shrink: 0;
+}
+
+/* ✅ Smaller play button for compact draggable card */
+.card.new-card-unrevealed .play-button {
+  width: 60px !important;
+  height: 60px !important;
+  font-size: 24px !important;
+  margin: 0 0 8px 0 !important;
 }
 
 .play-button:hover:not(:disabled) {
@@ -380,11 +383,16 @@ button:active {
 }
 
 .drag-hint {
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 700;
   color: rgba(255, 255, 255, 0.95);
   text-transform: uppercase;
   letter-spacing: 0.5px;
+}
+
+/* ✅ Smaller text for compact draggable card */
+.card.new-card-unrevealed .drag-hint {
+  font-size: 13px !important;
 }
 
 .card-front.new {
@@ -889,15 +897,15 @@ button:active {
   }
   
   .timeline .card.small-fixed {
-    width: 180px !important;
-    max-width: 180px !important;
-    min-height: 100px !important;
+    width: 220px !important;
+    max-width: 220px !important;
+    min-height: 140px !important;
   }
   
   .timeline .card.new-card-unrevealed {
-    width: 280px !important;
-    max-width: 280px !important;
-    min-height: 180px !important;
+    width: 180px !important;
+    max-width: 180px !important;
+    min-height: 100px !important;
   }
 
   .coin-slot {
