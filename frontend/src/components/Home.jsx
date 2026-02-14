@@ -62,7 +62,7 @@ function Home({ t, lang,
       if (genres && genres.length) setSelectedGenres(genres);
       if (min) setMinYear(Number(min));
       if (max) setMaxYear(Number(max));
-      if (playlistTracks) setPlaylistTracks(playlistTracks);
+      setPlaylistTracks(playlistTracks || null);  // Always update, even if null
       setScreen("playing");
     });
 
