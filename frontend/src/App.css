@@ -307,7 +307,7 @@ button:active {
   overflow: hidden;
 }
 
-/* ✅ When flipped, card-back becomes relative and can expand */
+/* ✅ When flipped, card-back becomes relative and can expand - NO SCROLL */
 .card-inner.flipped .card-back {
   position: relative !important;
   inset: unset !important;
@@ -362,10 +362,10 @@ button:active {
 
 /* ✅ Smaller play button for compact draggable card */
 .card.new-card-unrevealed .play-button {
-  width: 60px !important;
-  height: 60px !important;
-  font-size: 24px !important;
-  margin: 0 0 8px 0 !important;
+  width: 50px !important;
+  height: 50px !important;
+  font-size: 20px !important;
+  margin: 0 0 6px 0 !important;
 }
 
 .play-button:hover:not(:disabled) {
@@ -392,7 +392,8 @@ button:active {
 
 /* ✅ Smaller text for compact draggable card */
 .card.new-card-unrevealed .drag-hint {
-  font-size: 13px !important;
+  font-size: 11px !important;
+  letter-spacing: 0.3px !important;
 }
 
 .card-front.new {
