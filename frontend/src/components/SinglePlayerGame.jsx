@@ -12,7 +12,7 @@ function SinglePlayerGame({ t,
 }) {
   const [cards, setCards] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState(null); // "correct" | "wrong"
+  const [result, setResult] = useState(null);
   const [revealed, setRevealed] = useState(false);
   const [score, setScore] = useState(0);
   const [streak, setStreak] = useState(0);
@@ -23,13 +23,11 @@ function SinglePlayerGame({ t,
   const { ready: spotifyReady, playing, togglePlay, stop } = useSpotifyDirect();
 
   // Drag
-  const [dragY, setDragY] = useState(0);
   const [dragging, setDragging] = useState(false);
   const [insertIndex, setInsertIndex] = useState(null);
 
   const cardsRef = useRef(cards);
   const revealedRef = useRef(false);
-  const dragYRef = useRef(0);
   const draggingRef = useRef(false);
   const startYRef = useRef(0);
   const startXRef = useRef(0);
@@ -40,12 +38,18 @@ function SinglePlayerGame({ t,
   const genresRef = useRef(selectedGenres);
   const minYearRef = useRef(minYear);
   const maxYearRef = useRef(maxYear);
+  const dragCardRef = useRef(null);
+  const insertIndexRef = useRef(null);
+  const scrollIntervalRef = useRef(null);
+  const dragActiveRef = useRef(false);
 
   useEffect(() => { cardsRef.current = cards; }, [cards]);
   useEffect(() => { revealedRef.current = revealed; }, [revealed]);
-  useEffect(() => { dragYRef.current = dragY; }, [dragY]);
 
-  // ── Generate a card ──
+  // Read horizontal mode directly from window
+  const isHorizontal = () =>
+    window.innerWidth > window.innerHeight && window.innerWidth >= 768;
+
   const generateCard = async () => {
     const playlist = playlistRef.current;
 
@@ -57,7 +61,6 @@ function SinglePlayerGame({ t,
       return { id: Date.now(), year: parseInt(track.year), name: track.name, artist: track.artist, uri: track.uri, cover: track.cover, type: "new" };
     }
 
-    // Genre mode — keep trying until we get an unused URI (max 5 attempts)
     const genres = genresRef.current;
     const genre = genres.length > 0 ? genres[Math.floor(Math.random() * genres.length)] : "";
     for (let attempt = 0; attempt < 5; attempt++) {
@@ -76,19 +79,14 @@ function SinglePlayerGame({ t,
         };
       }
     }
-    // Fallback: just return whatever we got last even if duplicate
     const res = await axios.get(`/api/track?genre=${genre}&minYear=${minYearRef.current}&maxYear=${maxYearRef.current}`);
     return { id: Date.now(), year: parseInt(res.data.year), name: res.data.name, artist: res.data.artist, uri: res.data.uri, cover: res.data.cover, type: "new" };
   };
 
-  // ── Load first card on mount ──
   useEffect(() => {
     loadCard([]);
     return () => clearInterval(timerRef.current);
   }, []);
-
-  // ✅ scrollIntervalRef now holds a rAF id instead of an interval id
-  const scrollIntervalRef = useRef(null);
 
   const loadCard = async (existingTimeline) => {
     setLoading(true);
@@ -104,7 +102,6 @@ function SinglePlayerGame({ t,
 
     try {
       const card = await generateCard();
-      // Insert in middle so less dragging needed
       const midIdx = Math.floor(existingTimeline.length / 2);
       const newCards = [
         ...existingTimeline.slice(0, midIdx),
@@ -134,7 +131,6 @@ function SinglePlayerGame({ t,
     }
   };
 
-  // ── Reveal ──
   const doReveal = (currentCards) => {
     if (revealedRef.current) return;
     revealedRef.current = true;
@@ -171,7 +167,6 @@ function SinglePlayerGame({ t,
 
   const handleReveal = () => doReveal(cardsRef.current);
 
-  // ── Next card ──
   const nextCard = () => {
     const currentCards = cardsRef.current;
     const newCard = currentCards.find(c => c.type === "new");
@@ -187,28 +182,23 @@ function SinglePlayerGame({ t,
     loadCard(newTimeline);
   };
 
-  const dragCardRef = useRef(null);
-  const insertIndexRef = useRef(null);
-
-  // Read horizontal mode directly from window — no stale ref issues
-  const isHorizontal = () =>
-    window.innerWidth > window.innerHeight && window.innerWidth >= 768;
-  
-  // ── Drag ──
   const handleDragStart = useCallback((e) => {
     if (revealedRef.current) return;
     e.stopPropagation();
-    const h = isHorizontal();
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     startYRef.current = clientY;
     startXRef.current = clientX;
     draggingRef.current = false;
+    dragActiveRef.current = true;
   }, []);
+
+  const handleDragMoveRef = useRef(null);
+  const handleDragEndRef = useRef(null);
 
   useEffect(() => {
     const onMove = (e) => {
-      if (startYRef.current === 0) return;
+      if (!dragActiveRef.current) return;
 
       const clientY = e.touches ? e.touches[0].clientY : e.clientY;
       const clientX = e.touches ? e.touches[0].clientX : e.clientX;
@@ -221,8 +211,7 @@ function SinglePlayerGame({ t,
         const secondary = horizontal ? Math.abs(deltaY) : Math.abs(deltaX);
         if (primary < 3) return;
         if (secondary > primary * 1.5) {
-          startYRef.current = 0;
-          startXRef.current = 0;
+          dragActiveRef.current = false;
           return;
         }
         draggingRef.current = true;
@@ -230,8 +219,6 @@ function SinglePlayerGame({ t,
       }
 
       if (e.cancelable) e.preventDefault();
-
-      dragYRef.current = horizontal ? deltaX : deltaY;
 
       if (dragCardRef.current) {
         if (horizontal) {
@@ -243,7 +230,6 @@ function SinglePlayerGame({ t,
         dragCardRef.current.style.zIndex = "1000";
       }
 
-      // Auto-scroll edge detection
       const SCROLL_ZONE = 120;
       const MAX_SPEED = 22;
       cancelAnimationFrame(scrollIntervalRef.current);
@@ -296,7 +282,6 @@ function SinglePlayerGame({ t,
         }
       }
 
-      // Calculate insert position
       const currentCards = cardsRef.current;
       const newIdx = currentCards.findIndex(c => c.type === "new");
       if (!dragCardRef.current || !timelineRef.current) return;
@@ -330,14 +315,12 @@ function SinglePlayerGame({ t,
     };
 
     const onEnd = () => {
-      if (startYRef.current === 0) return;
-      startYRef.current = 0;
-      startXRef.current = 0;
+      if (!dragActiveRef.current) return;
+      dragActiveRef.current = false;
 
       if (!draggingRef.current) return;
       draggingRef.current = false;
 
-      // ✅ FIX: cancelAnimationFrame instead of clearInterval
       cancelAnimationFrame(scrollIntervalRef.current);
 
       if (dragCardRef.current) {
@@ -346,22 +329,24 @@ function SinglePlayerGame({ t,
         dragCardRef.current.style.zIndex = "";
       }
 
-      setDragging(false);
-      setDragY(0);
-
       const currentCards = cardsRef.current;
       const newIdx = currentCards.findIndex(c => c.type === "new");
       const arraySlot = insertIndexRef.current !== null ? insertIndexRef.current : newIdx;
-      insertIndexRef.current = null;
-
       const reordered = [...currentCards];
-      const [card] = reordered.splice(newIdx, 1);
+      const [moved] = reordered.splice(newIdx, 1);
       const insertAt = arraySlot > newIdx ? arraySlot - 1 : arraySlot;
-      reordered.splice(Math.max(0, Math.min(reordered.length, insertAt)), 0, card);
-      setCards(reordered);
+      reordered.splice(Math.max(0, Math.min(reordered.length, insertAt)), 0, moved);
       cardsRef.current = reordered;
+      setCards(reordered);
+      setDragging(false);
       setInsertIndex(null);
+      insertIndexRef.current = null;
+      startYRef.current = 0;
+      startXRef.current = 0;
     };
+
+    handleDragMoveRef.current = onMove;
+    handleDragEndRef.current = onEnd;
 
     window.addEventListener("mousemove", onMove, { passive: false });
     window.addEventListener("touchmove", onMove, { passive: false });
@@ -377,7 +362,6 @@ function SinglePlayerGame({ t,
     };
   }, []);
 
-  // ── Share score ──
   const shareScore = () => {
     const acc = Math.round((score / Math.max(totalPlayed, 1)) * 100);
     const text = t?.shareText(score, bestStreak, acc) ||
@@ -390,19 +374,18 @@ function SinglePlayerGame({ t,
     }
   };
 
-  // ── Game Over screen ──
   if (gameOver) {
     return (
       <div className="container">
-        <h1>{ t?.gameOver || "Game Over!" }</h1>
+        <h1>{t?.gameOver || "Game Over!"}</h1>
         <div className="sp-stats">
           <div className="sp-stat"><div className="sp-stat-num">{score}</div><div className="sp-stat-label">{t?.correct || 'Correct'}</div></div>
           <div className="sp-stat"><div className="sp-stat-num">{bestStreak}</div><div className="sp-stat-label">{t?.bestStreak || 'Best Streak'}</div></div>
           <div className="sp-stat"><div className="sp-stat-num">{Math.round((score / Math.max(totalPlayed, 1)) * 100)}%</div><div className="sp-stat-label">{t?.accuracy || 'Accuracy'}</div></div>
         </div>
-        <button onClick={shareScore} style={{ background: "#1DB954", marginBottom: 12 }}>{ t?.shareScore || "📤 Share Score" }</button>
-        <button onClick={() => setScreen("singleplayer-setup")} style={{ background: "#444" }}>{ t?.playAgain || "Play Again" }</button>
-        <button onClick={() => setScreen("start")} style={{ background: "transparent", color: "#b3b3b3", marginTop: 8 }}>{ t?.back || "← Home" }</button>
+        <button onClick={shareScore} style={{ background: "#1DB954", marginBottom: 12 }}>{t?.shareScore || "📤 Share Score"}</button>
+        <button onClick={() => setScreen("singleplayer-setup")} style={{ background: "#444" }}>{t?.playAgain || "Play Again"}</button>
+        <button onClick={() => setScreen("start")} style={{ background: "transparent", color: "#b3b3b3", marginTop: 8 }}>{t?.back || "← Home"}</button>
       </div>
     );
   }
@@ -413,12 +396,12 @@ function SinglePlayerGame({ t,
     <div className="container">
       <div className="game-header">
         <div>
-          <h2>{ t?.soloMode_label || "Solo Mode" }</h2>
-          <h3>{ t?.score || "Score" }: {score}</h3>
+          <h2>{t?.soloMode_label || "Solo Mode"}</h2>
+          <h3>{t?.score || "Score"}: {score}</h3>
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
           {streak >= 2 && <div className="streak-badge">🔥 {streak}</div>}
-          <button onClick={() => setGameOver(true)} style={{ background: "#444", fontSize: 13, padding: "6px 12px", minWidth: "auto" }}>{ t?.end || "End" }</button>
+          <button onClick={() => setGameOver(true)} style={{ background: "#444", fontSize: 13, padding: "6px 12px", minWidth: "auto" }}>{t?.end || "End"}</button>
         </div>
       </div>
 
@@ -441,7 +424,7 @@ function SinglePlayerGame({ t,
               const origIdx = newCardOriginalIndex;
               const cardEls = timelineRef.current?.querySelectorAll(".card");
               if (horizontal) {
-                const cardW = (cardEls?.[0]?.getBoundingClientRect().width || 260) + 12;
+                const cardW = (cardEls?.[0]?.getBoundingClientRect().width || 220) + 12;
                 if (insertIndex <= origIdx && index >= insertIndex && index < origIdx) shiftX = cardW;
                 else if (insertIndex > origIdx + 1 && index > origIdx && index < insertIndex) shiftX = -cardW;
               } else {
@@ -453,9 +436,6 @@ function SinglePlayerGame({ t,
 
             return (
               <div key={card.id} style={{ width: horizontal ? "auto" : "100%", maxWidth: horizontal ? "none" : 480, flexShrink: 0 }}>
-                {/* ✅ FIX: Oversized invisible touch wrapper — 20px padding on all sides
-                    catches touches that land just outside the visible card edge.
-                    touch-action: none prevents the browser stealing the gesture. */}
                 {isNewCard && !revealed ? (
                   <div
                     style={{
@@ -508,11 +488,11 @@ function SinglePlayerGame({ t,
                 ) : (
                   <div
                     ref={isNewCard ? dragCardRef : null}
-                    className={`card ${isNewCard && revealed ? "card-expanded" : ""}`}
+                    className={`card ${isNewCard && revealed ? (horizontal ? "card-expanded-horizontal" : "card-expanded") : ""}`}
                     style={{
                       position: "relative",
                       zIndex: 1,
-                      transform: `translateY(${shiftY}px) scale(1)`,
+                      transform: `translate(${shiftX}px, ${shiftY}px) scale(1)`,
                       transition: "transform 0.18s ease",
                       cursor: "default",
                       userSelect: "none",
@@ -557,7 +537,7 @@ function SinglePlayerGame({ t,
 
       <div className="action-container">
         {!revealed && !loading && (
-          <button onClick={handleReveal}>{ t?.reveal || "Reveal" }</button>
+          <button onClick={handleReveal}>{t?.reveal || "Reveal"}</button>
         )}
         {revealed && (
           <button onClick={nextCard}>

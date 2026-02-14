@@ -20,8 +20,6 @@ body {
   width: 100%;
 }
 
-/* ---------- Container ---------- */
-
 .container {
   min-height: 100vh;
   display: flex;
@@ -31,8 +29,6 @@ body {
   width: 100%;
   max-width: 100%;
 }
-
-/* ---------- Typography ---------- */
 
 h1 {
   font-size: clamp(28px, 7vw, 42px);
@@ -61,8 +57,6 @@ h3 {
   color: #b3b3b3;
 }
 
-/* ---------- Inputs ---------- */
-
 input[type="text"] {
   width: 100%;
   max-width: 400px;
@@ -87,8 +81,6 @@ input[type="text"]::placeholder {
   color: #555;
 }
 
-/* ---------- Buttons ---------- */
-
 button {
   padding: 14px 28px;
   font-size: 16px;
@@ -112,8 +104,6 @@ button:hover {
 button:active {
   transform: scale(0.97);
 }
-
-/* ---------- Home Screen Sections ---------- */
 
 .home-section {
   width: 100%;
@@ -144,8 +134,6 @@ button:active {
   color: #e0e0e0;
 }
 
-/* ---------- Genre Buttons ---------- */
-
 .genre-buttons {
   display: flex;
   flex-wrap: wrap;
@@ -170,8 +158,6 @@ button:active {
   min-width: 200px !important;
 }
 
-/* ---------- Room Code ---------- */
-
 .room-code {
   font-size: clamp(32px, 9vw, 48px);
   font-weight: 900;
@@ -184,8 +170,6 @@ button:active {
   margin: 10px 0;
   text-align: center;
 }
-
-/* ---------- Slider ---------- */
 
 .rc-slider {
   width: 100%;
@@ -218,8 +202,6 @@ button:active {
   box-shadow: 0 0 0 5px rgba(29, 185, 84, 0.2) !important;
 }
 
-/* ---------- Timeline ---------- */
-
 .timeline {
   width: 100%;
   max-width: 520px;
@@ -231,8 +213,6 @@ button:active {
   padding: 0;
 }
 
-/* ---------- Cards ---------- */
-
 .card {
   width: 100%;
   max-width: 480px;
@@ -243,12 +223,19 @@ button:active {
   perspective: 1200px;
 }
 
-/* When revealed, fixed height so everything fills properly */
 .card-expanded {
   aspect-ratio: unset !important;
   height: 480px !important;
   min-height: 480px !important;
-  overflow: visible !important;
+  max-height: 480px !important;
+}
+
+.card-expanded-horizontal {
+  aspect-ratio: 1 / 1 !important;
+  width: 220px !important;
+  height: 220px !important;
+  min-height: 220px !important;
+  max-height: 220px !important;
 }
 
 @media (max-width: 480px) {
@@ -260,10 +247,9 @@ button:active {
   .card-expanded {
     height: 420px !important;
     min-height: 420px !important;
+    max-height: 420px !important;
   }
 }
-
-/* ---------- Card Inner (flip container) ---------- */
 
 .card-inner {
   width: 100%;
@@ -275,14 +261,7 @@ button:active {
 
 .card-inner.flipped {
   transform: rotateY(180deg);
-  overflow: visible !important;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 16px;
 }
-
-/* ---------- Card Faces ---------- */
 
 .card-front,
 .card-back {
@@ -291,17 +270,14 @@ button:active {
   border-radius: 18px;
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
-  overflow: hidden;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   width: 100%;
-  overflow: visible !important;
-  max-height: none !important;
+  height: 100%;
+  overflow: hidden;
 }
-
-/* ---------- Fixed Year Cards ---------- */
 
 .card-front.fixed {
   background: linear-gradient(135deg, #2a2a2a, #1f1f1f);
@@ -320,8 +296,6 @@ button:active {
   height: 3px;
   background: linear-gradient(90deg, transparent, #1DB954, transparent);
 }
-
-/* ---------- Play Button ---------- */
 
 .play-button {
   width: 72px;
@@ -366,8 +340,6 @@ button:active {
   letter-spacing: 0.5px;
 }
 
-/* ---------- Play Button ---------- */
-
 .card-front.new {
   background: linear-gradient(135deg, #1DB954, #1ed760);
   border: 3px solid rgba(255,255,255,0.2);
@@ -387,8 +359,6 @@ button:active {
   pointer-events: none;
 }
 
-/* ---------- Card Back (Revealed) ---------- */
-
 .card-back {
   background: linear-gradient(135deg, #242424, #181818);
   border: 2px solid #333;
@@ -397,18 +367,48 @@ button:active {
   box-shadow: 0 12px 40px rgba(0,0,0,0.6);
   gap: 6px;
   justify-content: flex-start;
-  overflow-y: auto;
+  overflow-y: auto !important;
+  overflow-x: hidden;
+}
+
+/* ✅ Fix scrollbar on revealed cards */
+.card-expanded .card-back,
+.card-expanded-horizontal .card-back {
+  overflow-y: auto !important;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(29, 185, 84, 0.5) transparent;
+}
+
+.card-expanded .card-back::-webkit-scrollbar,
+.card-expanded-horizontal .card-back::-webkit-scrollbar {
+  width: 6px;
+}
+
+.card-expanded .card-back::-webkit-scrollbar-track,
+.card-expanded-horizontal .card-back::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.card-expanded .card-back::-webkit-scrollbar-thumb,
+.card-expanded-horizontal .card-back::-webkit-scrollbar-thumb {
+  background: rgba(29, 185, 84, 0.5);
+  border-radius: 10px;
 }
 
 .cover-large {
   width: 100%;
-  max-width: 280px;    /* cap so text always fits below */
+  max-width: 280px;
   aspect-ratio: 1;
   object-fit: cover;
   border-radius: 10px;
   margin-bottom: 10px;
   box-shadow: 0 6px 20px rgba(0,0,0,0.5);
   flex-shrink: 0;
+}
+
+.card-expanded-horizontal .cover-large {
+  max-width: 140px;
+  margin-bottom: 4px;
 }
 
 @media (max-width: 480px) {
@@ -430,6 +430,11 @@ button:active {
   flex-shrink: 0;
 }
 
+.card-expanded-horizontal .revealed-year {
+  font-size: 28px !important;
+  margin-bottom: 2px !important;
+}
+
 .card-back strong {
   font-size: 16px;
   font-weight: 700;
@@ -438,6 +443,10 @@ button:active {
   line-height: 1.3;
   flex-shrink: 0;
   width: 100%;
+}
+
+.card-expanded-horizontal .card-back strong {
+  font-size: 12px;
 }
 
 .song-title {
@@ -450,7 +459,9 @@ button:active {
   flex-shrink: 0;
 }
 
-/* ---------- Result States ---------- */
+.card-expanded-horizontal .song-title {
+  font-size: 11px !important;
+}
 
 .result-correct .card-back {
   background: linear-gradient(135deg, #1DB954, #107a33);
@@ -469,8 +480,6 @@ button:active {
   background: none;
   -webkit-text-fill-color: white;
 }
-
-/* ---------- Action Container (Sticky Bottom) ---------- */
 
 .action-container {
   position: fixed;
@@ -499,8 +508,6 @@ button:active {
   box-shadow: 0 8px 24px rgba(29, 185, 84, 0.4);
 }
 
-/* ---------- Timer ---------- */
-
 .timer-display {
   font-size: 48px;
   font-weight: 900;
@@ -527,8 +534,6 @@ button:active {
   50% { transform: scale(1.08); }
 }
 
-/* ---------- Number Picker ---------- */
-
 .number-picker {
   display: flex;
   align-items: center;
@@ -554,8 +559,6 @@ button:active {
   text-align: center;
 }
 
-/* ---------- Timer Options ---------- */
-
 .timer-options {
   display: flex;
   gap: 8px;
@@ -568,8 +571,6 @@ button:active {
   min-width: 56px !important;
   padding: 8px 12px !important;
 }
-
-/* ---------- Singleplayer Stats ---------- */
 
 .sp-stats {
   display: flex;
@@ -611,8 +612,6 @@ button:active {
   padding: 4px 12px;
 }
 
-/* ---------- Spotify Login Banner ---------- */
-
 .spotify-login-banner {
   width: 100%;
   max-width: 480px;
@@ -644,8 +643,6 @@ button:active {
   margin-bottom: 16px;
 }
 
-/* ---------- Language Toggle ---------- */
-
 .lang-toggle {
   display: flex;
   gap: 8px;
@@ -667,8 +664,6 @@ button:active {
   color: #fff !important;
   background: rgba(29,185,84,0.15) !important;
 }
-
-/* ---------- Timer ---------- */
 
 .playlist-info {
   width: 100%;
@@ -693,8 +688,6 @@ button:active {
   font-size: 13px;
   color: #b3b3b3;
 }
-
-/* ---------- Game Header ---------- */
 
 .game-header {
   width: 100%;
@@ -731,8 +724,6 @@ button:active {
 }
 
 .coin-display span { font-size: 22px; }
-
-/* ---------- Coin Slots ---------- */
 
 .coin-slot {
   width: 100%;
@@ -806,8 +797,6 @@ button:active {
   100% { transform: scale(1); opacity: 1; }
 }
 
-/* ---------- Loading Card ---------- */
-
 .loading-card {
   width: 100%;
   max-width: 480px;
@@ -828,8 +817,6 @@ button:active {
   50% { opacity: 1; }
 }
 
-/* ---------- Notch / Safe Area ---------- */
-
 @supports (padding: max(0px)) {
   .container {
     padding-left: max(16px, env(safe-area-inset-left));
@@ -837,8 +824,6 @@ button:active {
     padding-bottom: max(160px, calc(env(safe-area-inset-bottom) + 140px));
   }
 }
-
-/* ---------- Reduced Motion ---------- */
 
 @media (prefers-reduced-motion: reduce) {
   * {
@@ -851,8 +836,7 @@ button:active {
   touch-action: manipulation;
 }
 
-/* ---------- iPad Landscape: Horizontal Timeline ---------- */
-
+/* iPad Landscape: Horizontal Timeline */
 @media (min-width: 768px) and (orientation: landscape) {
   .timeline {
     flex-direction: row !important;
@@ -867,14 +851,12 @@ button:active {
     -webkit-overflow-scrolling: touch;
   }
 
-  /* Each card wrapper in horizontal mode */
   .timeline > div {
     flex-shrink: 0 !important;
     width: 220px !important;
     max-width: 220px !important;
   }
 
-  /* Cards stay iPhone-sized */
   .timeline .card {
     width: 220px !important;
     max-width: 220px !important;
@@ -882,38 +864,6 @@ button:active {
     aspect-ratio: 5 / 3 !important;
   }
 
-  /* Revealed card: square 1:1 format */
-  .card-expanded-horizontal {
-    aspect-ratio: 1 / 1 !important;
-    width: 220px !important;
-    height: 220px !important;
-    min-height: 220px !important;
-  }
-
-  /* Fix expanded cards in horizontal mode */
-.card-expanded-horizontal {
-  width: 100% !important;
-  max-width: 600px !important;
-  height: auto !important;
-  overflow: visible !important;
-}
-
-  /* Smaller text in compact revealed card */
-  .card-expanded-horizontal .revealed-year {
-    font-size: 28px !important;
-    margin-bottom: 2px !important;
-  }
-
-  .card-expanded-horizontal .card-back {
-  overflow: visible !important;
-  max-height: none !important;
-}
-
-  .card-expanded-horizontal .song-title {
-    font-size: 11px !important;
-  }
-
-  /* Coin slots vertical in horizontal timeline */
   .coin-slot {
     flex-direction: column !important;
     width: 36px !important;
