@@ -248,6 +248,7 @@ button:active {
   aspect-ratio: unset !important;
   height: 480px !important;
   min-height: 480px !important;
+  overflow: visible !important;
 }
 
 @media (max-width: 480px) {
@@ -274,6 +275,11 @@ button:active {
 
 .card-inner.flipped {
   transform: rotateY(180deg);
+  overflow: visible !important;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px;
 }
 
 /* ---------- Card Faces ---------- */
@@ -291,6 +297,8 @@ button:active {
   align-items: center;
   justify-content: center;
   width: 100%;
+  overflow: visible !important;
+  max-height: none !important;
 }
 
 /* ---------- Fixed Year Cards ---------- */
@@ -882,11 +890,13 @@ button:active {
     min-height: 220px !important;
   }
 
-  /* Cover image smaller in square card */
-  .card-expanded-horizontal .cover-large {
-    max-width: 120px !important;
-    margin-bottom: 6px !important;
-  }
+  /* Fix expanded cards in horizontal mode */
+.card-expanded-horizontal {
+  width: 100% !important;
+  max-width: 600px !important;
+  height: auto !important;
+  overflow: visible !important;
+}
 
   /* Smaller text in compact revealed card */
   .card-expanded-horizontal .revealed-year {
@@ -894,9 +904,10 @@ button:active {
     margin-bottom: 2px !important;
   }
 
-  .card-expanded-horizontal .card-back strong {
-    font-size: 12px !important;
-  }
+  .card-expanded-horizontal .card-back {
+  overflow: visible !important;
+  max-height: none !important;
+}
 
   .card-expanded-horizontal .song-title {
     font-size: 11px !important;

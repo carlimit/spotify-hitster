@@ -190,11 +190,15 @@ function SinglePlayerGame({ t,
   const dragCardRef = useRef(null);
   const insertIndexRef = useRef(null);
 
+  // Read horizontal mode directly from window — no stale ref issues
+  const isHorizontal = () =>
+    window.innerWidth > window.innerHeight && window.innerWidth >= 768;
+  
   // ── Drag ──
   const handleDragStart = useCallback((e) => {
     if (revealedRef.current) return;
-    // Stop the event here so it doesn't bubble to the page
     e.stopPropagation();
+    const h = isHorizontal();
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     startYRef.current = clientY;
@@ -210,29 +214,36 @@ function SinglePlayerGame({ t,
       const clientX = e.touches ? e.touches[0].clientX : e.clientX;
       const deltaY = clientY - startYRef.current;
       const deltaX = clientX - startXRef.current;
+      const horizontal = isHorizontal();
 
       if (!draggingRef.current) {
-        // ✅ FIX: Lowered from 8px to 3px — claims the gesture faster on iOS
-        // before the browser decides to scroll the page instead
-        const movedEnough = Math.abs(deltaY) >= 3;
-        const isVertical = Math.abs(deltaY) > Math.abs(deltaX);
-        if (!movedEnough) return;
-        if (!isVertical) { startYRef.current = 0; return; }
+        const primary = horizontal ? Math.abs(deltaX) : Math.abs(deltaY);
+        const secondary = horizontal ? Math.abs(deltaY) : Math.abs(deltaX);
+        if (primary < 3) return;
+        if (secondary > primary * 1.5) {
+          startYRef.current = 0;
+          startXRef.current = 0;
+          return;
+        }
         draggingRef.current = true;
         setDragging(true);
       }
 
       if (e.cancelable) e.preventDefault();
 
-      dragYRef.current = deltaY;
+      dragYRef.current = horizontal ? deltaX : deltaY;
 
       if (dragCardRef.current) {
-        dragCardRef.current.style.transform = `translateY(${deltaY}px) scale(1.04)`;
+        if (horizontal) {
+          dragCardRef.current.style.transform = `translateX(${deltaX}px) scale(1.04)`;
+        } else {
+          dragCardRef.current.style.transform = `translateY(${deltaY}px) scale(1.04)`;
+        }
         dragCardRef.current.style.boxShadow = "0 28px 70px rgba(29,185,84,0.55)";
         dragCardRef.current.style.zIndex = "1000";
       }
 
-      // ✅ FIX: Smooth variable-speed rAF auto-scroll instead of setInterval
+      // Auto-scroll edge detection
       const SCROLL_ZONE = 120;
       const MAX_SPEED = 22;
       cancelAnimationFrame(scrollIntervalRef.current);
@@ -240,59 +251,78 @@ function SinglePlayerGame({ t,
       const timeline = timelineRef.current;
       if (timeline) {
         const tlRect = timeline.getBoundingClientRect();
-        const timelineOverflowsTop = tlRect.top < 0;
-        const timelineOverflowsBottom = tlRect.bottom > window.innerHeight;
-
         let direction = 0;
         let proximity = 0;
 
-        if (clientY < SCROLL_ZONE && timelineOverflowsTop) {
-          direction = -1;
-          proximity = 1 - (clientY / SCROLL_ZONE);
-        } else if (clientY > window.innerHeight - SCROLL_ZONE && timelineOverflowsBottom) {
-          direction = 1;
-          proximity = 1 - ((window.innerHeight - clientY) / SCROLL_ZONE);
-        }
-
-        if (direction !== 0) {
-          // Ease-in: square the proximity so it starts gentle and ramps up
-          const eased = Math.pow(proximity, 2);
-          const speed = Math.max(1, eased * MAX_SPEED);
-
-          const tick = () => {
-            const tl = timelineRef.current;
-            if (!tl || !draggingRef.current) return;
-            const r = tl.getBoundingClientRect();
-            if (direction === -1 && r.top >= 0) return;
-            if (direction === 1 && r.bottom <= window.innerHeight) return;
-            window.scrollBy(0, direction * speed);
+        if (horizontal) {
+          if (clientX < tlRect.left + SCROLL_ZONE) {
+            direction = -1;
+            proximity = 1 - ((clientX - tlRect.left) / SCROLL_ZONE);
+          } else if (clientX > tlRect.right - SCROLL_ZONE) {
+            direction = 1;
+            proximity = 1 - ((tlRect.right - clientX) / SCROLL_ZONE);
+          }
+          if (direction !== 0) {
+            const speed = Math.max(1, Math.pow(proximity, 2) * MAX_SPEED);
+            const tick = () => {
+              const tl = timelineRef.current;
+              if (!tl || !draggingRef.current) return;
+              tl.scrollLeft += direction * speed;
+              scrollIntervalRef.current = requestAnimationFrame(tick);
+            };
             scrollIntervalRef.current = requestAnimationFrame(tick);
-          };
-          scrollIntervalRef.current = requestAnimationFrame(tick);
+          }
+        } else {
+          if (clientY < SCROLL_ZONE && tlRect.top < 0) {
+            direction = -1;
+            proximity = 1 - (clientY / SCROLL_ZONE);
+          } else if (clientY > window.innerHeight - SCROLL_ZONE && tlRect.bottom > window.innerHeight) {
+            direction = 1;
+            proximity = 1 - ((window.innerHeight - clientY) / SCROLL_ZONE);
+          }
+          if (direction !== 0) {
+            const speed = Math.max(1, Math.pow(proximity, 2) * MAX_SPEED);
+            const tick = () => {
+              const tl = timelineRef.current;
+              if (!tl || !draggingRef.current) return;
+              const r = tl.getBoundingClientRect();
+              if (direction === -1 && r.top >= 0) return;
+              if (direction === 1 && r.bottom <= window.innerHeight) return;
+              window.scrollBy(0, direction * speed);
+              scrollIntervalRef.current = requestAnimationFrame(tick);
+            };
+            scrollIntervalRef.current = requestAnimationFrame(tick);
+          }
         }
       }
 
+      // Calculate insert position
       const currentCards = cardsRef.current;
       const newIdx = currentCards.findIndex(c => c.type === "new");
       if (!dragCardRef.current || !timelineRef.current) return;
 
       const draggedRect = dragCardRef.current.getBoundingClientRect();
-      const draggedCenterY = draggedRect.top + draggedRect.height / 2;
-
       const allCardEls = timelineRef.current.querySelectorAll(".card");
       const fixedMidpoints = [];
+
       currentCards.forEach((c, i) => {
         if (c.type !== "new" && allCardEls[i]) {
           const r = allCardEls[i].getBoundingClientRect();
-          fixedMidpoints.push({ midY: r.top + r.height / 2, originalIndex: i });
+          fixedMidpoints.push({
+            mid: horizontal ? r.left + r.width / 2 : r.top + r.height / 2,
+            originalIndex: i
+          });
         }
       });
 
+      const draggedCenter = horizontal
+        ? draggedRect.left + draggedRect.width / 2
+        : draggedRect.top + draggedRect.height / 2;
+
       let fixedSlot = fixedMidpoints.length;
       for (let i = 0; i < fixedMidpoints.length; i++) {
-        if (draggedCenterY < fixedMidpoints[i].midY) { fixedSlot = i; break; }
+        if (draggedCenter < fixedMidpoints[i].mid) { fixedSlot = i; break; }
       }
-
       let arraySlot = fixedSlot <= newIdx ? fixedSlot : fixedSlot + 1;
       arraySlot = Math.max(0, Math.min(currentCards.length, arraySlot));
       insertIndexRef.current = arraySlot;
@@ -403,21 +433,26 @@ function SinglePlayerGame({ t,
           {cards.map((card, index) => {
             const isNewCard = card.type === "new";
             const isDragged = isNewCard && dragging;
+            const horizontal = isHorizontal();
 
             let shiftY = 0;
+            let shiftX = 0;
             if (dragging && !isNewCard && insertIndex !== null) {
               const origIdx = newCardOriginalIndex;
               const cardEls = timelineRef.current?.querySelectorAll(".card");
-              const cardH = (cardEls?.[0]?.getBoundingClientRect().height || 180) + 16;
-              if (insertIndex <= origIdx && index >= insertIndex && index < origIdx) {
-                shiftY = cardH;
-              } else if (insertIndex > origIdx + 1 && index > origIdx && index < insertIndex) {
-                shiftY = -cardH;
+              if (horizontal) {
+                const cardW = (cardEls?.[0]?.getBoundingClientRect().width || 260) + 12;
+                if (insertIndex <= origIdx && index >= insertIndex && index < origIdx) shiftX = cardW;
+                else if (insertIndex > origIdx + 1 && index > origIdx && index < insertIndex) shiftX = -cardW;
+              } else {
+                const cardH = (cardEls?.[0]?.getBoundingClientRect().height || 180) + 16;
+                if (insertIndex <= origIdx && index >= insertIndex && index < origIdx) shiftY = cardH;
+                else if (insertIndex > origIdx + 1 && index > origIdx && index < insertIndex) shiftY = -cardH;
               }
             }
 
             return (
-              <div key={card.id} style={{ width: "100%", maxWidth: 480 }}>
+              <div key={card.id} style={{ width: horizontal ? "auto" : "100%", maxWidth: horizontal ? "none" : 480, flexShrink: 0 }}>
                 {/* ✅ FIX: Oversized invisible touch wrapper — 20px padding on all sides
                     catches touches that land just outside the visible card edge.
                     touch-action: none prevents the browser stealing the gesture. */}
@@ -434,11 +469,11 @@ function SinglePlayerGame({ t,
                   >
                     <div
                       ref={dragCardRef}
-                      className={`card ${revealed ? "card-expanded" : ""}`}
+                      className={`card ${revealed ? (horizontal ? "card-expanded-horizontal" : "card-expanded") : ""}`}
                       style={{
                         position: "relative",
                         zIndex: isDragged ? 1000 : 1,
-                        transform: isDragged ? undefined : `translateY(${shiftY}px) scale(1)`,
+                        transform: isDragged ? undefined : `translate(${shiftX}px, ${shiftY}px) scale(1)`,
                         transition: isDragged ? "none" : "transform 0.18s ease",
                         cursor: dragging ? "grabbing" : "grab",
                         userSelect: "none",
