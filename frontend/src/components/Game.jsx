@@ -141,7 +141,7 @@ function Game({
       if (genres?.length) selectedGenresRef.current = genres;
       if (min) minYearRef.current = Number(min);
       if (max) maxYearRef.current = Number(max);
-      if (pt !== undefined) playlistTracksRef.current = pt;
+     if (pt) playlistTracksRef.current = pt;
       // ✅ FIX: Always sync usedUris from server — server is authoritative
       if (usedUris) usedUrisRef.current = new Set(usedUris);
 
