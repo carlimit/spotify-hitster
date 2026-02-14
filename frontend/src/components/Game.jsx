@@ -88,27 +88,29 @@ function Game({
   // ============================================================
 
   useEffect(() => {
-    // ✅ Try to restore session on remount (soft close / background)
-    const session = loadSession();
-    if (session && session.roomCode === roomCode) {
-      setLocalPlayers(session.players || initialPlayers);
-      setCurrentPlayerIndex(session.currentPlayerIndex || 0);
-      usedUrisRef.current = new Set(session.usedUris || []);
-      if (session.playlistTracks) playlistTracksRef.current = session.playlistTracks;
-    }
+  const session = loadSession();
+  if (session && session.roomCode === roomCode) {
+    setLocalPlayers(session.players || initialPlayers);
+    setCurrentPlayerIndex(session.currentPlayerIndex || 0);
+    usedUrisRef.current = new Set(session.usedUris || []);
+    if (session.playlistTracks) playlistTracksRef.current = session.playlistTracks;
+  } else {
+    // ✅ NEW: Initialize from props if no session
+    if (initialPlaylistTracks) playlistTracksRef.current = initialPlaylistTracks;
+  }
 
-    const myTurn = players[0]?.id === socket.id;
-    isMyTurnRef.current = myTurn;
-    setIsMyTurn(myTurn);
+  const myTurn = players[0]?.id === socket.id;
+  isMyTurnRef.current = myTurn;
+  setIsMyTurn(myTurn);
 
-    if (myTurn) {
-      loadNewCard(players[0]);
-    } else {
-      const c = players[0]?.timeline || [];
-      setCards(c);
-      cardsRef.current = c;
-    }
-  }, []);
+  if (myTurn) {
+    loadNewCard(players[0]);
+  } else {
+    const c = players[0]?.timeline || [];
+    setCards(c);
+    cardsRef.current = c;
+  }
+}, []);
 
   // ✅ Save session whenever key state changes
   useEffect(() => {
@@ -141,7 +143,7 @@ function Game({
       if (genres?.length) selectedGenresRef.current = genres;
       if (min) minYearRef.current = Number(min);
       if (max) maxYearRef.current = Number(max);
-     if (pt) playlistTracksRef.current = pt;
+      if (pt !== undefined) playlistTracksRef.current = pt;
       // ✅ FIX: Always sync usedUris from server — server is authoritative
       if (usedUris) usedUrisRef.current = new Set(usedUris);
 
