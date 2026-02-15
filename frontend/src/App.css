@@ -25,6 +25,7 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   padding: 24px 16px 160px 16px;
   width: 100%;
   max-width: 100%;
@@ -231,20 +232,19 @@ button:active {
   perspective: 1200px;
 }
 
-/* ✅ Fixed year cards - LARGER */
+/* ✅ ALL CARDS SAME SIZE - no distinction between fixed and new */
 .card.small-fixed {
   max-width: 480px !important;
   min-height: 180px !important;
 }
 
-/* ✅ New draggable card - SMALLER and compact */
 .card.new-card-unrevealed {
-  max-width: 280px !important;
-  min-height: 120px !important;
+  max-width: 480px !important;
+  min-height: 180px !important;
   aspect-ratio: 5 / 3 !important;
 }
 
-/* ✅ Revealed cards auto-expand to fit content */
+/* ✅ Revealed cards auto-expand to fit content - NO SCROLL */
 .card-expanded {
   aspect-ratio: unset !important;
   height: auto !important;
@@ -273,8 +273,8 @@ button:active {
   }
   
   .card.new-card-unrevealed {
-    max-width: 240px !important;
-    min-height: 100px !important;
+    max-width: 100% !important;
+    min-height: 160px !important;
   }
 }
 
@@ -307,7 +307,7 @@ button:active {
   overflow: hidden;
 }
 
-/* ✅ When flipped, card-back becomes relative and can expand - NO SCROLL */
+/* ✅ When flipped, card-back becomes relative and expands - NO SCROLL */
 .card-inner.flipped .card-back {
   position: relative !important;
   inset: unset !important;
@@ -360,14 +360,6 @@ button:active {
   flex-shrink: 0;
 }
 
-/* ✅ Smaller play button for compact draggable card */
-.card.new-card-unrevealed .play-button {
-  width: 50px !important;
-  height: 50px !important;
-  font-size: 20px !important;
-  margin: 0 0 6px 0 !important;
-}
-
 .play-button:hover:not(:disabled) {
   transform: scale(1.08) !important;
   background: rgba(0, 0, 0, 0.5);
@@ -388,12 +380,6 @@ button:active {
   color: rgba(255, 255, 255, 0.95);
   text-transform: uppercase;
   letter-spacing: 0.5px;
-}
-
-/* ✅ Smaller text for compact draggable card */
-.card.new-card-unrevealed .drag-hint {
-  font-size: 11px !important;
-  letter-spacing: 0.3px !important;
 }
 
 .card-front.new {
@@ -904,9 +890,9 @@ button:active {
   }
   
   .timeline .card.new-card-unrevealed {
-    width: 180px !important;
-    max-width: 180px !important;
-    min-height: 100px !important;
+    width: 220px !important;
+    max-width: 220px !important;
+    min-height: 140px !important;
   }
 
   .coin-slot {
