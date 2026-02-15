@@ -3,7 +3,6 @@ import axios from "axios";
 import { socket } from "../socket";
 import { useSpotifyPlayer } from "./useSpotifyPlayer";
 
-// ✅ FIX: Session persistence — save/restore game state so soft-close doesn't lose progress
 function saveSession(data) {
   try { sessionStorage.setItem("hitster_session", JSON.stringify(data)); } catch {}
 }
@@ -48,13 +47,11 @@ function Game({
   const [timeLeft, setTimeLeft] = useState(null);
   const timerRef = useRef(null);
 
-  // ✅ Card overview mode
   const [overviewMode, setOverviewMode] = useState(false);
 
   const { ready: spotifyReady, playing, togglePlay, stop } = useSpotifyPlayer(roomCode, isHost);
 
   // Drag
-  const [dragY, setDragY] = useState(0);
   const [dragging, setDragging] = useState(false);
   const [insertIndex, setInsertIndex] = useState(null);
 
@@ -67,15 +64,17 @@ function Game({
   const cardsRef = useRef(cards);
   const isMyTurnRef = useRef(false);
   const revealedRef = useRef(false);
-  const dragYRef = useRef(0);
   const draggingRef = useRef(false);
   const startYRef = useRef(0);
   const startXRef = useRef(0);
   const timelineRef = useRef(null);
   const newCardRef = useRef(null);
+  const dragCardRef = useRef(null);
+  const insertIndexRef = useRef(null);
+  const scrollIntervalRef = useRef(null);
+  const dragActiveRef = useRef(false);
 
-  // Track scroll offset at drag start so we can compensate for container
-  // scrolling without expensive getBoundingClientRect calls every frame.
+  // Scroll position recorded at drag-start for drift-free card movement
   const startScrollXRef = useRef(0);
   const startScrollYRef = useRef(0);
 
@@ -84,13 +83,12 @@ function Game({
   useEffect(() => { maxYearRef.current = maxYear; }, [maxYear]);
   useEffect(() => { cardsRef.current = cards; }, [cards]);
   useEffect(() => { revealedRef.current = revealed; }, [revealed]);
-  useEffect(() => { dragYRef.current = dragY; }, [dragY]);
 
   const updatePlayers = (p) => { setLocalPlayers(p); setPlayers(p); };
   const currentPlayer = players[currentPlayerIndex];
 
   // ============================================================
-  // 🚀 ON MOUNT — restore session if soft-closed
+  // ON MOUNT
   // ============================================================
 
   useEffect(() => {
@@ -117,7 +115,6 @@ function Game({
     }
   }, []);
 
-  // ✅ Save session whenever key state changes
   useEffect(() => {
     saveSession({
       roomCode,
@@ -129,7 +126,7 @@ function Game({
   }, [players, currentPlayerIndex]);
 
   // ============================================================
-  // 🎮 SOCKET
+  // SOCKET
   // ============================================================
 
   useEffect(() => {
@@ -159,7 +156,6 @@ function Game({
       setResult(null);
       setDragging(false);
       draggingRef.current = false;
-      setDragY(0);
       setInsertIndex(null);
       setCoins(newCoins || {});
       setMyCoinIndex(null);
@@ -196,7 +192,6 @@ function Game({
       setResult(revealResult);
       setRevealed(true);
       revealedRef.current = true;
-      // ✅ Auto-scroll to revealed card for spectators
       setTimeout(() => {
         newCardRef.current?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
       }, 300);
@@ -211,7 +206,7 @@ function Game({
   }, []);
 
   // ============================================================
-  // 🎲 GENERATE + LOAD CARD
+  // GENERATE + LOAD CARD
   // ============================================================
 
   const generateCard = async () => {
@@ -254,8 +249,6 @@ function Game({
     };
   };
 
-  const scrollIntervalRef = useRef(null);
-
   const loadNewCard = async (player) => {
     setLoading(true);
     clearInterval(timerRef.current);
@@ -272,8 +265,6 @@ function Game({
       setCards(newCards);
       cardsRef.current = newCards;
 
-      // ✅ FIX: Scroll to the new card after it's inserted so the player
-      // doesn't have to hunt for it in a long timeline
       setTimeout(() => {
         newCardRef.current?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
       }, 120);
@@ -299,19 +290,8 @@ function Game({
   };
 
   // ============================================================
-  // 👆 DRAG — supports both vertical (phone) and horizontal (iPad landscape)
-  //
-  // KEY FIX for "card drifts during auto-scroll":
-  //   Instead of transforming by (currentPointer - startPointer), we
-  //   record the card's bounding rect at drag-start and compute the
-  //   transform needed to move it to (cardStart + delta) in screen space.
-  //   Because we re-read the card's natural position each frame we can
-  //   subtract out any scroll offset that happened since drag-start.
+  // DRAG
   // ============================================================
-
-  const dragCardRef = useRef(null);
-  const startXRef2 = useRef(0);  // alias kept to avoid rename clutter below
-  const dragActiveRef = useRef(false);
 
   const isHorizontal = () =>
     window.innerWidth > window.innerHeight && window.innerWidth >= 768;
@@ -326,13 +306,18 @@ function Game({
     draggingRef.current = false;
     dragActiveRef.current = true;
 
-    // Record scroll position so we can compensate during auto-scroll
+    // Snapshot scroll so we can compensate for auto-scroll drift each frame
     const tl = timelineRef.current;
     startScrollXRef.current = tl ? tl.scrollLeft : 0;
     startScrollYRef.current = window.scrollY;
   };
 
-  const handleDragMove = (e) => {
+  // Store move/end in refs so the window listeners always call the latest
+  // version without being re-registered on every render.
+  const handleDragMoveRef = useRef(null);
+  const handleDragEndRef = useRef(null);
+
+  handleDragMoveRef.current = (e) => {
     if (!dragActiveRef.current) return;
 
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
@@ -356,8 +341,7 @@ function Game({
     if (e.cancelable) e.preventDefault();
 
     if (dragCardRef.current) {
-      // Simple delta from start, plus compensation for any scrolling that
-      // happened since drag began — no layout reads, no lag.
+      // Pointer delta + scroll drift = card stays under finger during auto-scroll
       const tl = timelineRef.current;
       const scrollDeltaX = tl ? tl.scrollLeft - startScrollXRef.current : 0;
       const scrollDeltaY = window.scrollY - startScrollYRef.current;
@@ -371,7 +355,6 @@ function Game({
       dragCardRef.current.style.zIndex = "1000";
     }
 
-    // Auto-scroll edge detection
     const SCROLL_ZONE = 120;
     const MAX_SPEED = 22;
     cancelAnimationFrame(scrollIntervalRef.current);
@@ -424,7 +407,6 @@ function Game({
       }
     }
 
-    // Calculate insert position
     const currentCards = cardsRef.current;
     const newIdx = currentCards.findIndex(c => c.type === "new");
     if (!dragCardRef.current || !timelineRef.current) return;
@@ -457,9 +439,7 @@ function Game({
     setInsertIndex(prev => prev === arraySlot ? prev : arraySlot);
   };
 
-  const insertIndexRef = useRef(null);
-
-  const handleDragEnd = () => {
+  handleDragEndRef.current = () => {
     if (!dragActiveRef.current) return;
     dragActiveRef.current = false;
 
@@ -483,22 +463,15 @@ function Game({
     cardsRef.current = reordered;
     setCards(reordered);
     setDragging(false);
-    setDragY(0);
     setInsertIndex(null);
     insertIndexRef.current = null;
     startYRef.current = 0;
     startXRef.current = 0;
   };
 
-  // Store handlers in refs so window listeners always call the latest version
-  const handleDragMoveRef = useRef(null);
-  const handleDragEndRef = useRef(null);
-  handleDragMoveRef.current = handleDragMove;
-  handleDragEndRef.current = handleDragEnd;
-
   useEffect(() => {
     const onMove = (e) => handleDragMoveRef.current(e);
-    const onEnd = (e) => handleDragEndRef.current(e);
+    const onEnd = () => handleDragEndRef.current();
     window.addEventListener("mousemove", onMove, { passive: false });
     window.addEventListener("touchmove", onMove, { passive: false });
     window.addEventListener("mouseup", onEnd);
@@ -514,7 +487,7 @@ function Game({
   }, []);
 
   // ============================================================
-  // 🧠 REVEAL
+  // REVEAL
   // ============================================================
 
   const handleReveal = () => {
@@ -538,7 +511,6 @@ function Game({
 
     socket.emit("reveal_card", { code: roomCode, result: revealResult, cards: currentCards });
 
-    // ✅ Auto-scroll to revealed card (both horizontal and vertical)
     setTimeout(() => {
       newCardRef.current?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
     }, 300);
@@ -576,7 +548,7 @@ function Game({
   };
 
   // ============================================================
-  // 🪙 COINS
+  // COINS
   // ============================================================
 
   const giveCoin = () => {
@@ -595,7 +567,7 @@ function Game({
   };
 
   // ============================================================
-  // ➡️ NEXT TURN
+  // NEXT TURN
   // ============================================================
 
   const nextTurn = () => {
@@ -628,7 +600,6 @@ function Game({
     coinsBySlot[idx] = (coinsBySlot[idx] || 0) + 1;
   });
 
-  // ✅ Overview mode: show all fixed cards in a compact grid
   if (overviewMode) {
     const myTimeline = myPlayer?.timeline || [];
     return (
@@ -729,7 +700,6 @@ function Game({
 
             return (
               <div key={card.id} style={{ width: horizontal ? "auto" : "100%", maxWidth: horizontal ? "none" : 480, flexShrink: 0 }}>
-                {/* Coin slots only shown to spectators, only BEFORE reveal */}
                 {!isMyTurn && !revealed && (
                   <div className="coin-slot">
                     {coinsHere - (myMyCoinHere ? 1 : 0) > 0 && (

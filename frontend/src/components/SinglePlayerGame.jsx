@@ -44,7 +44,7 @@ function SinglePlayerGame({ t,
   const dragActiveRef = useRef(false);
   const newCardRef = useRef(null);
 
-  // Track scroll offset at drag start for scroll-drift compensation
+  // Scroll position recorded at drag-start for drift-free card movement
   const startScrollXRef = useRef(0);
   const startScrollYRef = useRef(0);
 
@@ -115,7 +115,6 @@ function SinglePlayerGame({ t,
       setCards(newCards);
       cardsRef.current = newCards;
 
-      // ✅ FIX: Auto-scroll to new card
       setTimeout(() => {
         newCardRef.current?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
       }, 120);
@@ -173,7 +172,6 @@ function SinglePlayerGame({ t,
       setStreak(0);
     }
 
-    // ✅ Auto-scroll to revealed card
     setTimeout(() => {
       newCardRef.current?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
     }, 300);
@@ -206,7 +204,7 @@ function SinglePlayerGame({ t,
     draggingRef.current = false;
     dragActiveRef.current = true;
 
-    // Record scroll position for drift compensation
+    // Snapshot scroll position so we can compensate for auto-scroll drift
     const tl = timelineRef.current;
     startScrollXRef.current = tl ? tl.scrollLeft : 0;
     startScrollYRef.current = window.scrollY;
@@ -237,19 +235,15 @@ function SinglePlayerGame({ t,
       if (e.cancelable) e.preventDefault();
 
       if (dragCardRef.current) {
-        // ✅ FIX: Keep card under finger even during auto-scroll
-        const cardNow = dragCardRef.current.getBoundingClientRect();
-        const fingerOffsetX = startXRef.current - cardStartScreenXRef.current;
-        const fingerOffsetY = startYRef.current - cardStartScreenYRef.current;
-        const targetLeft = clientX - fingerOffsetX;
-        const targetTop  = clientY - fingerOffsetY;
-        const tx = targetLeft - cardNow.left;
-        const ty = targetTop  - cardNow.top;
+        // Add scroll drift to pointer delta so card stays under finger
+        const tl = timelineRef.current;
+        const scrollDeltaX = tl ? tl.scrollLeft - startScrollXRef.current : 0;
+        const scrollDeltaY = window.scrollY - startScrollYRef.current;
 
         if (horizontal) {
-          dragCardRef.current.style.transform = `translateX(${tx}px) scale(1.04)`;
+          dragCardRef.current.style.transform = `translateX(${deltaX + scrollDeltaX}px) scale(1.04)`;
         } else {
-          dragCardRef.current.style.transform = `translateY(${ty}px) scale(1.04)`;
+          dragCardRef.current.style.transform = `translateY(${deltaY + scrollDeltaY}px) scale(1.04)`;
         }
         dragCardRef.current.style.boxShadow = "0 28px 70px rgba(29,185,84,0.55)";
         dragCardRef.current.style.zIndex = "1000";
