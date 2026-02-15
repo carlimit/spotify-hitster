@@ -737,7 +737,8 @@ function Game({
 
                 {isNewCard && !revealed && isMyTurn ? (
                   <div
-                    style={{ padding: "20px", margin: "-20px", touchAction: "none", userSelect: "none" }}
+                    className="drag-wrapper"
+                    style={{ touchAction: "none", userSelect: "none" }}
                     onMouseDown={handleDragStart}
                     onTouchStart={(e) => {
                       e.preventDefault();

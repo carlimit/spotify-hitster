@@ -471,9 +471,8 @@ function SinglePlayerGame({ t,
               <div key={card.id} style={{ width: horizontal ? "auto" : "100%", maxWidth: horizontal ? "none" : 480, flexShrink: 0 }}>
                 {isNewCard && !revealed ? (
                   <div
+                    className="drag-wrapper"
                     style={{
-                      padding: "20px",
-                      margin: "-20px",
                       touchAction: "none",
                       userSelect: "none",
                     }}

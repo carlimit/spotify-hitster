@@ -266,6 +266,19 @@ button:active {
   height: 180px; /* same height as fixed cards before reveal */
 }
 
+/* Wrapper that provides the enlarged touch target for the draggable card.
+   Must match card height so the flex row doesn't collapse to a line. */
+.drag-wrapper {
+  width: 100%;
+  height: 180px;  /* same as .card.new-card-unrevealed */
+  padding: 20px;
+  margin: -20px;
+  width: calc(100% + 40px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 /* After reveal: the new card expands to show full content.
    Setting height: auto lets the flex container reflow properly
    so neighbouring cards are pushed down — no more overlaps. */
@@ -299,6 +312,9 @@ button:active {
     max-width: 100% !important;
     min-height: 160px !important;
     height: 160px !important;
+  }
+  .drag-wrapper {
+    height: 160px !important; /* matches mobile card height */
   }
 }
 
@@ -941,6 +957,11 @@ button:active {
     max-width: 200px !important;
     min-height: 120px !important;
     height: 120px !important;
+  }
+
+  .drag-wrapper {
+    height: 120px !important; /* matches landscape card height */
+    width: calc(200px + 40px) !important;
   }
 
   .timeline .card.card-expanded-horizontal {
