@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { socket } from "../socket";
 import { useSpotifyPlayer } from "./useSpotifyPlayer";
+let lastDragUpdate = 0;
+const DRAG_THROTTLE = 16; // ~60fps
 
 function saveSession(data) {
   try { sessionStorage.setItem("hitster_session", JSON.stringify(data)); } catch {}
@@ -322,10 +324,17 @@ function Game({
   const handleDragEndRef = useRef(null);
 
   handleDragMoveRef.current = (e) => {
-    if (!dragActiveRef.current) return;
+    handleDragMoveRef.current = (e) => {
+  if (!dragActiveRef.current) return;
+  
+  // Throttle drag updates to 60fps
+  const now = Date.now();
+  if (now - lastDragUpdate < DRAG_THROTTLE) return;
+  lastDragUpdate = now;
 
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  // ... rest of the function
     const deltaY = clientY - startYRef.current;
     const deltaX = clientX - startXRef.current;
     const horizontal = isHorizontal();
