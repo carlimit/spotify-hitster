@@ -437,14 +437,10 @@ function SinglePlayerGame({ t,
       </button>
 
       {!loading && (
-        <div
-          className="timeline-zoom-wrapper"
-          style={zoomed ? { width: "100%", overflowX: "hidden" } : {}}
-        >
+        <div className={`timeline-zoom-wrapper${zoomed ? " is-zoomed" : ""}`}>
         <div
           className="timeline"
           ref={timelineRef}
-          style={zoomed ? { transform: "scale(0.55)", transformOrigin: "top center", width: `${100 / 0.55}%`, maxWidth: "none" } : {}}
         >
           {cards.map((card, index) => {
             const isNewCard = card.type === "new";
@@ -468,7 +464,7 @@ function SinglePlayerGame({ t,
             }
 
             return (
-              <div key={card.id} style={{ width: horizontal ? "auto" : "100%", maxWidth: horizontal ? "none" : 480, flexShrink: 0 }}>
+              <div key={card.id} style={{ width: "100%", display: "flex", justifyContent: "center" }}>
                 {isNewCard && !revealed ? (
                   <div
                     className="drag-wrapper"

@@ -77,9 +77,7 @@ input[type="text"]:focus {
   box-shadow: 0 0 0 3px rgba(29, 185, 84, 0.12);
 }
 
-input[type="text"]::placeholder {
-  color: #555;
-}
+input[type="text"]::placeholder { color: #555; }
 
 button {
   padding: 14px 28px;
@@ -101,9 +99,7 @@ button:hover {
   box-shadow: 0 6px 20px rgba(29, 185, 84, 0.4);
 }
 
-button:active {
-  transform: scale(0.97);
-}
+button:active { transform: scale(0.97); }
 
 .home-section {
   width: 100%;
@@ -177,10 +173,7 @@ button:active {
   margin: 20px 0 12px 0;
 }
 
-.rc-slider-rail {
-  background: #2a2a2a;
-  height: 6px;
-}
+.rc-slider-rail { background: #2a2a2a; height: 6px; }
 
 .rc-slider-track {
   background: linear-gradient(90deg, #1DB954, #1ed760);
@@ -203,7 +196,7 @@ button:active {
 }
 
 /* ============================================================
-   VERTICAL TIMELINE (default / portrait)
+   VERTICAL TIMELINE (portrait / default)
    ============================================================ */
 
 .timeline {
@@ -215,18 +208,6 @@ button:active {
   margin: 16px auto 0 auto;
   align-items: center;
   padding: 0 0 40px 0;
-  /* zoom support */
-  transition: transform 0.3s ease;
-  transform-origin: top center;
-}
-
-/* When zoomed out, shrink the wrapper so it doesn't leave dead space */
-.timeline-zoom-wrapper {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  overflow: visible;
 }
 
 .timeline > div {
@@ -236,89 +217,65 @@ button:active {
   width: 100%;
 }
 
-/* ── Base card ── */
+/* ── Cards ──────────────────────────────────────────────────── */
+
+/* All cards share the same fixed size before reveal */
 .card {
   width: 100%;
   max-width: 480px;
-  /* Use min-height only — NO aspect-ratio in vertical mode so revealed
-     cards can grow freely without clipping neighbours */
-  min-height: 180px;
+  height: 180px;
   position: relative;
   border-radius: 20px;
   perspective: 1200px;
-  /* Ensure the card's layout height always reflects its real painted height */
-  overflow: visible;
+  flex-shrink: 0;
 }
 
-/* Fixed year cards */
 .card.small-fixed {
   width: 100% !important;
   max-width: 480px !important;
-  min-height: 180px !important;
-  height: 180px; /* fixed cards stay a constant height */
+  height: 180px !important;
 }
 
-/* The new (draggable) unrevealed card */
 .card.new-card-unrevealed {
   width: 100% !important;
   max-width: 480px !important;
-  min-height: 180px !important;
-  height: 180px; /* same height as fixed cards before reveal */
+  height: 180px !important;
 }
 
-/* Wrapper that provides the enlarged touch target for the draggable card.
-   Must match card height so the flex row doesn't collapse to a line. */
+/* Drag wrapper: same footprint as the card — NO padding/margin tricks.
+   overflow:visible on the card itself gives enough touch area. */
 .drag-wrapper {
   width: 100%;
-  height: 180px;  /* same as .card.new-card-unrevealed */
-  padding: 20px;
-  margin: -20px;
-  width: calc(100% + 40px);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-/* After reveal: the new card expands to show full content.
-   Setting height: auto lets the flex container reflow properly
-   so neighbouring cards are pushed down — no more overlaps. */
+/* Revealed card expands freely; height:auto propagates up through
+   .card so neighbours are pushed down correctly */
 .card.card-expanded {
   height: auto !important;
-  min-height: auto !important;
-  aspect-ratio: unset !important;
 }
 
-/* Horizontal revealed card (landscape only, overridden below) */
+/* Horizontal mode revealed (overridden in landscape query below) */
 .card.card-expanded-horizontal {
-  aspect-ratio: unset !important;
-  width: 220px !important;
   height: auto !important;
-  min-height: auto !important;
-  max-height: none !important;
+  min-height: unset !important;
+  aspect-ratio: unset !important;
 }
 
 @media (max-width: 480px) {
-  .card {
-    max-width: 100%;
-    min-height: 160px;
-    border-radius: 16px;
-  }
-  .card.small-fixed {
-    max-width: 100% !important;
-    min-height: 160px !important;
-    height: 160px !important;
-  }
+  .card,
+  .card.small-fixed,
   .card.new-card-unrevealed {
     max-width: 100% !important;
-    min-height: 160px !important;
     height: 160px !important;
-  }
-  .drag-wrapper {
-    height: 160px !important; /* matches mobile card height */
+    border-radius: 16px;
   }
 }
 
-/* ── Card inner (flip container) ── */
+/* ── Card inner ─────────────────────────────────────────────── */
+
 .card-inner {
   width: 100%;
   height: 100%;
@@ -327,12 +284,10 @@ button:active {
   transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* When flipped, switch to normal flow so height is content-driven */
+/* Flipped: let height grow with content */
 .card-inner.flipped {
   transform: rotateY(180deg);
-  /* Let height be driven by .card-back content */
   height: auto !important;
-  min-height: 180px;
 }
 
 .card-front,
@@ -351,8 +306,8 @@ button:active {
   overflow: hidden;
 }
 
-/* Revealed back: escape absolute positioning so it participates
-   in normal flow and pushes the card's height correctly */
+/* When flipped, card-back leaves absolute flow so the card's
+   layout height matches the actual rendered content */
 .card-inner.flipped .card-back {
   position: relative !important;
   inset: unset !important;
@@ -362,11 +317,10 @@ button:active {
   padding: 20px;
 }
 
-.card-inner.flipped .card-front {
-  display: none;
-}
+.card-inner.flipped .card-front { display: none; }
 
-/* ── Card faces ── */
+/* ── Card faces ─────────────────────────────────────────────── */
+
 .card-front.fixed {
   background: linear-gradient(135deg, #2a2a2a, #1f1f1f);
   border: 2px solid #333;
@@ -411,14 +365,8 @@ button:active {
   background: rgba(0, 0, 0, 0.5);
 }
 
-.play-button:active:not(:disabled) {
-  transform: scale(0.95) !important;
-}
-
-.play-button:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
+.play-button:active:not(:disabled) { transform: scale(0.95) !important; }
+.play-button:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .drag-hint {
   font-size: 15px;
@@ -469,9 +417,7 @@ button:active {
 }
 
 @media (max-width: 480px) {
-  .cover-large {
-    max-width: 240px;
-  }
+  .cover-large { max-width: 240px; }
 }
 
 .revealed-year {
@@ -526,7 +472,8 @@ button:active {
   -webkit-text-fill-color: white;
 }
 
-/* ── Action bar ── */
+/* ── Action bar ─────────────────────────────────────────────── */
+
 .action-container {
   position: fixed;
   bottom: 24px;
@@ -554,10 +501,12 @@ button:active {
   box-shadow: 0 8px 24px rgba(29, 185, 84, 0.4);
 }
 
-/* ── Zoom button ── */
+/* ── Zoom ────────────────────────────────────────────────────── */
+
+/* The zoom button */
 .zoom-btn {
   position: fixed;
-  bottom: 100px;
+  bottom: 104px;
   right: 16px;
   z-index: 201;
   width: 48px !important;
@@ -565,23 +514,43 @@ button:active {
   min-width: unset !important;
   padding: 0 !important;
   border-radius: 50% !important;
-  font-size: 22px !important;
+  font-size: 20px !important;
   margin: 0 !important;
   background: rgba(40,40,40,0.92) !important;
-  border: 2px solid #444 !important;
+  border: 2px solid #555 !important;
   box-shadow: 0 4px 16px rgba(0,0,0,0.5) !important;
   color: white !important;
   backdrop-filter: blur(8px);
   pointer-events: auto;
-  transition: background 0.15s, transform 0.15s !important;
 }
 
-.zoom-btn:hover {
-  background: rgba(60,60,60,0.95) !important;
-  transform: scale(1.08) !important;
+/* Zoomed-out timeline: use CSS zoom so layout actually shrinks,
+   then set a fixed height on the wrapper and let it scroll.
+   This works on all browsers that support CSS zoom (all modern ones). */
+.timeline-zoom-wrapper {
+  width: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* leave room for action bar */
+  max-height: calc(100vh - 220px);
 }
 
-/* ── Timer ── */
+/* Normal (not zoomed) wrapper — just let content flow */
+.timeline-zoom-wrapper:not(.is-zoomed) {
+  max-height: none;
+  overflow: visible;
+}
+
+/* Zoomed state: scale the whole timeline via CSS zoom.
+   Unlike transform:scale, CSS zoom shrinks the element in the layout
+   flow, so the container actually gets smaller and shows more cards. */
+.timeline-zoom-wrapper.is-zoomed .timeline {
+  zoom: 0.52;
+  /* At 0.52 zoom, the timeline appears ~half size so you see 2x cards */
+}
+
+/* ── Timer ─────────────────────────────────────────────────── */
+
 .timer-display {
   font-size: 48px;
   font-weight: 900;
@@ -646,7 +615,8 @@ button:active {
   padding: 8px 12px !important;
 }
 
-/* ── Solo stats ── */
+/* ── Solo stats ─────────────────────────────────────────────── */
+
 .sp-stats {
   display: flex;
   gap: 20px;
@@ -784,7 +754,8 @@ button:active {
   margin: 4px 0;
 }
 
-/* ── Coins ── */
+/* ── Coins ─────────────────────────────────────────────────── */
+
 .coin-display {
   font-size: 28px;
   font-weight: 800;
@@ -908,24 +879,23 @@ button:active {
   }
 }
 
-* {
-  touch-action: manipulation;
-}
+* { touch-action: manipulation; }
 
 /* ============================================================
-   iPad Landscape: Horizontal Timeline
+   LANDSCAPE / HORIZONTAL TIMELINE
    ============================================================ */
 @media (min-width: 768px) and (orientation: landscape) {
+
   .timeline {
     flex-direction: row !important;
     overflow-x: auto !important;
     overflow-y: visible !important;
+    /* Top-align so revealed cards grow downward without clipping */
     align-items: flex-start !important;
     gap: 12px !important;
     padding: 12px 32px 130px 32px !important;
     width: 100% !important;
     max-width: 100% !important;
-    scroll-snap-type: x mandatory;
     -webkit-overflow-scrolling: touch;
   }
 
@@ -933,46 +903,37 @@ button:active {
     flex-shrink: 0 !important;
     width: auto !important;
     max-width: none !important;
-    justify-content: flex-start;
-    align-items: flex-start;
+    align-items: flex-start !important;
+    flex-direction: column !important;
   }
 
-  .timeline .card {
-    width: 200px !important;
-    max-width: 200px !important;
-    min-height: 120px !important;
-    height: 120px !important;
-    aspect-ratio: 5 / 3 !important;
-  }
-
-  .timeline .card.small-fixed {
-    width: 200px !important;
-    max-width: 200px !important;
-    min-height: 120px !important;
-    height: 120px !important;
-  }
-
+  /* All cards the same fixed size in landscape */
+  .timeline .card,
+  .timeline .card.small-fixed,
   .timeline .card.new-card-unrevealed {
     width: 200px !important;
     max-width: 200px !important;
+    height: 120px !important;
     min-height: 120px !important;
+    aspect-ratio: unset !important;
+  }
+
+  /* Drag wrapper in landscape: exact card footprint, no padding tricks */
+  .timeline .drag-wrapper {
+    width: 200px !important;
     height: 120px !important;
   }
 
-  .drag-wrapper {
-    height: 120px !important; /* matches landscape card height */
-    width: calc(200px + 40px) !important;
-  }
-
+  /* Revealed card in landscape grows downward from its top edge */
   .timeline .card.card-expanded-horizontal {
     width: 200px !important;
     max-width: 200px !important;
     height: auto !important;
-    min-height: auto !important;
+    min-height: unset !important;
     aspect-ratio: unset !important;
   }
 
-  /* Smaller cover art in horizontal revealed cards */
+  /* Compact content inside landscape revealed card */
   .card-expanded-horizontal .cover-large {
     max-width: 130px;
     margin-bottom: 6px;
@@ -984,13 +945,16 @@ button:active {
     letter-spacing: -1px !important;
   }
 
-  .card-expanded-horizontal .card-back strong {
-    font-size: 12px;
-  }
+  .card-expanded-horizontal .card-back strong { font-size: 12px; }
 
   .card-expanded-horizontal .song-title {
     font-size: 11px !important;
     line-height: 1.3 !important;
+  }
+
+  /* Also shrink the back-card min-height so it doesn't balloon */
+  .card-expanded-horizontal .card-inner.flipped .card-back {
+    min-height: unset !important;
   }
 
   .coin-slot {
@@ -1001,9 +965,13 @@ button:active {
     margin: 0 !important;
   }
 
-  /* Zoom button position for landscape */
   .zoom-btn {
     bottom: 120px;
     right: 24px;
+  }
+
+  /* Zoomed landscape: zoom the horizontal scroller */
+  .timeline-zoom-wrapper.is-zoomed .timeline {
+    zoom: 0.6;
   }
 }
