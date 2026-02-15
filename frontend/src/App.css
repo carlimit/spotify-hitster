@@ -528,11 +528,10 @@ button:active { transform: scale(0.97); }
 /* Zoom wrapper: maintains full space even when content is scaled down */
 .timeline-zoom-wrapper {
   width: 100%;
-  overflow-x: auto;  /* ← Changed from visible to auto */
-  overflow-y: visible;
-  min-height: 100%;
-  -webkit-overflow-scrolling: touch;
+  overflow: visible;
+  min-height: 100%;  /* ← Add this */
 }
+
 
 /* Scale from top-center so portrait column stays horizontally centered.
    JS sets transform:scale(z) inline and sets wrapper height = scrollHeight*z
@@ -887,16 +886,33 @@ button:active { transform: scale(0.97); }
     align-items: flex-start !important;
     gap: 12px !important;
     padding: 12px 32px 130px 32px !important;
-    min-width: 100% !important;  /* ← Changed from width to min-width */
-    max-width: none !important;  /* ← Changed from 100% to none */
+    width: 100% !important;
+    max-width: 100% !important;
     -webkit-overflow-scrolling: touch;
   }
 
-  /* Compensate timeline width when zoomed in horizontal mode */
   @media (min-width: 768px) and (orientation: landscape) {
-    .timeline-zoom-wrapper .timeline {
-      min-width: 100%;
-    }
+
+  .timeline {
+    flex-direction: row !important;
+    overflow-x: auto !important;
+    overflow-y: visible !important;
+    /* Top-align so revealed cards grow downward without clipping */
+    align-items: flex-start !important;
+    gap: 12px !important;
+    padding: 12px 32px 130px 32px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    -webkit-overflow-scrolling: touch;
+    transform-origin: left center;  /* Scale from left edge */
+  }
+
+  .timeline-zoom-wrapper {
+    min-width: 100%;
+  }
+
+  .timeline-zoom-wrapper .timeline {
+    min-width: 100%;
   }
 
   .timeline > div {
