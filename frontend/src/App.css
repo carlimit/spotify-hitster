@@ -894,14 +894,19 @@ button:active { transform: scale(0.97); }
   }
 
   .timeline-zoom-wrapper {
-    min-width: 100vw;  /* ← Changed from 100% to 100vw */
-    width: 100vw;      /* ← Added this */
+    min-width: 100vw !important;
+    width: 100vw !important;
+    position: relative;
+    left: 50%;
+    right: 50%;
+    margin-left: -50vw !important;
+    margin-right: -50vw !important;
   }
 
   .timeline-zoom-wrapper .timeline {
     min-width: 100%;
   }
-
+  
   .timeline > div {
     flex-shrink: 0 !important;
     width: auto !important;
