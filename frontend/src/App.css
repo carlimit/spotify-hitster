@@ -528,8 +528,10 @@ button:active { transform: scale(0.97); }
 /* Zoom wrapper: maintains full space even when content is scaled down */
 .timeline-zoom-wrapper {
   width: 100%;
-  overflow: visible;
-  min-height: 100%;  /* ← Add this */
+  overflow-x: auto;  /* ← Changed from visible to auto */
+  overflow-y: visible;
+  min-height: 100%;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Scale from top-center so portrait column stays horizontally centered.
@@ -885,8 +887,8 @@ button:active { transform: scale(0.97); }
     align-items: flex-start !important;
     gap: 12px !important;
     padding: 12px 32px 130px 32px !important;
-    width: 100% !important;
-    max-width: 100% !important;
+    min-width: 100% !important;  /* ← Changed from width to min-width */
+    max-width: none !important;  /* ← Changed from 100% to none */
     -webkit-overflow-scrolling: touch;
   }
 
