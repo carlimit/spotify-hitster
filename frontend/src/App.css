@@ -876,20 +876,6 @@ button:active { transform: scale(0.97); }
 /* ============================================================
    LANDSCAPE / HORIZONTAL TIMELINE
    ============================================================ */
-@media (min-width: 768px) and (orientation: landscape) {
-
-  .timeline {
-    flex-direction: row !important;
-    overflow-x: auto !important;
-    overflow-y: visible !important;
-    /* Top-align so revealed cards grow downward without clipping */
-    align-items: flex-start !important;
-    gap: 12px !important;
-    padding: 12px 32px 130px 32px !important;
-    width: 100% !important;
-    max-width: 100% !important;
-    -webkit-overflow-scrolling: touch;
-  }
 
   @media (min-width: 768px) and (orientation: landscape) {
 
@@ -908,7 +894,8 @@ button:active { transform: scale(0.97); }
   }
 
   .timeline-zoom-wrapper {
-    min-width: 100%;
+    min-width: 100vw;  /* ← Changed from 100% to 100vw */
+    width: 100vw;      /* ← Added this */
   }
 
   .timeline-zoom-wrapper .timeline {
