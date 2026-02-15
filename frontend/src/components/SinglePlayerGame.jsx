@@ -25,6 +25,7 @@ function SinglePlayerGame({ t,
   // Drag
   const [dragging, setDragging] = useState(false);
   const [insertIndex, setInsertIndex] = useState(null);
+  const [zoomed, setZoomed] = useState(false);
 
   const cardsRef = useRef(cards);
   const revealedRef = useRef(false);
@@ -427,8 +428,24 @@ function SinglePlayerGame({ t,
         <div className={`timer-display ${timeLeft <= 5 ? "timer-urgent" : ""}`}>{timeLeft}s</div>
       )}
 
+      <button
+        className="zoom-btn"
+        onClick={() => setZoomed(z => !z)}
+        title={zoomed ? "Zoom in" : "Zoom out"}
+      >
+        {zoomed ? "🔍" : "🔎"}
+      </button>
+
       {!loading && (
-        <div className="timeline" ref={timelineRef}>
+        <div
+          className="timeline-zoom-wrapper"
+          style={zoomed ? { width: "100%", overflowX: "hidden" } : {}}
+        >
+        <div
+          className="timeline"
+          ref={timelineRef}
+          style={zoomed ? { transform: "scale(0.55)", transformOrigin: "top center", width: `${100 / 0.55}%`, maxWidth: "none" } : {}}
+        >
           {cards.map((card, index) => {
             const isNewCard = card.type === "new";
             const isDragged = isNewCard && dragging;
@@ -547,6 +564,7 @@ function SinglePlayerGame({ t,
               </div>
             );
           })}
+        </div>
         </div>
       )}
 

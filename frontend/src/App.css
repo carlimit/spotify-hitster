@@ -202,6 +202,10 @@ button:active {
   box-shadow: 0 0 0 5px rgba(29, 185, 84, 0.2) !important;
 }
 
+/* ============================================================
+   VERTICAL TIMELINE (default / portrait)
+   ============================================================ */
+
 .timeline {
   width: 100%;
   max-width: 520px;
@@ -211,9 +215,20 @@ button:active {
   margin: 16px auto 0 auto;
   align-items: center;
   padding: 0 0 40px 0;
+  /* zoom support */
+  transition: transform 0.3s ease;
+  transform-origin: top center;
 }
 
-/* ✅ All card wrappers centered */
+/* When zoomed out, shrink the wrapper so it doesn't leave dead space */
+.timeline-zoom-wrapper {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow: visible;
+}
+
 .timeline > div {
   display: flex;
   justify-content: center;
@@ -221,38 +236,47 @@ button:active {
   width: 100%;
 }
 
+/* ── Base card ── */
 .card {
   width: 100%;
   max-width: 480px;
-  aspect-ratio: 5 / 3;
+  /* Use min-height only — NO aspect-ratio in vertical mode so revealed
+     cards can grow freely without clipping neighbours */
   min-height: 180px;
   position: relative;
   border-radius: 20px;
   perspective: 1200px;
+  /* Ensure the card's layout height always reflects its real painted height */
+  overflow: visible;
 }
 
-/* ✅ ALL CARDS SAME SIZE - no distinction between fixed and new */
+/* Fixed year cards */
 .card.small-fixed {
+  width: 100% !important;
   max-width: 480px !important;
   min-height: 180px !important;
+  height: 180px; /* fixed cards stay a constant height */
 }
 
+/* The new (draggable) unrevealed card */
 .card.new-card-unrevealed {
+  width: 100% !important;
   max-width: 480px !important;
   min-height: 180px !important;
-  aspect-ratio: 5 / 3 !important;
+  height: 180px; /* same height as fixed cards before reveal */
 }
 
-/* ✅ Revealed cards auto-expand to fit content - NO SCROLL */
-.card-expanded {
-  aspect-ratio: unset !important;
+/* After reveal: the new card expands to show full content.
+   Setting height: auto lets the flex container reflow properly
+   so neighbouring cards are pushed down — no more overlaps. */
+.card.card-expanded {
   height: auto !important;
   min-height: auto !important;
-  max-height: none !important;
+  aspect-ratio: unset !important;
 }
 
-/* ✅ FIXED: Horizontal revealed cards expand to show all content */
-.card-expanded-horizontal {
+/* Horizontal revealed card (landscape only, overridden below) */
+.card.card-expanded-horizontal {
   aspect-ratio: unset !important;
   width: 220px !important;
   height: auto !important;
@@ -266,18 +290,19 @@ button:active {
     min-height: 160px;
     border-radius: 16px;
   }
-  
   .card.small-fixed {
     max-width: 100% !important;
     min-height: 160px !important;
+    height: 160px !important;
   }
-  
   .card.new-card-unrevealed {
     max-width: 100% !important;
     min-height: 160px !important;
+    height: 160px !important;
   }
 }
 
+/* ── Card inner (flip container) ── */
 .card-inner {
   width: 100%;
   height: 100%;
@@ -286,9 +311,12 @@ button:active {
   transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/* When flipped, switch to normal flow so height is content-driven */
 .card-inner.flipped {
   transform: rotateY(180deg);
+  /* Let height be driven by .card-back content */
   height: auto !important;
+  min-height: 180px;
 }
 
 .card-front,
@@ -307,12 +335,13 @@ button:active {
   overflow: hidden;
 }
 
-/* ✅ When flipped, card-back becomes relative and expands - NO SCROLL */
+/* Revealed back: escape absolute positioning so it participates
+   in normal flow and pushes the card's height correctly */
 .card-inner.flipped .card-back {
   position: relative !important;
   inset: unset !important;
   height: auto !important;
-  min-height: auto !important;
+  min-height: 180px;
   overflow: visible !important;
   padding: 20px;
 }
@@ -321,6 +350,7 @@ button:active {
   display: none;
 }
 
+/* ── Card faces ── */
 .card-front.fixed {
   background: linear-gradient(135deg, #2a2a2a, #1f1f1f);
   border: 2px solid #333;
@@ -422,12 +452,6 @@ button:active {
   flex-shrink: 0;
 }
 
-/* ✅ FIXED: horizontal revealed card — smaller cover so everything fits without scrolling */
-.card-expanded-horizontal .cover-large {
-  max-width: 130px;
-  margin-bottom: 6px;
-}
-
 @media (max-width: 480px) {
   .cover-large {
     max-width: 240px;
@@ -447,13 +471,6 @@ button:active {
   flex-shrink: 0;
 }
 
-/* ✅ FIXED: smaller year text in horizontal mode */
-.card-expanded-horizontal .revealed-year {
-  font-size: 22px !important;
-  margin-bottom: 4px !important;
-  letter-spacing: -1px !important;
-}
-
 .card-back strong {
   font-size: 17px;
   font-weight: 700;
@@ -465,10 +482,6 @@ button:active {
   margin-bottom: 4px;
 }
 
-.card-expanded-horizontal .card-back strong {
-  font-size: 12px;
-}
-
 .song-title {
   font-size: 15px;
   color: #aaa;
@@ -477,11 +490,6 @@ button:active {
   word-break: break-word;
   width: 100%;
   flex-shrink: 0;
-}
-
-.card-expanded-horizontal .song-title {
-  font-size: 11px !important;
-  line-height: 1.3 !important;
 }
 
 .result-correct .card-back {
@@ -502,6 +510,7 @@ button:active {
   -webkit-text-fill-color: white;
 }
 
+/* ── Action bar ── */
 .action-container {
   position: fixed;
   bottom: 24px;
@@ -529,6 +538,34 @@ button:active {
   box-shadow: 0 8px 24px rgba(29, 185, 84, 0.4);
 }
 
+/* ── Zoom button ── */
+.zoom-btn {
+  position: fixed;
+  bottom: 100px;
+  right: 16px;
+  z-index: 201;
+  width: 48px !important;
+  height: 48px !important;
+  min-width: unset !important;
+  padding: 0 !important;
+  border-radius: 50% !important;
+  font-size: 22px !important;
+  margin: 0 !important;
+  background: rgba(40,40,40,0.92) !important;
+  border: 2px solid #444 !important;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.5) !important;
+  color: white !important;
+  backdrop-filter: blur(8px);
+  pointer-events: auto;
+  transition: background 0.15s, transform 0.15s !important;
+}
+
+.zoom-btn:hover {
+  background: rgba(60,60,60,0.95) !important;
+  transform: scale(1.08) !important;
+}
+
+/* ── Timer ── */
 .timer-display {
   font-size: 48px;
   font-weight: 900;
@@ -593,6 +630,7 @@ button:active {
   padding: 8px 12px !important;
 }
 
+/* ── Solo stats ── */
 .sp-stats {
   display: flex;
   gap: 20px;
@@ -730,6 +768,7 @@ button:active {
   margin: 4px 0;
 }
 
+/* ── Coins ── */
 .coin-display {
   font-size: 28px;
   font-weight: 800;
@@ -861,14 +900,11 @@ button:active {
    iPad Landscape: Horizontal Timeline
    ============================================================ */
 @media (min-width: 768px) and (orientation: landscape) {
-  /* ✅ FIX: Give the timeline a fixed height so it doesn't try to
-     expand taller than the viewport. Cards that are taller (revealed)
-     just show correctly inside. */
   .timeline {
     flex-direction: row !important;
     overflow-x: auto !important;
     overflow-y: visible !important;
-    align-items: flex-start !important;  /* ✅ top-align so revealed cards grow downward */
+    align-items: flex-start !important;
     gap: 12px !important;
     padding: 12px 32px 130px 32px !important;
     width: 100% !important;
@@ -889,22 +925,24 @@ button:active {
     width: 200px !important;
     max-width: 200px !important;
     min-height: 120px !important;
+    height: 120px !important;
     aspect-ratio: 5 / 3 !important;
   }
-  
+
   .timeline .card.small-fixed {
     width: 200px !important;
     max-width: 200px !important;
     min-height: 120px !important;
+    height: 120px !important;
   }
-  
+
   .timeline .card.new-card-unrevealed {
     width: 200px !important;
     max-width: 200px !important;
     min-height: 120px !important;
+    height: 120px !important;
   }
 
-  /* ✅ FIX: Revealed card in horizontal mode — auto height, fixed width */
   .timeline .card.card-expanded-horizontal {
     width: 200px !important;
     max-width: 200px !important;
@@ -913,11 +951,38 @@ button:active {
     aspect-ratio: unset !important;
   }
 
+  /* Smaller cover art in horizontal revealed cards */
+  .card-expanded-horizontal .cover-large {
+    max-width: 130px;
+    margin-bottom: 6px;
+  }
+
+  .card-expanded-horizontal .revealed-year {
+    font-size: 22px !important;
+    margin-bottom: 4px !important;
+    letter-spacing: -1px !important;
+  }
+
+  .card-expanded-horizontal .card-back strong {
+    font-size: 12px;
+  }
+
+  .card-expanded-horizontal .song-title {
+    font-size: 11px !important;
+    line-height: 1.3 !important;
+  }
+
   .coin-slot {
     flex-direction: column !important;
     width: 36px !important;
     height: auto !important;
     align-self: center !important;
     margin: 0 !important;
+  }
+
+  /* Zoom button position for landscape */
+  .zoom-btn {
+    bottom: 120px;
+    right: 24px;
   }
 }

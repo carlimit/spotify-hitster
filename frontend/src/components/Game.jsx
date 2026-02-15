@@ -54,6 +54,7 @@ function Game({
   // Drag
   const [dragging, setDragging] = useState(false);
   const [insertIndex, setInsertIndex] = useState(null);
+  const [zoomed, setZoomed] = useState(false);
 
   // Refs
   const selectedGenresRef = useRef(selectedGenres);
@@ -673,8 +674,27 @@ function Game({
         <div className={`timer-display ${timeLeft <= 5 ? "timer-urgent" : ""}`}>{timeLeft}s</div>
       )}
 
+      <button
+        className="zoom-btn"
+        onClick={() => setZoomed(z => !z)}
+        title={zoomed ? "Zoom in" : "Zoom out"}
+      >
+        {zoomed ? "🔍" : "🔎"}
+      </button>
+
       {!loading && (
-        <div className="timeline" ref={timelineRef} style={{ paddingBottom: "100px" }}>
+        <div
+          className="timeline-zoom-wrapper"
+          style={zoomed ? { width: "100%", overflowX: "hidden" } : {}}
+        >
+        <div
+          className="timeline"
+          ref={timelineRef}
+          style={{
+            paddingBottom: "100px",
+            ...(zoomed ? { transform: "scale(0.55)", transformOrigin: "top center", width: `${100 / 0.55}%`, maxWidth: "none" } : {})
+          }}
+        >
           {cards.map((card, index) => {
             const isNewCard = card.type === "new";
             const isDragged = isNewCard && dragging;
@@ -825,6 +845,7 @@ function Game({
               </div>
             );
           })}
+        </div>
         </div>
       )}
 
