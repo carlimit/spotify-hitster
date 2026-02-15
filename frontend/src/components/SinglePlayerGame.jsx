@@ -42,11 +42,15 @@ function SinglePlayerGame({ t,
   const insertIndexRef = useRef(null);
   const scrollIntervalRef = useRef(null);
   const dragActiveRef = useRef(false);
+  const newCardRef = useRef(null);
+
+  // ✅ FIX: Record card screen position at drag start
+  const cardStartScreenXRef = useRef(0);
+  const cardStartScreenYRef = useRef(0);
 
   useEffect(() => { cardsRef.current = cards; }, [cards]);
   useEffect(() => { revealedRef.current = revealed; }, [revealed]);
 
-  // Read horizontal mode directly from window
   const isHorizontal = () =>
     window.innerWidth > window.innerHeight && window.innerWidth >= 768;
 
@@ -111,6 +115,11 @@ function SinglePlayerGame({ t,
       setCards(newCards);
       cardsRef.current = newCards;
 
+      // ✅ FIX: Auto-scroll to new card
+      setTimeout(() => {
+        newCardRef.current?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+      }, 120);
+
       if (timerSeconds > 0) {
         setTimeLeft(timerSeconds);
         timerRef.current = setInterval(() => {
@@ -163,6 +172,11 @@ function SinglePlayerGame({ t,
       setResult("wrong");
       setStreak(0);
     }
+
+    // ✅ Auto-scroll to revealed card
+    setTimeout(() => {
+      newCardRef.current?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+    }, 300);
   };
 
   const handleReveal = () => doReveal(cardsRef.current);
@@ -191,10 +205,14 @@ function SinglePlayerGame({ t,
     startXRef.current = clientX;
     draggingRef.current = false;
     dragActiveRef.current = true;
-  }, []);
 
-  const handleDragMoveRef = useRef(null);
-  const handleDragEndRef = useRef(null);
+    // ✅ FIX: Record card screen position at drag start
+    if (dragCardRef.current) {
+      const r = dragCardRef.current.getBoundingClientRect();
+      cardStartScreenXRef.current = r.left;
+      cardStartScreenYRef.current = r.top;
+    }
+  }, []);
 
   useEffect(() => {
     const onMove = (e) => {
@@ -221,10 +239,19 @@ function SinglePlayerGame({ t,
       if (e.cancelable) e.preventDefault();
 
       if (dragCardRef.current) {
+        // ✅ FIX: Keep card under finger even during auto-scroll
+        const cardNow = dragCardRef.current.getBoundingClientRect();
+        const fingerOffsetX = startXRef.current - cardStartScreenXRef.current;
+        const fingerOffsetY = startYRef.current - cardStartScreenYRef.current;
+        const targetLeft = clientX - fingerOffsetX;
+        const targetTop  = clientY - fingerOffsetY;
+        const tx = targetLeft - cardNow.left;
+        const ty = targetTop  - cardNow.top;
+
         if (horizontal) {
-          dragCardRef.current.style.transform = `translateX(${deltaX}px) scale(1.04)`;
+          dragCardRef.current.style.transform = `translateX(${tx}px) scale(1.04)`;
         } else {
-          dragCardRef.current.style.transform = `translateY(${deltaY}px) scale(1.04)`;
+          dragCardRef.current.style.transform = `translateY(${ty}px) scale(1.04)`;
         }
         dragCardRef.current.style.boxShadow = "0 28px 70px rgba(29,185,84,0.55)";
         dragCardRef.current.style.zIndex = "1000";
@@ -345,9 +372,6 @@ function SinglePlayerGame({ t,
       startXRef.current = 0;
     };
 
-    handleDragMoveRef.current = onMove;
-    handleDragEndRef.current = onEnd;
-
     window.addEventListener("mousemove", onMove, { passive: false });
     window.addEventListener("touchmove", onMove, { passive: false });
     window.addEventListener("mouseup", onEnd);
@@ -424,7 +448,7 @@ function SinglePlayerGame({ t,
               const origIdx = newCardOriginalIndex;
               const cardEls = timelineRef.current?.querySelectorAll(".card");
               if (horizontal) {
-                const cardW = (cardEls?.[0]?.getBoundingClientRect().width || 220) + 12;
+                const cardW = (cardEls?.[0]?.getBoundingClientRect().width || 200) + 12;
                 if (insertIndex <= origIdx && index >= insertIndex && index < origIdx) shiftX = cardW;
                 else if (insertIndex > origIdx + 1 && index > origIdx && index < insertIndex) shiftX = -cardW;
               } else {
@@ -448,8 +472,8 @@ function SinglePlayerGame({ t,
                     onTouchStart={handleDragStart}
                   >
                     <div
-                      ref={dragCardRef}
-                      className={`card new-card-unrevealed ${revealed ? (horizontal ? "card-expanded-horizontal" : "card-expanded") : ""}`}
+                      ref={(el) => { dragCardRef.current = el; newCardRef.current = el; }}
+                      className={`card new-card-unrevealed`}
                       style={{
                         position: "relative",
                         zIndex: isDragged ? 1000 : 1,
@@ -487,7 +511,7 @@ function SinglePlayerGame({ t,
                   </div>
                 ) : (
                   <div
-                    ref={isNewCard ? dragCardRef : null}
+                    ref={isNewCard ? (el) => { newCardRef.current = el; } : null}
                     className={`card ${isNewCard ? "new-card-unrevealed" : "small-fixed"} ${isNewCard && revealed ? (horizontal ? "card-expanded-horizontal" : "card-expanded") : ""}`}
                     style={{
                       position: "relative",

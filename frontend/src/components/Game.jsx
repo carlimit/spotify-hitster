@@ -70,8 +70,14 @@ function Game({
   const dragYRef = useRef(0);
   const draggingRef = useRef(false);
   const startYRef = useRef(0);
+  const startXRef = useRef(0);
   const timelineRef = useRef(null);
-  const newCardRef = useRef(null); // ✅ ref for auto-scroll to revealed card
+  const newCardRef = useRef(null);
+
+  // ✅ FIX: Track the card's screen position at drag start so we can
+  // keep it under the finger even when the container auto-scrolls.
+  const cardStartScreenXRef = useRef(0);
+  const cardStartScreenYRef = useRef(0);
 
   useEffect(() => { selectedGenresRef.current = selectedGenres; }, [selectedGenres]);
   useEffect(() => { minYearRef.current = minYear; }, [minYear]);
@@ -88,7 +94,6 @@ function Game({
   // ============================================================
 
   useEffect(() => {
-    // ✅ Try to restore session on remount (soft close / background)
     const session = loadSession();
     if (session && session.roomCode === roomCode) {
       setLocalPlayers(session.players || initialPlayers);
@@ -96,7 +101,6 @@ function Game({
       usedUrisRef.current = new Set(session.usedUris || []);
       if (session.playlistTracks) playlistTracksRef.current = session.playlistTracks;
     } else {
-      // ✅ NEW: Initialize from props if no session
       if (initialPlaylistTracks) playlistTracksRef.current = initialPlaylistTracks;
     }
 
@@ -145,7 +149,6 @@ function Game({
       if (min) minYearRef.current = Number(min);
       if (max) maxYearRef.current = Number(max);
       if (pt !== undefined) playlistTracksRef.current = pt;
-      // ✅ FIX: Always sync usedUris from server — server is authoritative
       if (usedUris) usedUrisRef.current = new Set(usedUris);
 
       updatePlayers(newPlayers);
@@ -193,9 +196,9 @@ function Game({
       setResult(revealResult);
       setRevealed(true);
       revealedRef.current = true;
-      // ✅ Auto-scroll to revealed card for spectators too
+      // ✅ Auto-scroll to revealed card for spectators
       setTimeout(() => {
-        newCardRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+        newCardRef.current?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
       }, 300);
     });
 
@@ -214,10 +217,8 @@ function Game({
   const generateCard = async () => {
     const playlist = playlistTracksRef.current;
 
-    // ✅ FIX: ONLY use playlist tracks when playlist mode is active — no fallback to genre search
     if (playlist && playlist.length > 0) {
       const unused = playlist.filter(t => !usedUrisRef.current.has(t.uri));
-      // If all used, reset and reuse (better than mixing in random tracks)
       const pool = unused.length > 0 ? unused : playlist;
       const track = pool[Math.floor(Math.random() * pool.length)];
       usedUrisRef.current.add(track.uri);
@@ -233,7 +234,6 @@ function Game({
       };
     }
 
-    // No playlist — use genre/year search, pass usedUris to server to avoid repeats
     const genres = selectedGenresRef.current;
     const min = minYearRef.current;
     const max = maxYearRef.current;
@@ -272,6 +272,12 @@ function Game({
       setCards(newCards);
       cardsRef.current = newCards;
 
+      // ✅ FIX: Scroll to the new card after it's inserted so the player
+      // doesn't have to hunt for it in a long timeline
+      setTimeout(() => {
+        newCardRef.current?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+      }, 120);
+
       if (timerSeconds > 0 && isMyTurnRef.current) {
         setTimeLeft(timerSeconds);
         timerRef.current = setInterval(() => {
@@ -294,31 +300,38 @@ function Game({
 
   // ============================================================
   // 👆 DRAG — supports both vertical (phone) and horizontal (iPad landscape)
+  //
+  // KEY FIX for "card drifts during auto-scroll":
+  //   Instead of transforming by (currentPointer - startPointer), we
+  //   record the card's bounding rect at drag-start and compute the
+  //   transform needed to move it to (cardStart + delta) in screen space.
+  //   Because we re-read the card's natural position each frame we can
+  //   subtract out any scroll offset that happened since drag-start.
   // ============================================================
 
   const dragCardRef = useRef(null);
-  const startXRef = useRef(0);
-  const dragActiveRef = useRef(false); // true once finger is down, regardless of axis
+  const startXRef2 = useRef(0);  // alias kept to avoid rename clutter below
+  const dragActiveRef = useRef(false);
 
-  // Read horizontal mode directly from window — no stale ref issues
   const isHorizontal = () =>
-  window.innerWidth > window.innerHeight && window.innerWidth >= 768;
+    window.innerWidth > window.innerHeight && window.innerWidth >= 768;
 
   const handleDragStart = (e) => {
     if (revealedRef.current || !isMyTurnRef.current) return;
     e.stopPropagation();
-    const h = isHorizontal();
-    const w = window.innerWidth;
-    const land = window.matchMedia("(orientation: landscape)").matches;
-    console.log("🟢 dragStart — horizontal:", h, "w:", w, "landscape:", land);
-    const el = document.getElementById("drag-debug");
-    if (el) el.textContent = `horizontal:${h} w:${w} land:${land}`;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     startYRef.current = clientY;
     startXRef.current = clientX;
     draggingRef.current = false;
     dragActiveRef.current = true;
+
+    // ✅ Record the card's screen position at the moment dragging starts
+    if (dragCardRef.current) {
+      const r = dragCardRef.current.getBoundingClientRect();
+      cardStartScreenXRef.current = r.left;
+      cardStartScreenYRef.current = r.top;
+    }
   };
 
   const handleDragMove = (e) => {
@@ -329,15 +342,12 @@ function Game({
     const deltaY = clientY - startYRef.current;
     const deltaX = clientX - startXRef.current;
     const horizontal = isHorizontal();
-    console.log("🔴 MOVE horizontal:", horizontal, "dX:", Math.round(deltaX), "dY:", Math.round(deltaY));
 
     if (!draggingRef.current) {
       const primary = horizontal ? Math.abs(deltaX) : Math.abs(deltaY);
       const secondary = horizontal ? Math.abs(deltaY) : Math.abs(deltaX);
-      console.log("🔵 move — horizontal:", horizontal, "deltaX:", Math.round(deltaX), "deltaY:", Math.round(deltaY));
       if (primary < 4) return;
       if (secondary > primary * 1.5) {
-        console.log("❌ cancelled — wrong axis");
         dragActiveRef.current = false;
         return;
       }
@@ -348,10 +358,22 @@ function Game({
     if (e.cancelable) e.preventDefault();
 
     if (dragCardRef.current) {
+      // ✅ FIX: compute transform relative to the card's *current* layout
+      // position so it always stays under the finger regardless of scroll.
+      const cardNow = dragCardRef.current.getBoundingClientRect();
+      // Where we want the card's top-left corner to be (under the finger, offset by how
+      // far into the card the finger landed)
+      const fingerOffsetX = startXRef.current - cardStartScreenXRef.current;
+      const fingerOffsetY = startYRef.current - cardStartScreenYRef.current;
+      const targetLeft = clientX - fingerOffsetX;
+      const targetTop  = clientY - fingerOffsetY;
+      const tx = targetLeft - cardNow.left;
+      const ty = targetTop  - cardNow.top;
+
       if (horizontal) {
-        dragCardRef.current.style.transform = `translateX(${deltaX}px) scale(1.04)`;
+        dragCardRef.current.style.transform = `translateX(${tx}px) scale(1.04)`;
       } else {
-        dragCardRef.current.style.transform = `translateY(${deltaY}px) scale(1.04)`;
+        dragCardRef.current.style.transform = `translateY(${ty}px) scale(1.04)`;
       }
       dragCardRef.current.style.boxShadow = "0 28px 70px rgba(29,185,84,0.55)";
       dragCardRef.current.style.zIndex = "1000";
@@ -524,9 +546,9 @@ function Game({
 
     socket.emit("reveal_card", { code: roomCode, result: revealResult, cards: currentCards });
 
-    // ✅ Auto-scroll to revealed card
+    // ✅ Auto-scroll to revealed card (both horizontal and vertical)
     setTimeout(() => {
-      newCardRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      newCardRef.current?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
     }, 300);
 
     if (!correct) {
@@ -607,7 +629,6 @@ function Game({
   const myCoins = myPlayer?.coins ?? 0;
   const hasCoinPlaced = myCoinIndex !== null;
   const nextPlayerIndex = (currentPlayerIndex + 1) % players.length;
-  // ✅ FIX: Give coin only shown AFTER reveal
   const isNextPlayer = players[nextPlayerIndex]?.id === socket.id && !isMyTurn;
 
   const coinsBySlot = {};
@@ -655,7 +676,6 @@ function Game({
     <div className="container">
       <div className="game-header">
         <div>
-          {/* ✅ Home button — confirms before leaving */}
           <button
             onClick={() => {
               if (window.confirm(lang === "de" ? "Spiel wirklich verlassen?" : "Leave the game?")) {
@@ -702,7 +722,7 @@ function Game({
               const origIdx = newCardOriginalIndex;
               const cardEls = timelineRef.current?.querySelectorAll(".card");
               if (horizontal) {
-                const cardW = (cardEls?.[0]?.getBoundingClientRect().width || 260) + 12;
+                const cardW = (cardEls?.[0]?.getBoundingClientRect().width || 200) + 12;
                 if (insertIndex <= origIdx && index >= insertIndex && index < origIdx) shiftX = cardW;
                 else if (insertIndex > origIdx + 1 && index > origIdx && index < insertIndex) shiftX = -cardW;
               } else {
@@ -717,7 +737,7 @@ function Game({
 
             return (
               <div key={card.id} style={{ width: horizontal ? "auto" : "100%", maxWidth: horizontal ? "none" : 480, flexShrink: 0 }}>
-                {/* ✅ FIX: Coin slots only shown to spectators, only BEFORE reveal */}
+                {/* Coin slots only shown to spectators, only BEFORE reveal */}
                 {!isMyTurn && !revealed && (
                   <div className="coin-slot">
                     {coinsHere - (myMyCoinHere ? 1 : 0) > 0 && (
@@ -749,7 +769,7 @@ function Game({
                       style={{
                         position: "relative",
                         zIndex: isDragged ? 1000 : 1,
-                      transform: isDragged ? undefined : `translate(${shiftX}px, ${shiftY}px) scale(1)`,
+                        transform: isDragged ? undefined : `translate(${shiftX}px, ${shiftY}px) scale(1)`,
                         transition: isDragged ? "none" : "transform 0.18s ease",
                         cursor: dragging ? "grabbing" : "grab",
                         userSelect: "none",
@@ -795,7 +815,6 @@ function Game({
                     {isNewCard ? (
                       <div className={`card-inner flipped ${result === "correct" ? "result-correct" : ""} ${result === "wrong" ? "result-wrong" : ""}`}>
                         <div className="card-front new">
-                          {/* ✅ FIX: Non-host play button — always enabled, routes via socket */}
                           <button
                             className="play-button"
                             onClick={(e) => { e.stopPropagation(); togglePlay(card.uri); }}
@@ -861,14 +880,6 @@ function Game({
           </button>
         )}
       </div>
-
-      {/* 🐛 TEMP DEBUG — remove after testing */}
-      <div id="drag-debug" style={{
-        position: "fixed", top: 8, left: "50%", transform: "translateX(-50%)",
-        background: "rgba(0,0,0,0.8)", color: "#1DB954", padding: "4px 12px",
-        borderRadius: 8, fontSize: 12, zIndex: 9999, pointerEvents: "none"
-      }}>tap card to debug</div>
-
     </div>
   );
 }

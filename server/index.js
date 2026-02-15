@@ -48,8 +48,68 @@ async function getSpotifyToken() {
 ========================================= */
 function extractYear(track) {
   const date = track.album?.release_date || "";
-  // Always just take the 4-digit year — earliest available date
   return date.substring(0, 4);
+}
+
+/* =========================================
+   🎵 ORIGINAL YEAR LOOKUP
+   Searches Spotify for the track name + artist and returns the
+   earliest release year found across all results. This catches the
+   original studio release even when a playlist contains a remaster
+   or re-release. Falls back to the album's own release_date if the
+   search returns nothing useful.
+
+   Only used for playlist loading (called once per track at load time,
+   results are cached in the track objects sent to clients).
+========================================= */
+async function getOriginalYear(track) {
+  const trackName = track.name;
+  const artistName = track.artists?.[0]?.name || "";
+  const albumYear = track.album?.release_date?.substring(0, 4) || "";
+
+  try {
+    // Search for all versions of this track by this artist
+    const query = `track:"${trackName}" artist:"${artistName}"`;
+    const response = await axios.get("https://api.spotify.com/v1/search", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      params: { q: query, type: "track", limit: 50 }
+    });
+
+    const items = response.data.tracks?.items || [];
+    if (!items.length) return albumYear;
+
+    // Keep only tracks where at least one artist matches (case-insensitive)
+    const artistLower = artistName.toLowerCase();
+    const sameArtist = items.filter(t =>
+      t.artists?.some(a =>
+        a.name.toLowerCase().includes(artistLower) ||
+        artistLower.includes(a.name.toLowerCase())
+      )
+    );
+
+    const candidates = sameArtist.length > 0 ? sameArtist : items;
+
+    // Collect valid years
+    const years = candidates
+      .map(t => parseInt(t.album?.release_date?.substring(0, 4) || ""))
+      .filter(y => !isNaN(y) && y > 1900 && y <= new Date().getFullYear());
+
+    if (!years.length) return albumYear;
+
+    const earliest = Math.min(...years).toString();
+
+    // Sanity guard: if earliest is more than 60 years before the album date,
+    // something weird matched — trust the album date instead
+    if (albumYear) {
+      const diff = parseInt(albumYear) - parseInt(earliest);
+      if (diff > 60) return albumYear;
+    }
+
+    return earliest;
+  } catch {
+    // Any network / parse error → fall back silently
+    return albumYear;
+  }
 }
 
 /* =========================================
@@ -76,21 +136,20 @@ app.get("/api/track", async (req, res) => {
     let tracks = response.data.tracks?.items || [];
     if (!tracks.length) return res.status(404).json({ error: "No tracks found" });
 
-    // ✅ FIX: Filter out already-used URIs to prevent repeats
+    // Filter out already-used URIs to prevent repeats
     const unused = tracks.filter(t => !used.has(t.uri));
-    const pool = unused.length >= 3 ? unused : tracks; // fallback if almost everything used
+    const pool = unused.length >= 3 ? unused : tracks;
 
-    // ✅ FIX: Prefer popular tracks, but don't require it
+    // Prefer popular tracks
     const popular = pool.filter(t => t.popularity > 40);
     const candidates = popular.length >= 3 ? popular : pool;
 
-    // ✅ FIX: Pick randomly from candidates
     const randomTrack = candidates[Math.floor(Math.random() * candidates.length)];
 
     res.json({
       name: randomTrack.name,
       artist: randomTrack.artists[0].name,
-      year: extractYear(randomTrack),  // ✅ use helper
+      year: extractYear(randomTrack),
       uri: randomTrack.uri,
       cover: randomTrack.album.images[0]?.url
     });
@@ -102,6 +161,8 @@ app.get("/api/track", async (req, res) => {
 
 /* =========================================
    🎵 PLAYLIST ENDPOINT
+   For each track, we do a secondary search to find the earliest
+   known release year — so remasters/re-releases get the original date.
 ========================================= */
 
 app.get("/api/playlist", async (req, res) => {
@@ -150,18 +211,38 @@ app.get("/api/playlist", async (req, res) => {
       }
     );
 
+    // ✅ FIX: For each track, look up the earliest known release year.
+    // We process in batches of 10 to avoid hammering the API and stay
+    // within rate limits, while still being fast enough for reasonable playlists.
+    const BATCH = 10;
+    const resolvedTracks = [];
+
+    for (let i = 0; i < tracks.length; i += BATCH) {
+      const batch = tracks.slice(i, i + BATCH);
+      const resolved = await Promise.all(
+        batch.map(async t => {
+          const originalYear = await getOriginalYear(t);
+          return {
+            name: t.name,
+            artist: t.artists[0].name,
+            year: originalYear,             // ← earliest year found, not album date
+            uri: t.uri,
+            cover: t.album.images?.[0]?.url,
+            popularity: t.popularity
+          };
+        })
+      );
+      resolvedTracks.push(...resolved);
+    }
+
+    // Filter out any tracks where year resolution failed completely
+    const validResolved = resolvedTracks.filter(t => t.year && !isNaN(parseInt(t.year)));
+
     res.json({
       name: playlistInfo.data.name,
       image: playlistInfo.data.images?.[0]?.url,
-      trackCount: tracks.length,
-      tracks: tracks.map(t => ({
-        name: t.name,
-        artist: t.artists[0].name,
-        year: extractYear(t),  // ✅ use helper
-        uri: t.uri,
-        cover: t.album.images?.[0]?.url,
-        popularity: t.popularity
-      }))
+      trackCount: validResolved.length,
+      tracks: validResolved
     });
   } catch (err) {
     const spotifyError = err.response?.data;
@@ -220,7 +301,7 @@ io.on("connection", (socket) => {
     game.started = true;
     game.selectedGenres = selectedGenres || [];
     game.playlistTracks = playlistTracks || null;
-    game.usedUris = new Set(); // ✅ authoritative used URIs on server
+    game.usedUris = new Set();
     game.currentPlayerIndex = 0;
     game.winGoal = winGoal || 10;
     game.timerSeconds = timerSeconds || 0;
@@ -348,7 +429,7 @@ io.on("connection", (socket) => {
       const coinCorrect = isSlotCorrect(insertIndex);
 
       if (activeCorrect && coinCorrect) {
-        // both right — coin returned
+        // both right — coin returned (no change)
       } else if (activeCorrect && !coinCorrect) {
         game.players[coinPlayerIndex].coins = Math.max(0, (coinPlayer.coins || 0) - 1);
       } else if (!activeCorrect && coinCorrect) {
@@ -371,12 +452,11 @@ io.on("connection", (socket) => {
       minYear: game.minYear,
       maxYear: game.maxYear,
       playlistTracks: game.playlistTracks,
-      usedUris: Array.from(game.usedUris), // ✅ send authoritative used list
+      usedUris: Array.from(game.usedUris),
       coins: {}
     });
   });
 
-  // ✅ FIX: Server owns usedUris — client just reports, server records
   socket.on("mark_used", ({ code, uri }) => {
     const game = games[code];
     if (!game) return;

@@ -251,6 +251,7 @@ button:active {
   max-height: none !important;
 }
 
+/* ✅ FIXED: Horizontal revealed cards expand to show all content */
 .card-expanded-horizontal {
   aspect-ratio: unset !important;
   width: 220px !important;
@@ -421,8 +422,9 @@ button:active {
   flex-shrink: 0;
 }
 
+/* ✅ FIXED: horizontal revealed card — smaller cover so everything fits without scrolling */
 .card-expanded-horizontal .cover-large {
-  max-width: 160px;
+  max-width: 130px;
   margin-bottom: 6px;
 }
 
@@ -445,9 +447,11 @@ button:active {
   flex-shrink: 0;
 }
 
+/* ✅ FIXED: smaller year text in horizontal mode */
 .card-expanded-horizontal .revealed-year {
-  font-size: 24px !important;
+  font-size: 22px !important;
   margin-bottom: 4px !important;
+  letter-spacing: -1px !important;
 }
 
 .card-back strong {
@@ -462,7 +466,7 @@ button:active {
 }
 
 .card-expanded-horizontal .card-back strong {
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .song-title {
@@ -853,15 +857,20 @@ button:active {
   touch-action: manipulation;
 }
 
-/* iPad Landscape: Horizontal Timeline */
+/* ============================================================
+   iPad Landscape: Horizontal Timeline
+   ============================================================ */
 @media (min-width: 768px) and (orientation: landscape) {
+  /* ✅ FIX: Give the timeline a fixed height so it doesn't try to
+     expand taller than the viewport. Cards that are taller (revealed)
+     just show correctly inside. */
   .timeline {
     flex-direction: row !important;
     overflow-x: auto !important;
     overflow-y: visible !important;
-    align-items: center !important;
+    align-items: flex-start !important;  /* ✅ top-align so revealed cards grow downward */
     gap: 12px !important;
-    padding: 20px 32px 120px 32px !important;
+    padding: 12px 32px 130px 32px !important;
     width: 100% !important;
     max-width: 100% !important;
     scroll-snap-type: x mandatory;
@@ -872,26 +881,36 @@ button:active {
     flex-shrink: 0 !important;
     width: auto !important;
     max-width: none !important;
-    justify-content: center;
+    justify-content: flex-start;
+    align-items: flex-start;
   }
 
   .timeline .card {
-    width: 220px !important;
-    max-width: 220px !important;
-    min-height: 140px !important;
+    width: 200px !important;
+    max-width: 200px !important;
+    min-height: 120px !important;
     aspect-ratio: 5 / 3 !important;
   }
   
   .timeline .card.small-fixed {
-    width: 220px !important;
-    max-width: 220px !important;
-    min-height: 140px !important;
+    width: 200px !important;
+    max-width: 200px !important;
+    min-height: 120px !important;
   }
   
   .timeline .card.new-card-unrevealed {
-    width: 220px !important;
-    max-width: 220px !important;
-    min-height: 140px !important;
+    width: 200px !important;
+    max-width: 200px !important;
+    min-height: 120px !important;
+  }
+
+  /* ✅ FIX: Revealed card in horizontal mode — auto height, fixed width */
+  .timeline .card.card-expanded-horizontal {
+    width: 200px !important;
+    max-width: 200px !important;
+    height: auto !important;
+    min-height: auto !important;
+    aspect-ratio: unset !important;
   }
 
   .coin-slot {
