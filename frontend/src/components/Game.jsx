@@ -694,19 +694,21 @@ function Game({
   if (zoomWrapperRef.current && timelineRef.current) {
     const isLandscape = window.innerWidth > window.innerHeight && window.innerWidth >= 768;
     if (isLandscape) {
-      // In horizontal mode, expand timeline to compensate for zoom scale
-      timelineRef.current.style.width = next ? `${100 / ZOOM_OUT}%` : "100%";
-      zoomWrapperRef.current.style.width = "100%";
+      // In horizontal mode, calculate actual content width when scaled
+      if (next) {
+        const actualWidth = timelineRef.current.scrollWidth;
+        zoomWrapperRef.current.style.minWidth = `${actualWidth * ZOOM_OUT}px`;
+      } else {
+        zoomWrapperRef.current.style.minWidth = "";
+      }
       zoomWrapperRef.current.style.height = "";
     } else {
-      // Reset timeline width in vertical mode
-      timelineRef.current.style.width = "";
       // In vertical mode, set height to accommodate zoomed timeline
       const natural = timelineRef.current.scrollHeight;
       zoomWrapperRef.current.style.height = next
         ? `${natural * ZOOM_OUT}px`
         : "";
-      zoomWrapperRef.current.style.width = "";
+      zoomWrapperRef.current.style.minWidth = "";
     }
   }
 });
