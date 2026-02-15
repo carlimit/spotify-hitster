@@ -523,20 +523,19 @@ button:active { transform: scale(0.97); }
   pointer-events: auto;
 }
 
-/* Wrapper clips the scaled-down timeline.
-   Height is set via inline style in JS so it collapses to the visual height. */
+/* Zoom wrapper: just a passthrough div that we set an inline height on.
+   overflow:visible so nothing is clipped when scaled. */
 .timeline-zoom-wrapper {
   width: 100%;
-  overflow: hidden;
-  align-self: stretch;
+  overflow: visible;
 }
 
-/* The timeline scales from the top-left corner.
-   transform-origin top left keeps column cards left-aligned.
-   JS sets transform:scale(factor) and the wrapper height = naturalHeight*factor. */
+/* Scale from top-center so portrait column stays horizontally centered.
+   JS sets transform:scale(z) inline and sets wrapper height = scrollHeight*z
+   so the page collapses correctly and neighbours don't float away. */
 .timeline-zoom-wrapper .timeline {
-  transform-origin: top left;
-  transition: transform 0.3s ease;
+  transform-origin: top center;
+  transition: transform 0.25s ease;
 }
 
 /* ── Timer ─────────────────────────────────────────────────── */

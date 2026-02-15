@@ -345,17 +345,15 @@ function Game({
     if (e.cancelable) e.preventDefault();
 
     if (dragCardRef.current) {
-      // Divide by zoom: pointer delta is screen-space, but translateX/Y
-      // applies in local (scaled) space — must compensate.
       const z = zoomRef.current;
       const tl = timelineRef.current;
       const scrollDeltaX = tl ? tl.scrollLeft - startScrollXRef.current : 0;
       const scrollDeltaY = window.scrollY - startScrollYRef.current;
 
       if (horizontal) {
-        dragCardRef.current.style.transform = `translateX(${(deltaX + scrollDeltaX) / z}px) scale(${1.04 / z})`;
+        dragCardRef.current.style.transform = `translateX(${(deltaX + scrollDeltaX) / z}px) scale(1.04)`;
       } else {
-        dragCardRef.current.style.transform = `translateY(${(deltaY + scrollDeltaY) / z}px) scale(${1.04 / z})`;
+        dragCardRef.current.style.transform = `translateY(${(deltaY + scrollDeltaY) / z}px) scale(1.04)`;
       }
       dragCardRef.current.style.boxShadow = "0 28px 70px rgba(29,185,84,0.55)";
       dragCardRef.current.style.zIndex = "1000";
@@ -685,12 +683,19 @@ function Game({
           const next = !zoomed;
           setZoomed(next);
           zoomRef.current = next ? ZOOM_OUT : 1;
-          if (zoomWrapperRef.current && timelineRef.current) {
-            const natural = timelineRef.current.scrollHeight;
-            zoomWrapperRef.current.style.height = next
-              ? `${natural * ZOOM_OUT}px`
-              : "";
-          }
+          requestAnimationFrame(() => {
+            if (zoomWrapperRef.current && timelineRef.current) {
+              const isLandscape = window.innerWidth > window.innerHeight && window.innerWidth >= 768;
+              if (isLandscape) {
+                zoomWrapperRef.current.style.height = "";
+              } else {
+                const natural = timelineRef.current.scrollHeight;
+                zoomWrapperRef.current.style.height = next
+                  ? `${natural * ZOOM_OUT}px`
+                  : "";
+              }
+            }
+          });
         }}
         title={zoomed ? "Zoom in" : "Zoom out"}
       >
