@@ -503,7 +503,6 @@ button:active { transform: scale(0.97); }
 
 /* ── Zoom ────────────────────────────────────────────────────── */
 
-/* The zoom button */
 .zoom-btn {
   position: fixed;
   bottom: 104px;
@@ -524,29 +523,20 @@ button:active { transform: scale(0.97); }
   pointer-events: auto;
 }
 
-/* Zoomed-out timeline: use CSS zoom so layout actually shrinks,
-   then set a fixed height on the wrapper and let it scroll.
-   This works on all browsers that support CSS zoom (all modern ones). */
+/* Wrapper clips the scaled-down timeline.
+   Height is set via inline style in JS so it collapses to the visual height. */
 .timeline-zoom-wrapper {
   width: 100%;
-  overflow-y: auto;
-  overflow-x: hidden;
-  /* leave room for action bar */
-  max-height: calc(100vh - 220px);
+  overflow: hidden;
+  align-self: stretch;
 }
 
-/* Normal (not zoomed) wrapper — just let content flow */
-.timeline-zoom-wrapper:not(.is-zoomed) {
-  max-height: none;
-  overflow: visible;
-}
-
-/* Zoomed state: scale the whole timeline via CSS zoom.
-   Unlike transform:scale, CSS zoom shrinks the element in the layout
-   flow, so the container actually gets smaller and shows more cards. */
-.timeline-zoom-wrapper.is-zoomed .timeline {
-  zoom: 0.52;
-  /* At 0.52 zoom, the timeline appears ~half size so you see 2x cards */
+/* The timeline scales from the top-left corner.
+   transform-origin top left keeps column cards left-aligned.
+   JS sets transform:scale(factor) and the wrapper height = naturalHeight*factor. */
+.timeline-zoom-wrapper .timeline {
+  transform-origin: top left;
+  transition: transform 0.3s ease;
 }
 
 /* ── Timer ─────────────────────────────────────────────────── */
@@ -970,8 +960,5 @@ button:active { transform: scale(0.97); }
     right: 24px;
   }
 
-  /* Zoomed landscape: zoom the horizontal scroller */
-  .timeline-zoom-wrapper.is-zoomed .timeline {
-    zoom: 0.6;
-  }
+  /* Landscape zoom is handled by JS same as portrait */
 }

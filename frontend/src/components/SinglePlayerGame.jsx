@@ -26,6 +26,9 @@ function SinglePlayerGame({ t,
   const [dragging, setDragging] = useState(false);
   const [insertIndex, setInsertIndex] = useState(null);
   const [zoomed, setZoomed] = useState(false);
+  const zoomRef = useRef(1);          // 1 = normal, ZOOM_OUT = zoomed
+  const zoomWrapperRef = useRef(null);
+  const ZOOM_OUT = 0.55;
 
   const cardsRef = useRef(cards);
   const revealedRef = useRef(false);
@@ -236,15 +239,17 @@ function SinglePlayerGame({ t,
       if (e.cancelable) e.preventDefault();
 
       if (dragCardRef.current) {
-        // Add scroll drift to pointer delta so card stays under finger
+        // Pointer delta is in screen-space; translateX/Y applies in the
+        // element's local space which is scaled by zoom — so divide by zoom.
+        const z = zoomRef.current;
         const tl = timelineRef.current;
         const scrollDeltaX = tl ? tl.scrollLeft - startScrollXRef.current : 0;
         const scrollDeltaY = window.scrollY - startScrollYRef.current;
 
         if (horizontal) {
-          dragCardRef.current.style.transform = `translateX(${deltaX + scrollDeltaX}px) scale(1.04)`;
+          dragCardRef.current.style.transform = `translateX(${(deltaX + scrollDeltaX) / z}px) scale(${1.04 / z})`;
         } else {
-          dragCardRef.current.style.transform = `translateY(${deltaY + scrollDeltaY}px) scale(1.04)`;
+          dragCardRef.current.style.transform = `translateY(${(deltaY + scrollDeltaY) / z}px) scale(${1.04 / z})`;
         }
         dragCardRef.current.style.boxShadow = "0 28px 70px rgba(29,185,84,0.55)";
         dragCardRef.current.style.zIndex = "1000";
@@ -430,17 +435,32 @@ function SinglePlayerGame({ t,
 
       <button
         className="zoom-btn"
-        onClick={() => setZoomed(z => !z)}
+        onClick={() => {
+          const next = !zoomed;
+          setZoomed(next);
+          zoomRef.current = next ? ZOOM_OUT : 1;
+          // Collapse wrapper height to visual height so no dead space
+          if (zoomWrapperRef.current && timelineRef.current) {
+            const natural = timelineRef.current.scrollHeight;
+            zoomWrapperRef.current.style.height = next
+              ? `${natural * ZOOM_OUT}px`
+              : "";
+          }
+        }}
         title={zoomed ? "Zoom in" : "Zoom out"}
       >
         {zoomed ? "🔍" : "🔎"}
       </button>
 
       {!loading && (
-        <div className={`timeline-zoom-wrapper${zoomed ? " is-zoomed" : ""}`}>
+        <div
+          className="timeline-zoom-wrapper"
+          ref={zoomWrapperRef}
+        >
         <div
           className="timeline"
           ref={timelineRef}
+          style={zoomed ? { transform: `scale(${ZOOM_OUT})` } : {}}
         >
           {cards.map((card, index) => {
             const isNewCard = card.type === "new";
