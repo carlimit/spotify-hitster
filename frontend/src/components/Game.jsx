@@ -687,10 +687,13 @@ function Game({
   if (zoomWrapperRef.current && timelineRef.current) {
     const isLandscape = window.innerWidth > window.innerHeight && window.innerWidth >= 768;
     if (isLandscape) {
-      // In horizontal mode, keep full width - timeline scrolls horizontally
+      // In horizontal mode, expand timeline to compensate for zoom scale
+      timelineRef.current.style.width = next ? `${100 / ZOOM_OUT}%` : "100%";
       zoomWrapperRef.current.style.width = "100%";
       zoomWrapperRef.current.style.height = "";
     } else {
+      // Reset timeline width in vertical mode
+      timelineRef.current.style.width = "";
       // In vertical mode, set height to accommodate zoomed timeline
       const natural = timelineRef.current.scrollHeight;
       zoomWrapperRef.current.style.height = next

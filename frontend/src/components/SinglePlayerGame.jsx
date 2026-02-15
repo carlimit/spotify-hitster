@@ -446,11 +446,13 @@ function SinglePlayerGame({ t,
   if (zoomWrapperRef.current && timelineRef.current) {
     const isLandscape = window.innerWidth > window.innerHeight && window.innerWidth >= 768;
     if (isLandscape) {
-      // In horizontal mode, keep full width - timeline scrolls horizontally
+      // In horizontal mode, expand timeline to compensate for zoom scale
+      timelineRef.current.style.width = next ? `${100 / ZOOM_OUT}%` : "100%";
       zoomWrapperRef.current.style.width = "100%";
       zoomWrapperRef.current.style.height = "";
     } else {
-      // In vertical mode, set height to accommodate zoomed timeline
+      // Reset timeline width in vertical mode
+      timelineRef.current.style.width = "";
       const natural = timelineRef.current.scrollHeight;
       zoomWrapperRef.current.style.height = next
         ? `${natural * ZOOM_OUT}px`
