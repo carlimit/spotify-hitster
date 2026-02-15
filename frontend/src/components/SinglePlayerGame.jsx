@@ -44,9 +44,9 @@ function SinglePlayerGame({ t,
   const dragActiveRef = useRef(false);
   const newCardRef = useRef(null);
 
-  // ✅ FIX: Record card screen position at drag start
-  const cardStartScreenXRef = useRef(0);
-  const cardStartScreenYRef = useRef(0);
+  // Track scroll offset at drag start for scroll-drift compensation
+  const startScrollXRef = useRef(0);
+  const startScrollYRef = useRef(0);
 
   useEffect(() => { cardsRef.current = cards; }, [cards]);
   useEffect(() => { revealedRef.current = revealed; }, [revealed]);
@@ -206,12 +206,10 @@ function SinglePlayerGame({ t,
     draggingRef.current = false;
     dragActiveRef.current = true;
 
-    // ✅ FIX: Record card screen position at drag start
-    if (dragCardRef.current) {
-      const r = dragCardRef.current.getBoundingClientRect();
-      cardStartScreenXRef.current = r.left;
-      cardStartScreenYRef.current = r.top;
-    }
+    // Record scroll position for drift compensation
+    const tl = timelineRef.current;
+    startScrollXRef.current = tl ? tl.scrollLeft : 0;
+    startScrollYRef.current = window.scrollY;
   }, []);
 
   useEffect(() => {

@@ -74,10 +74,10 @@ function Game({
   const timelineRef = useRef(null);
   const newCardRef = useRef(null);
 
-  // ✅ FIX: Track the card's screen position at drag start so we can
-  // keep it under the finger even when the container auto-scrolls.
-  const cardStartScreenXRef = useRef(0);
-  const cardStartScreenYRef = useRef(0);
+  // Track scroll offset at drag start so we can compensate for container
+  // scrolling without expensive getBoundingClientRect calls every frame.
+  const startScrollXRef = useRef(0);
+  const startScrollYRef = useRef(0);
 
   useEffect(() => { selectedGenresRef.current = selectedGenres; }, [selectedGenres]);
   useEffect(() => { minYearRef.current = minYear; }, [minYear]);
@@ -326,12 +326,10 @@ function Game({
     draggingRef.current = false;
     dragActiveRef.current = true;
 
-    // ✅ Record the card's screen position at the moment dragging starts
-    if (dragCardRef.current) {
-      const r = dragCardRef.current.getBoundingClientRect();
-      cardStartScreenXRef.current = r.left;
-      cardStartScreenYRef.current = r.top;
-    }
+    // Record scroll position so we can compensate during auto-scroll
+    const tl = timelineRef.current;
+    startScrollXRef.current = tl ? tl.scrollLeft : 0;
+    startScrollYRef.current = window.scrollY;
   };
 
   const handleDragMove = (e) => {
@@ -358,22 +356,16 @@ function Game({
     if (e.cancelable) e.preventDefault();
 
     if (dragCardRef.current) {
-      // ✅ FIX: compute transform relative to the card's *current* layout
-      // position so it always stays under the finger regardless of scroll.
-      const cardNow = dragCardRef.current.getBoundingClientRect();
-      // Where we want the card's top-left corner to be (under the finger, offset by how
-      // far into the card the finger landed)
-      const fingerOffsetX = startXRef.current - cardStartScreenXRef.current;
-      const fingerOffsetY = startYRef.current - cardStartScreenYRef.current;
-      const targetLeft = clientX - fingerOffsetX;
-      const targetTop  = clientY - fingerOffsetY;
-      const tx = targetLeft - cardNow.left;
-      const ty = targetTop  - cardNow.top;
+      // Simple delta from start, plus compensation for any scrolling that
+      // happened since drag began — no layout reads, no lag.
+      const tl = timelineRef.current;
+      const scrollDeltaX = tl ? tl.scrollLeft - startScrollXRef.current : 0;
+      const scrollDeltaY = window.scrollY - startScrollYRef.current;
 
       if (horizontal) {
-        dragCardRef.current.style.transform = `translateX(${tx}px) scale(1.04)`;
+        dragCardRef.current.style.transform = `translateX(${deltaX + scrollDeltaX}px) scale(1.04)`;
       } else {
-        dragCardRef.current.style.transform = `translateY(${ty}px) scale(1.04)`;
+        dragCardRef.current.style.transform = `translateY(${deltaY + scrollDeltaY}px) scale(1.04)`;
       }
       dragCardRef.current.style.boxShadow = "0 28px 70px rgba(29,185,84,0.55)";
       dragCardRef.current.style.zIndex = "1000";
