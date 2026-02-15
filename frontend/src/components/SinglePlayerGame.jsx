@@ -443,18 +443,25 @@ function SinglePlayerGame({ t,
           // After state update, collapse wrapper to visual height (portrait only).
           // In landscape the timeline scrolls horizontally so no height fix needed.
           requestAnimationFrame(() => {
-            if (zoomWrapperRef.current && timelineRef.current) {
-              const isLandscape = window.innerWidth > window.innerHeight && window.innerWidth >= 768;
-              if (isLandscape) {
-                zoomWrapperRef.current.style.height = "";
-              } else {
-                const natural = timelineRef.current.scrollHeight;
-                zoomWrapperRef.current.style.height = next
-                  ? `${natural * ZOOM_OUT}px`
-                  : "";
-              }
-            }
-          });
+  if (zoomWrapperRef.current && timelineRef.current) {
+    const isLandscape = window.innerWidth > window.innerHeight && window.innerWidth >= 768;
+    if (isLandscape) {
+      // In horizontal mode, set width to accommodate zoomed timeline
+      const natural = timelineRef.current.scrollWidth;
+      zoomWrapperRef.current.style.width = next
+        ? `${natural * ZOOM_OUT}px`
+        : "";
+      zoomWrapperRef.current.style.height = "";
+    } else {
+      // In vertical mode, set height to accommodate zoomed timeline
+      const natural = timelineRef.current.scrollHeight;
+      zoomWrapperRef.current.style.height = next
+        ? `${natural * ZOOM_OUT}px`
+        : "";
+      zoomWrapperRef.current.style.width = "";
+    }
+  }
+});
         }}
         title={zoomed ? "Zoom in" : "Zoom out"}
       >

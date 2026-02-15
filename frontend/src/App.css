@@ -525,9 +525,11 @@ button:active { transform: scale(0.97); }
 
 /* Zoom wrapper: just a passthrough div that we set an inline height on.
    overflow:visible so nothing is clipped when scaled. */
+/* Zoom wrapper: maintains full space even when content is scaled down */
 .timeline-zoom-wrapper {
   width: 100%;
   overflow: visible;
+  min-height: 100%;  /* ← Add this */
 }
 
 /* Scale from top-center so portrait column stays horizontally centered.
