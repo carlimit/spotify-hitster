@@ -761,7 +761,6 @@ function Game({
                       style={{
                         position: "relative",
                         zIndex: isDragged ? 1000 : 1,
-                        transform: isDragged ? undefined : `translate(${shiftX}px, ${shiftY}px) scale(1)`,
                         transition: isDragged ? "none" : "transform 0.18s ease",
                         cursor: dragging ? "grabbing" : "grab",
                         userSelect: "none",
