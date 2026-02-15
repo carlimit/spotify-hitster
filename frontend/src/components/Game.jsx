@@ -694,13 +694,10 @@ function Game({
   if (zoomWrapperRef.current && timelineRef.current) {
     const isLandscape = window.innerWidth > window.innerHeight && window.innerWidth >= 768;
     if (isLandscape) {
-      // In horizontal mode, calculate actual content width when scaled
-      if (next) {
-        const actualWidth = timelineRef.current.scrollWidth;
-        zoomWrapperRef.current.style.minWidth = `${actualWidth * ZOOM_OUT}px`;
-      } else {
-        zoomWrapperRef.current.style.minWidth = "";
-      }
+      // In horizontal mode, wrapper should stay full width
+      // The timeline will be scrollable inside it
+      zoomWrapperRef.current.style.width = "100%";
+      zoomWrapperRef.current.style.minWidth = "100%";
       zoomWrapperRef.current.style.height = "";
     } else {
       // In vertical mode, set height to accommodate zoomed timeline
@@ -708,6 +705,7 @@ function Game({
       zoomWrapperRef.current.style.height = next
         ? `${natural * ZOOM_OUT}px`
         : "";
+      zoomWrapperRef.current.style.width = "";
       zoomWrapperRef.current.style.minWidth = "";
     }
   }
