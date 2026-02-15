@@ -239,18 +239,17 @@ function SinglePlayerGame({ t,
       if (e.cancelable) e.preventDefault();
 
       if (dragCardRef.current) {
-        // Divide delta by zoom: pointer coords are screen-space but translateX/Y
-        // applies in local (scaled) space. scale(1.04) stays plain — the tiny
-        // lift effect doesn't need to be exact in screen space.
         const z = zoomRef.current;
         const tl = timelineRef.current;
         const scrollDeltaX = tl ? tl.scrollLeft - startScrollXRef.current : 0;
         const scrollDeltaY = window.scrollY - startScrollYRef.current;
 
         if (horizontal) {
-          dragCardRef.current.style.transform = `translateX(${(deltaX + scrollDeltaX) / z}px) scale(1.04)`;
+          dragCardRef.current.style.transform = `translateX(${(deltaX + scrollDeltaX) / z}px)`;
+          dragCardRef.current.style.scale = "1.04";
         } else {
-          dragCardRef.current.style.transform = `translateY(${(deltaY + scrollDeltaY) / z}px) scale(1.04)`;
+          dragCardRef.current.style.transform = `translateY(${(deltaY + scrollDeltaY) / z}px)`;
+          dragCardRef.current.style.scale = "1.04";
         }
         dragCardRef.current.style.boxShadow = "0 28px 70px rgba(29,185,84,0.55)";
         dragCardRef.current.style.zIndex = "1000";
@@ -351,6 +350,7 @@ function SinglePlayerGame({ t,
 
       if (dragCardRef.current) {
         dragCardRef.current.style.transform = "";
+        dragCardRef.current.style.scale = "";
         dragCardRef.current.style.boxShadow = "";
         dragCardRef.current.style.zIndex = "";
       }
@@ -440,28 +440,23 @@ function SinglePlayerGame({ t,
           const next = !zoomed;
           setZoomed(next);
           zoomRef.current = next ? ZOOM_OUT : 1;
-          // After state update, collapse wrapper to visual height (portrait only).
-          // In landscape the timeline scrolls horizontally so no height fix needed.
           requestAnimationFrame(() => {
-  if (zoomWrapperRef.current && timelineRef.current) {
-    const isLandscape = window.innerWidth > window.innerHeight && window.innerWidth >= 768;
-    if (isLandscape) {
-      // In horizontal mode, wrapper should stay full width
-      // The timeline will be scrollable inside it
-      zoomWrapperRef.current.style.width = "100%";
-      zoomWrapperRef.current.style.minWidth = "100%";
-      zoomWrapperRef.current.style.height = "";
-    } else {
-      // In vertical mode, set height to accommodate zoomed timeline
-      const natural = timelineRef.current.scrollHeight;
-      zoomWrapperRef.current.style.height = next
-        ? `${natural * ZOOM_OUT}px`
-        : "";
-      zoomWrapperRef.current.style.width = "";
-      zoomWrapperRef.current.style.minWidth = "";
-    }
-  }
-});
+            if (zoomWrapperRef.current && timelineRef.current) {
+              const isLandscape = window.innerWidth > window.innerHeight && window.innerWidth >= 768;
+              if (isLandscape) {
+                zoomWrapperRef.current.style.width = "100%";
+                zoomWrapperRef.current.style.minWidth = "100%";
+                zoomWrapperRef.current.style.height = "";
+              } else {
+                const natural = timelineRef.current.scrollHeight;
+                zoomWrapperRef.current.style.height = next
+                  ? `${natural * ZOOM_OUT}px`
+                  : "";
+                zoomWrapperRef.current.style.width = "";
+                zoomWrapperRef.current.style.minWidth = "";
+              }
+            }
+          });
         }}
         title={zoomed ? "Zoom in" : "Zoom out"}
       >
@@ -554,7 +549,7 @@ function SinglePlayerGame({ t,
                     className={`card ${isNewCard ? "new-card-unrevealed" : "small-fixed"} ${isNewCard && revealed ? (horizontal ? "card-expanded-horizontal" : "card-expanded") : ""}`}
                     style={{
                       position: "relative",
-                      zIndex: 1,
+                      zIndex: isNewCard && revealed ? 100 : 1,
                       transform: `translate(${shiftX}px, ${shiftY}px) scale(1)`,
                       transition: "transform 0.18s ease",
                       cursor: "default",

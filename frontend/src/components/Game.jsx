@@ -58,8 +58,6 @@ function Game({
   const zoomRef = useRef(1);
   const zoomWrapperRef = useRef(null);
   const ZOOM_OUT = 0.55;
-  let lastDragUpdate = 0;
-  const DRAG_THROTTLE = 16; // ~60fps
 
   // Refs
   const selectedGenresRef = useRef(selectedGenres);
@@ -79,6 +77,7 @@ function Game({
   const insertIndexRef = useRef(null);
   const scrollIntervalRef = useRef(null);
   const dragActiveRef = useRef(false);
+  const lastDragUpdateRef = useRef(0);
 
   // Scroll position recorded at drag-start for drift-free card movement
   const startScrollXRef = useRef(0);
@@ -324,15 +323,15 @@ function Game({
   const handleDragEndRef = useRef(null);
 
   handleDragMoveRef.current = (e) => {
-  if (!dragActiveRef.current) return;
-  
-  // Throttle drag updates to 60fps
-  const now = Date.now();
-  if (now - lastDragUpdate < DRAG_THROTTLE) return;
-  lastDragUpdate = now;
+    if (!dragActiveRef.current) return;
 
-  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    // Throttle drag updates to 60fps
+    const now = Date.now();
+    if (now - lastDragUpdateRef.current < 16) return;
+    lastDragUpdateRef.current = now;
+
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const deltaY = clientY - startYRef.current;
     const deltaX = clientX - startXRef.current;
     const horizontal = isHorizontal();
@@ -358,9 +357,11 @@ function Game({
       const scrollDeltaY = window.scrollY - startScrollYRef.current;
 
       if (horizontal) {
-        dragCardRef.current.style.transform = `translateX(${(deltaX + scrollDeltaX) / z}px) scale(1.04)`;
+        dragCardRef.current.style.transform = `translateX(${(deltaX + scrollDeltaX) / z}px)`;
+        dragCardRef.current.style.scale = "1.04";
       } else {
-        dragCardRef.current.style.transform = `translateY(${(deltaY + scrollDeltaY) / z}px) scale(1.04)`;
+        dragCardRef.current.style.transform = `translateY(${(deltaY + scrollDeltaY) / z}px)`;
+        dragCardRef.current.style.scale = "1.04";
       }
       dragCardRef.current.style.boxShadow = "0 28px 70px rgba(29,185,84,0.55)";
       dragCardRef.current.style.zIndex = "1000";
@@ -460,6 +461,7 @@ function Game({
 
     if (dragCardRef.current) {
       dragCardRef.current.style.transform = "";
+      dragCardRef.current.style.scale = "";
       dragCardRef.current.style.boxShadow = "";
       dragCardRef.current.style.zIndex = "";
     }
@@ -691,25 +693,22 @@ function Game({
           setZoomed(next);
           zoomRef.current = next ? ZOOM_OUT : 1;
           requestAnimationFrame(() => {
-  if (zoomWrapperRef.current && timelineRef.current) {
-    const isLandscape = window.innerWidth > window.innerHeight && window.innerWidth >= 768;
-    if (isLandscape) {
-      // In horizontal mode, wrapper should stay full width
-      // The timeline will be scrollable inside it
-      zoomWrapperRef.current.style.width = "100%";
-      zoomWrapperRef.current.style.minWidth = "100%";
-      zoomWrapperRef.current.style.height = "";
-    } else {
-      // In vertical mode, set height to accommodate zoomed timeline
-      const natural = timelineRef.current.scrollHeight;
-      zoomWrapperRef.current.style.height = next
-        ? `${natural * ZOOM_OUT}px`
-        : "";
-      zoomWrapperRef.current.style.width = "";
-      zoomWrapperRef.current.style.minWidth = "";
-    }
-  }
-});
+            if (zoomWrapperRef.current && timelineRef.current) {
+              const isLandscape = window.innerWidth > window.innerHeight && window.innerWidth >= 768;
+              if (isLandscape) {
+                zoomWrapperRef.current.style.width = "100%";
+                zoomWrapperRef.current.style.minWidth = "100%";
+                zoomWrapperRef.current.style.height = "";
+              } else {
+                const natural = timelineRef.current.scrollHeight;
+                zoomWrapperRef.current.style.height = next
+                  ? `${natural * ZOOM_OUT}px`
+                  : "";
+                zoomWrapperRef.current.style.width = "";
+                zoomWrapperRef.current.style.minWidth = "";
+              }
+            }
+          });
         }}
         title={zoomed ? "Zoom in" : "Zoom out"}
       >
@@ -818,7 +817,7 @@ function Game({
                     className={`card ${isNewCard ? "new-card-unrevealed" : "small-fixed"} ${isNewCard && revealed ? (horizontal ? "card-expanded-horizontal" : "card-expanded") : ""}`}
                     style={{
                       position: "relative",
-                      zIndex: 1,
+                      zIndex: isNewCard && revealed ? 100 : 1,
                       transform: `translate(${shiftX}px, ${shiftY}px) scale(1)`,
                       transition: "transform 0.18s ease",
                       cursor: "default",
