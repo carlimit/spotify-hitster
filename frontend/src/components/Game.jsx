@@ -684,18 +684,22 @@ function Game({
           setZoomed(next);
           zoomRef.current = next ? ZOOM_OUT : 1;
           requestAnimationFrame(() => {
-            if (zoomWrapperRef.current && timelineRef.current) {
-              const isLandscape = window.innerWidth > window.innerHeight && window.innerWidth >= 768;
-              if (isLandscape) {
-                zoomWrapperRef.current.style.height = "";
-              } else {
-                const natural = timelineRef.current.scrollHeight;
-                zoomWrapperRef.current.style.height = next
-                  ? `${natural * ZOOM_OUT}px`
-                  : "";
-              }
-            }
-          });
+  if (zoomWrapperRef.current && timelineRef.current) {
+    const isLandscape = window.innerWidth > window.innerHeight && window.innerWidth >= 768;
+    if (isLandscape) {
+      // In horizontal mode, keep full width - timeline scrolls horizontally
+      zoomWrapperRef.current.style.width = "100%";
+      zoomWrapperRef.current.style.height = "";
+    } else {
+      // In vertical mode, set height to accommodate zoomed timeline
+      const natural = timelineRef.current.scrollHeight;
+      zoomWrapperRef.current.style.height = next
+        ? `${natural * ZOOM_OUT}px`
+        : "";
+      zoomWrapperRef.current.style.width = "";
+    }
+  }
+});
         }}
         title={zoomed ? "Zoom in" : "Zoom out"}
       >
