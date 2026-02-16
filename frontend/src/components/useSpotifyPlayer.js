@@ -9,14 +9,20 @@ export function useSpotifyPlayer(roomCode, shouldInitialize = true) {
   const currentUriRef = useRef(null);
 
   useEffect(() => {
+    const token = localStorage.getItem("token");
+    
     if (!shouldInitialize) {
-      // Non-host players in online mode: don't initialize SDK
-      setReady(true); // Still mark as "ready" so UI shows play buttons
+      // Non-host players in online mode: don't initialize SDK but mark as "ready"
+      // so UI shows play buttons (they'll send socket events instead)
+      setReady(true);
       return;
     }
 
-    const token = localStorage.getItem("token");
-    if (!token) return;
+    // Host or local mode: need token to initialize SDK
+    if (!token) {
+      console.warn("No Spotify token found - play button will be disabled");
+      return;
+    }
 
     if (!window.Spotify) {
       const script = document.createElement("script");
@@ -70,7 +76,10 @@ export function useSpotifyPlayer(roomCode, shouldInitialize = true) {
 
     // Host player: control SDK directly
     const token = localStorage.getItem("token");
-    if (!playerRef.current || !deviceIdRef.current || !token) return;
+    if (!playerRef.current || !deviceIdRef.current || !token) {
+      console.warn("Cannot play - player not ready or no token");
+      return;
+    }
 
     try {
       if (currentUriRef.current === uri && playing) {
@@ -125,7 +134,10 @@ export function useSpotifyDirect() {
 
   useEffect(() => {
     const token = localStorage.getItem("token");
-    if (!token) return;
+    if (!token) {
+      console.warn("No Spotify token found - play button will be disabled");
+      return;
+    }
 
     if (!window.Spotify) {
       const script = document.createElement("script");
@@ -171,7 +183,10 @@ export function useSpotifyDirect() {
 
   const togglePlay = async (uri) => {
     const token = localStorage.getItem("token");
-    if (!playerRef.current || !deviceIdRef.current || !token) return;
+    if (!playerRef.current || !deviceIdRef.current || !token) {
+      console.warn("Cannot play - player not ready or no token");
+      return;
+    }
 
     try {
       if (currentUriRef.current === uri && playing) {
