@@ -275,7 +275,8 @@ io.on("connection", (socket) => {
       currentPlayerIndex: 0,
       started: false,
       minYear: 1990,
-      maxYear: 2024
+      maxYear: 2024,
+      isOnlineMode: false
     };
     socket.join(code);
     socket.emit("game_created", { code });
@@ -294,7 +295,7 @@ io.on("connection", (socket) => {
     io.to(code).emit("player_list", game.players);
   });
 
-  socket.on("start_game", ({ code, minYear, maxYear, selectedGenres, playlistTracks, winGoal, timerSeconds }) => {
+  socket.on("start_game", ({ code, minYear, maxYear, selectedGenres, playlistTracks, winGoal, timerSeconds, isOnlineMode }) => {
     const game = games[code];
     if (!game) return;
 
@@ -305,6 +306,7 @@ io.on("connection", (socket) => {
     game.currentPlayerIndex = 0;
     game.winGoal = winGoal || 10;
     game.timerSeconds = timerSeconds || 0;
+    game.isOnlineMode = isOnlineMode || false; // NEW
 
     if (playlistTracks && playlistTracks.length) {
       const years = playlistTracks.map(t => parseInt(t.year)).filter(y => !isNaN(y));
@@ -333,7 +335,8 @@ io.on("connection", (socket) => {
       maxYear: game.maxYear,
       playlistTracks: game.playlistTracks,
       winGoal: game.winGoal,
-      timerSeconds: game.timerSeconds
+      timerSeconds: game.timerSeconds,
+      isOnlineMode: game.isOnlineMode // NEW
     });
   });
 
@@ -350,6 +353,20 @@ io.on("connection", (socket) => {
     const game = games[code];
     if (!game) return;
     socket.to(code).emit("card_revealed", { result, cards });
+  });
+
+  // NEW: Broadcast new card to all players in online mode
+  socket.on("broadcast_card", ({ code, card }) => {
+    const game = games[code];
+    if (!game || !game.isOnlineMode) return;
+    socket.to(code).emit("new_card_broadcast", { card });
+  });
+
+  // NEW: Sync playback across all devices in online mode
+  socket.on("sync_playback", ({ code, uri, action }) => {
+    const game = games[code];
+    if (!game || !game.isOnlineMode) return;
+    socket.to(code).emit("playback_sync", { uri, action });
   });
 
   socket.on("play_track", ({ code, uri }) => {
@@ -453,7 +470,8 @@ io.on("connection", (socket) => {
       maxYear: game.maxYear,
       playlistTracks: game.playlistTracks,
       usedUris: Array.from(game.usedUris),
-      coins: {}
+      coins: {},
+      isOnlineMode: game.isOnlineMode // NEW
     });
   });
 
@@ -476,13 +494,23 @@ io.on("connection", (socket) => {
       maxYear: game.maxYear,
       playlistTracks: game.playlistTracks,
       usedUris: Array.from(game.usedUris),
-      coins: {}
+      coins: {},
+      isOnlineMode: game.isOnlineMode // NEW
     });
   });
 
   socket.on("disconnect", () => {
     console.log("User disconnected:", socket.id);
   });
+});
+
+// NEW: Handle playback requests from non-host players in online mode
+socket.on("request_playback", ({ code, uri, action }) => {
+  const game = games[code];
+  if (!game || !game.isOnlineMode) return;
+  
+  // Forward the request to the host who controls the SDK
+  io.to(game.host).emit("control_playback", { uri, action });
 });
 
 const PORT = process.env.PORT || 3001;

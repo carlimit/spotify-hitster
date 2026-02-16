@@ -19,7 +19,8 @@ function Home({ t, lang,
   winGoal,
   setWinGoal,
   timerSeconds,
-  setTimerSeconds
+  setTimerSeconds,
+  isOnlineMode // NEW
 }) {
   const [playerName, setPlayerName] = useState("");
   const [inputCode, setInputCode] = useState("");
@@ -133,7 +134,8 @@ function Home({ t, lang,
       selectedGenres,
       playlistTracks: playlistInfo?.tracks || null,
       winGoal,
-      timerSeconds
+      timerSeconds,
+      isOnlineMode // NEW - send to server
     });
   };
 

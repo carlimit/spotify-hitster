@@ -27,7 +27,8 @@ function Game({
   timerSeconds = 0,
   t,
   lang,
-  isHost
+  isHost,
+  isOnlineMode = false // NEW
 }) {
   const [players, setLocalPlayers] = useState(initialPlayers);
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0);
@@ -37,6 +38,7 @@ function Game({
   const [showNextButton, setShowNextButton] = useState(false);
   const [revealed, setRevealed] = useState(false);
   const [isMyTurn, setIsMyTurn] = useState(false);
+  const [currentCard, setCurrentCard] = useState(null); // NEW - for spectators in online mode
 
   // Coins
   const [coins, setCoins] = useState({});
@@ -49,7 +51,9 @@ function Game({
 
   const [overviewMode, setOverviewMode] = useState(false);
 
-  const { ready: spotifyReady, playing, togglePlay, stop } = useSpotifyPlayer(roomCode, isHost);
+  // Use host's Spotify player in online mode, own player in local mode
+  const shouldInitializeSpotify = isOnlineMode ? isHost : isHost;
+  const { ready: spotifyReady, playing, togglePlay, stop } = useSpotifyPlayer(roomCode, shouldInitializeSpotify);
 
   // Drag
   const [dragging, setDragging] = useState(false);
@@ -131,7 +135,56 @@ function Game({
   }, [players, currentPlayerIndex]);
 
   // ============================================================
-  // SOCKET
+  // SOCKET - ONLINE MODE LISTENERS
+  // ============================================================
+
+  useEffect(() => {
+    if (!isOnlineMode) return; // Only in online mode
+    
+    socket.on("new_card_broadcast", ({ card }) => {
+      if (!isMyTurnRef.current) {
+        setCurrentCard(card); // Spectators see the card to play
+      }
+    });
+    
+    socket.on("playback_sync", ({ uri, action }) => {
+      // All players sync playback
+      if (action === "play") {
+        togglePlay(uri);
+      } else if (action === "pause") {
+        stop();
+      }
+    });
+    
+    return () => {
+      socket.off("new_card_broadcast");
+      socket.off("playback_sync");
+    };
+  }, [isOnlineMode, togglePlay, stop]);
+
+  // ============================================================
+  // SOCKET - HOST RECEIVES PLAYBACK CONTROL REQUESTS (ONLINE MODE)
+  // ============================================================
+
+  useEffect(() => {
+    // Host receives playback control requests from other players in online mode
+    if (isOnlineMode && isHost) {
+      socket.on("control_playback", ({ uri, action }) => {
+        if (action === "play") {
+          togglePlay(uri);
+        } else if (action === "pause") {
+          stop();
+        }
+      });
+      
+      return () => {
+        socket.off("control_playback");
+      };
+    }
+  }, [isOnlineMode, isHost, togglePlay, stop]);
+
+  // ============================================================
+  // SOCKET - STANDARD LISTENERS
   // ============================================================
 
   useEffect(() => {
@@ -166,6 +219,7 @@ function Game({
       setMyCoinIndex(null);
       setCoinGiven(false);
       setOverviewMode(false);
+      setCurrentCard(null); // NEW - clear current card
       stop();
       clearInterval(timerRef.current);
       setTimeLeft(null);
@@ -269,6 +323,11 @@ function Game({
       ];
       setCards(newCards);
       cardsRef.current = newCards;
+
+      // NEW: Broadcast card to all players in online mode
+      if (isOnlineMode) {
+        socket.emit("broadcast_card", { code: roomCode, card: newCard });
+      }
 
       setTimeout(() => {
         newCardRef.current?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
@@ -596,6 +655,21 @@ function Game({
   };
 
   // ============================================================
+  // PLAYBACK CONTROL - NEW
+  // ============================================================
+
+  const handlePlayToggle = (uri) => {
+    togglePlay(uri);
+    if (isOnlineMode) {
+      socket.emit("sync_playback", { 
+        code: roomCode, 
+        uri, 
+        action: playing ? "pause" : "play" 
+      });
+    }
+  };
+
+  // ============================================================
   // UI
   // ============================================================
 
@@ -680,6 +754,30 @@ function Game({
         </div>
       </div>
 
+      {/* NEW: Spectator play button in online mode */}
+      {isOnlineMode && !isMyTurn && currentCard && !revealed && (
+        <div style={{ marginBottom: 20, textAlign: "center" }}>
+          <button
+            className="play-button"
+            onClick={() => handlePlayToggle(currentCard.uri)}
+            disabled={!spotifyReady}
+            title={spotifyReady ? "Play / Pause" : "Connecting to Spotify..."}
+            style={{ 
+              width: 120, 
+              height: 120, 
+              fontSize: 48,
+              margin: "0 auto 12px auto",
+              display: "flex"
+            }}
+          >
+            {playing ? "⏸" : "▶"}
+          </button>
+          <p style={{ color: "#b3b3b3", fontSize: 14 }}>
+            {lang === "de" ? `${currentPlayer.name} spielt...` : `${currentPlayer.name} is playing...`}
+          </p>
+        </div>
+      )}
+
       {loading && <div className="loading-card">{t?.loadingSong || "Loading song..."}</div>}
 
       {timeLeft !== null && isMyTurn && (
@@ -696,18 +794,16 @@ function Game({
             if (zoomWrapperRef.current && timelineRef.current) {
               const isLandscape = window.innerWidth > window.innerHeight && window.innerWidth >= 768;
               if (isLandscape) {
-  if (next) {
-    // Zooming out - make wider
-    zoomWrapperRef.current.style.width = "180%";
-    zoomWrapperRef.current.style.minWidth = "180%";
-    zoomWrapperRef.current.style.height = "";
-  } else {
-    // Zooming back in - reset to normal
-    zoomWrapperRef.current.style.width = "";
-    zoomWrapperRef.current.style.minWidth = "";
-    zoomWrapperRef.current.style.height = "";
-  }
-} else {
+                if (next) {
+                  zoomWrapperRef.current.style.width = "180%";
+                  zoomWrapperRef.current.style.minWidth = "180%";
+                  zoomWrapperRef.current.style.height = "";
+                } else {
+                  zoomWrapperRef.current.style.width = "";
+                  zoomWrapperRef.current.style.minWidth = "";
+                  zoomWrapperRef.current.style.height = "";
+                }
+              } else {
                 const natural = timelineRef.current.scrollHeight;
                 zoomWrapperRef.current.style.height = next
                   ? `${natural * ZOOM_OUT}px`
@@ -800,7 +896,7 @@ function Game({
                         <div className="card-front new">
                           <button
                             className="play-button"
-                            onClick={(e) => { e.stopPropagation(); togglePlay(card.uri); }}
+                            onClick={(e) => { e.stopPropagation(); handlePlayToggle(card.uri); }}
                             onMouseDown={e => e.stopPropagation()}
                             onTouchStart={e => e.stopPropagation()}
                             disabled={!spotifyReady}
@@ -837,7 +933,7 @@ function Game({
                         <div className="card-front new">
                           <button
                             className="play-button"
-                            onClick={(e) => { e.stopPropagation(); togglePlay(card.uri); }}
+                            onClick={(e) => { e.stopPropagation(); handlePlayToggle(card.uri); }}
                             onMouseDown={e => e.stopPropagation()}
                             onTouchStart={e => e.stopPropagation()}
                             title="Play / Pause"
