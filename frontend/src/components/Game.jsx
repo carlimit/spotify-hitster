@@ -52,7 +52,7 @@ function Game({
   const [overviewMode, setOverviewMode] = useState(false);
 
   // Use host's Spotify player in online mode, own player in local mode
-  const shouldInitializeSpotify = isOnlineMode ? isHost : isHost;
+  const shouldInitializeSpotify = isOnlineMode ? isHost : true;
   const { ready: spotifyReady, playing, togglePlay, stop } = useSpotifyPlayer(roomCode, shouldInitializeSpotify);
 
   // Drag
