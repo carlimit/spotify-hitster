@@ -2,7 +2,7 @@ export default async function handler(req, res) {
   const { code } = req.query;
 
   const CLIENT_ID = process.env.SPOTIFY_CLIENT_ID;
-  const REDIRECT_URI = "https://spotify-hitster.vercel.app";
+  const REDIRECT_URI = "https://hitstream.vercel.app/";
 
   const codeVerifier = req.headers["x-code-verifier"];
 
