@@ -696,16 +696,10 @@ function Game({
             if (zoomWrapperRef.current && timelineRef.current) {
               const isLandscape = window.innerWidth > window.innerHeight && window.innerWidth >= 768;
               if (isLandscape) {
-  // Remove wrapper constraints
-  zoomWrapperRef.current.style.width = "";
-  zoomWrapperRef.current.style.minWidth = "100vw";
-  zoomWrapperRef.current.style.maxWidth = "none";
+  // Remove width constraints - let timeline be as wide as it needs
+  zoomWrapperRef.current.style.width = "180%";
+  zoomWrapperRef.current.style.minWidth = "180%";
   zoomWrapperRef.current.style.height = "";
-  
-  // Let timeline expand to its natural width
-  if (timelineRef.current) {
-    timelineRef.current.style.minWidth = "100vw";
-  }
 } else {
                 const natural = timelineRef.current.scrollHeight;
                 zoomWrapperRef.current.style.height = next
