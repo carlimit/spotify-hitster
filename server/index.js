@@ -306,7 +306,7 @@ io.on("connection", (socket) => {
     game.currentPlayerIndex = 0;
     game.winGoal = winGoal || 10;
     game.timerSeconds = timerSeconds || 0;
-    game.isOnlineMode = isOnlineMode || false; // NEW
+    game.isOnlineMode = isOnlineMode || false;
 
     if (playlistTracks && playlistTracks.length) {
       const years = playlistTracks.map(t => parseInt(t.year)).filter(y => !isNaN(y));
@@ -336,7 +336,7 @@ io.on("connection", (socket) => {
       playlistTracks: game.playlistTracks,
       winGoal: game.winGoal,
       timerSeconds: game.timerSeconds,
-      isOnlineMode: game.isOnlineMode // NEW
+      isOnlineMode: game.isOnlineMode
     });
   });
 
@@ -367,6 +367,15 @@ io.on("connection", (socket) => {
     const game = games[code];
     if (!game || !game.isOnlineMode) return;
     socket.to(code).emit("playback_sync", { uri, action });
+  });
+
+  // NEW: Handle playback requests from non-host players in online mode
+  socket.on("request_playback", ({ code, uri, action }) => {
+    const game = games[code];
+    if (!game || !game.isOnlineMode) return;
+    
+    // Forward the request to the host who controls the SDK
+    io.to(game.host).emit("control_playback", { uri, action });
   });
 
   socket.on("play_track", ({ code, uri }) => {
@@ -471,7 +480,7 @@ io.on("connection", (socket) => {
       playlistTracks: game.playlistTracks,
       usedUris: Array.from(game.usedUris),
       coins: {},
-      isOnlineMode: game.isOnlineMode // NEW
+      isOnlineMode: game.isOnlineMode
     });
   });
 
@@ -495,22 +504,13 @@ io.on("connection", (socket) => {
       playlistTracks: game.playlistTracks,
       usedUris: Array.from(game.usedUris),
       coins: {},
-      isOnlineMode: game.isOnlineMode // NEW
+      isOnlineMode: game.isOnlineMode
     });
   });
 
   socket.on("disconnect", () => {
     console.log("User disconnected:", socket.id);
   });
-});
-
-// NEW: Handle playback requests from non-host players in online mode
-socket.on("request_playback", ({ code, uri, action }) => {
-  const game = games[code];
-  if (!game || !game.isOnlineMode) return;
-  
-  // Forward the request to the host who controls the SDK
-  io.to(game.host).emit("control_playback", { uri, action });
 });
 
 const PORT = process.env.PORT || 3001;
