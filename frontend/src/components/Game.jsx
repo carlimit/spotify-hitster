@@ -696,10 +696,17 @@ function Game({
             if (zoomWrapperRef.current && timelineRef.current) {
               const isLandscape = window.innerWidth > window.innerHeight && window.innerWidth >= 768;
               if (isLandscape) {
-  // Remove width constraints - let timeline be as wide as it needs
-  zoomWrapperRef.current.style.width = "180%";
-  zoomWrapperRef.current.style.minWidth = "180%";
-  zoomWrapperRef.current.style.height = "";
+  if (next) {
+    // Zooming out - make wider
+    zoomWrapperRef.current.style.width = "180%";
+    zoomWrapperRef.current.style.minWidth = "180%";
+    zoomWrapperRef.current.style.height = "";
+  } else {
+    // Zooming back in - reset to normal
+    zoomWrapperRef.current.style.width = "";
+    zoomWrapperRef.current.style.minWidth = "";
+    zoomWrapperRef.current.style.height = "";
+  }
 } else {
                 const natural = timelineRef.current.scrollHeight;
                 zoomWrapperRef.current.style.height = next
