@@ -30,10 +30,6 @@ function SinglePlayerGame({ t,
   const zoomWrapperRef = useRef(null);
   const ZOOM_OUT = 0.55;
 
-  // NEW: track expanded card height for post-reveal shifting
-  const [expandedCardHeight, setExpandedCardHeight] = useState(0);
-  const expandedCardRef = useRef(null);
-
   const cardsRef = useRef(cards);
   const revealedRef = useRef(false);
   const draggingRef = useRef(false);
@@ -57,21 +53,7 @@ function SinglePlayerGame({ t,
   useEffect(() => { cardsRef.current = cards; }, [cards]);
   useEffect(() => { revealedRef.current = revealed; }, [revealed]);
 
-  // Measure expanded card height after reveal so we know how much to push neighbours
-  useEffect(() => {
-    if (revealed && expandedCardRef.current) {
-      const ro = new ResizeObserver(() => {
-        if (expandedCardRef.current) {
-          setExpandedCardHeight(expandedCardRef.current.getBoundingClientRect().height);
-        }
-      });
-      ro.observe(expandedCardRef.current);
-      setExpandedCardHeight(expandedCardRef.current.getBoundingClientRect().height);
-      return () => ro.disconnect();
-    } else {
-      setExpandedCardHeight(0);
-    }
-  }, [revealed]);
+
 
   const isHorizontal = () =>
     window.innerWidth > window.innerHeight && window.innerWidth >= 768;
@@ -124,7 +106,6 @@ function SinglePlayerGame({ t,
     setDragging(false);
     draggingRef.current = false;
     setInsertIndex(null);
-    setExpandedCardHeight(0);
     stop();
 
     try {
@@ -434,13 +415,6 @@ function SinglePlayerGame({ t,
   const newCardOriginalIndex = cards.findIndex(c => c.type === "new");
   const horizontal = isHorizontal();
 
-  // How much extra height the expanded new card adds over a normal fixed card.
-  // 180px is the approximate collapsed card height — adjust if your CSS differs.
-  const COLLAPSED_CARD_H = 180;
-  const revealExtraH = revealed && !horizontal && expandedCardHeight > 0
-    ? Math.max(0, expandedCardHeight - COLLAPSED_CARD_H)
-    : 0;
-
   return (
     <div className="container">
       <div className="game-header">
@@ -509,36 +483,36 @@ function SinglePlayerGame({ t,
               const isNewCard = card.type === "new";
               const isDragged = isNewCard && dragging;
 
-              // ─── Shift calculation ──────────────────────────────────
-              // During drag: shift neighbours around the ghost position.
-              // After reveal: push cards below the expanded card downward.
+              // ─── Drag-time shift (transform only — purely visual during drag) ───
               let shiftY = 0;
               let shiftX = 0;
 
-              if (!isNewCard) {
-                if (dragging && insertIndex !== null) {
-                  const origIdx = newCardOriginalIndex;
-                  const cardEls = timelineRef.current?.querySelectorAll(".card");
-                  if (horizontal) {
-                    const cardW = (cardEls?.[0]?.getBoundingClientRect().width || 200) + 12;
-                    if (insertIndex <= origIdx && index >= insertIndex && index < origIdx) shiftX = cardW;
-                    else if (insertIndex > origIdx + 1 && index > origIdx && index < insertIndex) shiftX = -cardW;
-                  } else {
-                    const cardH = (cardEls?.[0]?.getBoundingClientRect().height || 180) + 16;
-                    if (insertIndex <= origIdx && index >= insertIndex && index < origIdx) shiftY = cardH;
-                    else if (insertIndex > origIdx + 1 && index > origIdx && index < insertIndex) shiftY = -cardH;
-                  }
-                } else if (revealed && !horizontal && revealExtraH > 0) {
-                  // Post-reveal: push cards BELOW the new card down by the extra height
-                  if (index > newCardOriginalIndex) {
-                    shiftY = revealExtraH;
-                  }
+              if (!isNewCard && dragging && insertIndex !== null) {
+                const origIdx = newCardOriginalIndex;
+                const cardEls = timelineRef.current?.querySelectorAll(".card");
+                if (horizontal) {
+                  const cardW = (cardEls?.[0]?.getBoundingClientRect().width || 200) + 12;
+                  if (insertIndex <= origIdx && index >= insertIndex && index < origIdx) shiftX = cardW;
+                  else if (insertIndex > origIdx + 1 && index > origIdx && index < insertIndex) shiftX = -cardW;
+                } else {
+                  const cardH = (cardEls?.[0]?.getBoundingClientRect().height || 180) + 16;
+                  if (insertIndex <= origIdx && index >= insertIndex && index < origIdx) shiftY = cardH;
+                  else if (insertIndex > origIdx + 1 && index > origIdx && index < insertIndex) shiftY = -cardH;
                 }
               }
-              // ────────────────────────────────────────────────────────
+
+              // Post-reveal: only the first card below the new card needs a margin —
+              // the rest naturally follow in the flow.
+              const isFirstCardBelowNew = !horizontal && revealed && index === newCardOriginalIndex + 1;
 
               return (
-                <div key={card.id} style={{ width: "100%", display: "flex", justifyContent: "center" }}>
+                <div key={card.id} style={{
+                  width: "100%",
+                  display: "flex",
+                  justifyContent: "center",
+                  marginTop: isFirstCardBelowNew ? "220px" : undefined,
+                  transition: "margin-top 0.3s ease",
+                }}>
                   {isNewCard && !revealed ? (
                     <div
                       className="drag-wrapper"
@@ -588,7 +562,6 @@ function SinglePlayerGame({ t,
                       ref={isNewCard
                         ? (el) => {
                             newCardRef.current = el;
-                            expandedCardRef.current = el;
                           }
                         : null}
                       className={`card ${isNewCard ? "new-card-unrevealed" : "small-fixed"} ${isNewCard && revealed ? (horizontal ? "card-expanded-horizontal" : "card-expanded") : ""}`}

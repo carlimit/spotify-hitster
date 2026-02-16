@@ -62,10 +62,6 @@ function Game({
   const zoomWrapperRef = useRef(null);
   const ZOOM_OUT = 0.55;
 
-  // NEW: track expanded card height for post-reveal shifting
-  const [expandedCardHeight, setExpandedCardHeight] = useState(0);
-  const expandedCardRef = useRef(null);
-
   // Refs
   const selectedGenresRef = useRef(selectedGenres);
   const minYearRef = useRef(minYear);
@@ -94,23 +90,7 @@ function Game({
   useEffect(() => { cardsRef.current = cards; }, [cards]);
   useEffect(() => { revealedRef.current = revealed; }, [revealed]);
 
-  // Measure expanded card height after reveal so we know how much to shift neighbours
-  useEffect(() => {
-    if (revealed && expandedCardRef.current) {
-      // Use ResizeObserver so we get the measurement after CSS transition completes
-      const ro = new ResizeObserver(() => {
-        if (expandedCardRef.current) {
-          setExpandedCardHeight(expandedCardRef.current.getBoundingClientRect().height);
-        }
-      });
-      ro.observe(expandedCardRef.current);
-      // Also set immediately in case transition already finished
-      setExpandedCardHeight(expandedCardRef.current.getBoundingClientRect().height);
-      return () => ro.disconnect();
-    } else {
-      setExpandedCardHeight(0);
-    }
-  }, [revealed]);
+
 
   const updatePlayers = (p) => { setLocalPlayers(p); setPlayers(p); };
   const currentPlayer = players[currentPlayerIndex];
@@ -224,7 +204,6 @@ function Game({
       setCoinGiven(false);
       setOverviewMode(false);
       setCurrentCard(null);
-      setExpandedCardHeight(0);
       stop();
       clearInterval(timerRef.current);
       setTimeLeft(null);
@@ -689,14 +668,6 @@ function Game({
 
   const horizontal = window.innerWidth > window.innerHeight && window.innerWidth >= 768;
 
-  // How much extra height the expanded new card adds over a normal fixed card.
-  // We use this to push neighbours away after reveal in vertical mode.
-  // 180 is approx the collapsed card height — adjust if your CSS differs.
-  const COLLAPSED_CARD_H = 180;
-  const revealExtraH = revealed && !horizontal && expandedCardHeight > 0
-    ? Math.max(0, expandedCardHeight - COLLAPSED_CARD_H)
-    : 0;
-
   if (overviewMode) {
     const myTimeline = myPlayer?.timeline || [];
     return (
@@ -843,40 +814,42 @@ function Game({
               const isNewCard = card.type === "new";
               const isDragged = isNewCard && dragging;
 
-              // ─── Shift calculation ──────────────────────────────────
-              // During drag: shift neighbours around the ghost position.
-              // After reveal: shift neighbours below the expanded card down.
+              // ─── Drag-time shift (transform only — purely visual during drag) ───
               let shiftY = 0;
               let shiftX = 0;
 
-              if (!isNewCard) {
-                if (dragging && insertIndex !== null) {
-                  // Drag-time shifting (unchanged logic)
-                  const origIdx = newCardOriginalIndex;
-                  const cardEls = timelineRef.current?.querySelectorAll(".card");
-                  if (horizontal) {
-                    const cardW = (cardEls?.[0]?.getBoundingClientRect().width || 200) + 12;
-                    if (insertIndex <= origIdx && index >= insertIndex && index < origIdx) shiftX = cardW;
-                    else if (insertIndex > origIdx + 1 && index > origIdx && index < insertIndex) shiftX = -cardW;
-                  } else {
-                    const cardH = (cardEls?.[0]?.getBoundingClientRect().height || 180) + 16;
-                    if (insertIndex <= origIdx && index >= insertIndex && index < origIdx) shiftY = cardH;
-                    else if (insertIndex > origIdx + 1 && index > origIdx && index < insertIndex) shiftY = -cardH;
-                  }
-                } else if (revealed && !horizontal && revealExtraH > 0) {
-                  // Post-reveal: push cards BELOW the new card down by the extra height
-                  if (index > newCardOriginalIndex) {
-                    shiftY = revealExtraH;
-                  }
+              if (!isNewCard && dragging && insertIndex !== null) {
+                const origIdx = newCardOriginalIndex;
+                const cardEls = timelineRef.current?.querySelectorAll(".card");
+                if (horizontal) {
+                  const cardW = (cardEls?.[0]?.getBoundingClientRect().width || 200) + 12;
+                  if (insertIndex <= origIdx && index >= insertIndex && index < origIdx) shiftX = cardW;
+                  else if (insertIndex > origIdx + 1 && index > origIdx && index < insertIndex) shiftX = -cardW;
+                } else {
+                  const cardH = (cardEls?.[0]?.getBoundingClientRect().height || 180) + 16;
+                  if (insertIndex <= origIdx && index >= insertIndex && index < origIdx) shiftY = cardH;
+                  else if (insertIndex > origIdx + 1 && index > origIdx && index < insertIndex) shiftY = -cardH;
                 }
               }
-              // ────────────────────────────────────────────────────────
+
+              // Post-reveal: add real margin to the card immediately after the
+              // new card so the expanded card pushes it down in the normal flow.
+              // Only the first card below needs the margin — layout handles the rest.
+              const isFirstCardBelowNew = !horizontal && revealed && index === newCardOriginalIndex + 1;
 
               const coinsHere = coinsBySlot[index] || 0;
               const myMyCoinHere = myCoinIndex === index;
 
               return (
-                <div key={card.id} style={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center" }}>
+                <div key={card.id} style={{
+                  width: "100%",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  // Push this card down in real layout space when the new card above it expands
+                  marginTop: isFirstCardBelowNew ? "220px" : undefined,
+                  transition: "margin-top 0.3s ease",
+                }}>
                   {!isMyTurn && !revealed && (
                     <div className="coin-slot">
                       {coinsHere - (myMyCoinHere ? 1 : 0) > 0 && (
@@ -943,8 +916,6 @@ function Game({
                       ref={isNewCard
                         ? (el) => {
                             newCardRef.current = el;
-                            // Also track this as the expanded card for height measurement
-                            expandedCardRef.current = el;
                           }
                         : null}
                       className={`card ${isNewCard ? "new-card-unrevealed" : "small-fixed"} ${isNewCard && revealed ? (horizontal ? "card-expanded-horizontal" : "card-expanded") : ""}`}
