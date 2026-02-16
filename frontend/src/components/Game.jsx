@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { socket } from "../socket";
-import { useSpotifyPlayer } from "./UseSpotifyPlayer";
+import { useSpotifyPlayer } from "./useSpotifyPlayer";
 
 function saveSession(data) {
   try { sessionStorage.setItem("hitster_session", JSON.stringify(data)); } catch {}
