@@ -520,7 +520,7 @@ function SinglePlayerGame({ t,
                       style={{
                         position: "relative",
                         zIndex: isDragged ? 1000 : 1,
-                        transition: isDragged ? "none" : "transform 0.18s ease",
+                        transition: isDragged ? "none" : "none",
                         cursor: dragging ? "grabbing" : "grab",
                         userSelect: "none",
                         touchAction: "none",
