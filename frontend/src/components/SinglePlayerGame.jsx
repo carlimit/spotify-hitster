@@ -26,9 +26,13 @@ function SinglePlayerGame({ t,
   const [dragging, setDragging] = useState(false);
   const [insertIndex, setInsertIndex] = useState(null);
   const [zoomed, setZoomed] = useState(false);
-  const zoomRef = useRef(1);          // 1 = normal, ZOOM_OUT = zoomed
+  const zoomRef = useRef(1);
   const zoomWrapperRef = useRef(null);
   const ZOOM_OUT = 0.55;
+
+  // NEW: track expanded card height for post-reveal shifting
+  const [expandedCardHeight, setExpandedCardHeight] = useState(0);
+  const expandedCardRef = useRef(null);
 
   const cardsRef = useRef(cards);
   const revealedRef = useRef(false);
@@ -47,13 +51,27 @@ function SinglePlayerGame({ t,
   const scrollIntervalRef = useRef(null);
   const dragActiveRef = useRef(false);
   const newCardRef = useRef(null);
-
-  // Scroll position recorded at drag-start for drift-free card movement
   const startScrollXRef = useRef(0);
   const startScrollYRef = useRef(0);
 
   useEffect(() => { cardsRef.current = cards; }, [cards]);
   useEffect(() => { revealedRef.current = revealed; }, [revealed]);
+
+  // Measure expanded card height after reveal so we know how much to push neighbours
+  useEffect(() => {
+    if (revealed && expandedCardRef.current) {
+      const ro = new ResizeObserver(() => {
+        if (expandedCardRef.current) {
+          setExpandedCardHeight(expandedCardRef.current.getBoundingClientRect().height);
+        }
+      });
+      ro.observe(expandedCardRef.current);
+      setExpandedCardHeight(expandedCardRef.current.getBoundingClientRect().height);
+      return () => ro.disconnect();
+    } else {
+      setExpandedCardHeight(0);
+    }
+  }, [revealed]);
 
   const isHorizontal = () =>
     window.innerWidth > window.innerHeight && window.innerWidth >= 768;
@@ -106,6 +124,7 @@ function SinglePlayerGame({ t,
     setDragging(false);
     draggingRef.current = false;
     setInsertIndex(null);
+    setExpandedCardHeight(0);
     stop();
 
     try {
@@ -208,7 +227,6 @@ function SinglePlayerGame({ t,
     draggingRef.current = false;
     dragActiveRef.current = true;
 
-    // Snapshot scroll position so we can compensate for auto-scroll drift
     const tl = timelineRef.current;
     startScrollXRef.current = tl ? tl.scrollLeft : 0;
     startScrollYRef.current = window.scrollY;
@@ -414,6 +432,14 @@ function SinglePlayerGame({ t,
   }
 
   const newCardOriginalIndex = cards.findIndex(c => c.type === "new");
+  const horizontal = isHorizontal();
+
+  // How much extra height the expanded new card adds over a normal fixed card.
+  // 180px is the approximate collapsed card height — adjust if your CSS differs.
+  const COLLAPSED_CARD_H = 180;
+  const revealExtraH = revealed && !horizontal && expandedCardHeight > 0
+    ? Math.max(0, expandedCardHeight - COLLAPSED_CARD_H)
+    : 0;
 
   return (
     <div className="container">
@@ -444,18 +470,16 @@ function SinglePlayerGame({ t,
             if (zoomWrapperRef.current && timelineRef.current) {
               const isLandscape = window.innerWidth > window.innerHeight && window.innerWidth >= 768;
               if (isLandscape) {
-  if (next) {
-    // Zooming out - make wider
-    zoomWrapperRef.current.style.width = "180%";
-    zoomWrapperRef.current.style.minWidth = "180%";
-    zoomWrapperRef.current.style.height = "";
-  } else {
-    // Zooming back in - reset to normal
-    zoomWrapperRef.current.style.width = "";
-    zoomWrapperRef.current.style.minWidth = "";
-    zoomWrapperRef.current.style.height = "";
-  }
-} else {
+                if (next) {
+                  zoomWrapperRef.current.style.width = "180%";
+                  zoomWrapperRef.current.style.minWidth = "180%";
+                  zoomWrapperRef.current.style.height = "";
+                } else {
+                  zoomWrapperRef.current.style.width = "";
+                  zoomWrapperRef.current.style.minWidth = "";
+                  zoomWrapperRef.current.style.height = "";
+                }
+              } else {
                 const natural = timelineRef.current.scrollHeight;
                 zoomWrapperRef.current.style.height = next
                   ? `${natural * ZOOM_OUT}px`
@@ -476,129 +500,142 @@ function SinglePlayerGame({ t,
           className="timeline-zoom-wrapper"
           ref={zoomWrapperRef}
         >
-        <div
-          className="timeline"
-          ref={timelineRef}
-          style={zoomed ? { transform: `scale(${ZOOM_OUT})` } : {}}
-        >
-          {cards.map((card, index) => {
-            const isNewCard = card.type === "new";
-            const isDragged = isNewCard && dragging;
-            const horizontal = isHorizontal();
+          <div
+            className="timeline"
+            ref={timelineRef}
+            style={zoomed ? { transform: `scale(${ZOOM_OUT})` } : {}}
+          >
+            {cards.map((card, index) => {
+              const isNewCard = card.type === "new";
+              const isDragged = isNewCard && dragging;
 
-            let shiftY = 0;
-            let shiftX = 0;
-            if (dragging && !isNewCard && insertIndex !== null) {
-              const origIdx = newCardOriginalIndex;
-              const cardEls = timelineRef.current?.querySelectorAll(".card");
-              if (horizontal) {
-                const cardW = (cardEls?.[0]?.getBoundingClientRect().width || 200) + 12;
-                if (insertIndex <= origIdx && index >= insertIndex && index < origIdx) shiftX = cardW;
-                else if (insertIndex > origIdx + 1 && index > origIdx && index < insertIndex) shiftX = -cardW;
-              } else {
-                const cardH = (cardEls?.[0]?.getBoundingClientRect().height || 180) + 16;
-                if (insertIndex <= origIdx && index >= insertIndex && index < origIdx) shiftY = cardH;
-                else if (insertIndex > origIdx + 1 && index > origIdx && index < insertIndex) shiftY = -cardH;
+              // ─── Shift calculation ──────────────────────────────────
+              // During drag: shift neighbours around the ghost position.
+              // After reveal: push cards below the expanded card downward.
+              let shiftY = 0;
+              let shiftX = 0;
+
+              if (!isNewCard) {
+                if (dragging && insertIndex !== null) {
+                  const origIdx = newCardOriginalIndex;
+                  const cardEls = timelineRef.current?.querySelectorAll(".card");
+                  if (horizontal) {
+                    const cardW = (cardEls?.[0]?.getBoundingClientRect().width || 200) + 12;
+                    if (insertIndex <= origIdx && index >= insertIndex && index < origIdx) shiftX = cardW;
+                    else if (insertIndex > origIdx + 1 && index > origIdx && index < insertIndex) shiftX = -cardW;
+                  } else {
+                    const cardH = (cardEls?.[0]?.getBoundingClientRect().height || 180) + 16;
+                    if (insertIndex <= origIdx && index >= insertIndex && index < origIdx) shiftY = cardH;
+                    else if (insertIndex > origIdx + 1 && index > origIdx && index < insertIndex) shiftY = -cardH;
+                  }
+                } else if (revealed && !horizontal && revealExtraH > 0) {
+                  // Post-reveal: push cards BELOW the new card down by the extra height
+                  if (index > newCardOriginalIndex) {
+                    shiftY = revealExtraH;
+                  }
+                }
               }
-            }
+              // ────────────────────────────────────────────────────────
 
-            return (
-              <div key={card.id} style={{ width: "100%", display: "flex", justifyContent: "center" }}>
-                {isNewCard && !revealed ? (
-                  <div
-                    className="drag-wrapper"
-                    style={{
-                      touchAction: "none",
-                      userSelect: "none",
-                    }}
-                    onMouseDown={handleDragStart}
-                    onTouchStart={handleDragStart}
-                  >
+              return (
+                <div key={card.id} style={{ width: "100%", display: "flex", justifyContent: "center" }}>
+                  {isNewCard && !revealed ? (
                     <div
-                      ref={(el) => { dragCardRef.current = el; newCardRef.current = el; }}
-                      className={`card new-card-unrevealed`}
-                      style={{
-                        position: "relative",
-                        zIndex: isDragged ? 1000 : 1,
-                        transition: isDragged ? "none" : "none",
-                        cursor: dragging ? "grabbing" : "grab",
-                        userSelect: "none",
-                        touchAction: "none",
-                      }}
+                      className="drag-wrapper"
+                      style={{ touchAction: "none", userSelect: "none" }}
+                      onMouseDown={handleDragStart}
+                      onTouchStart={handleDragStart}
                     >
-                      <div className={`card-inner ${result === "correct" ? "result-correct" : ""} ${result === "wrong" ? "result-wrong" : ""}`}>
-                        <div className="card-front new">
-                          {localStorage.getItem("token") && (
-                            <button
-                              className="play-button"
-                              onClick={e => { e.stopPropagation(); togglePlay(card.uri); }}
-                              onMouseDown={e => e.stopPropagation()}
-                              onTouchStart={e => e.stopPropagation()}
-                              disabled={!spotifyReady}
-                              title={spotifyReady ? "Play / Pause" : "Connecting to Spotify..."}
-                            >
-                              {playing ? "⏸" : "▶"}
-                            </button>
-                          )}
-                          <div className="drag-hint">Drag to place</div>
-                        </div>
-                        <div className="card-back">
-                          <img src={card.cover} className="cover-large" alt="" />
-                          <div className="revealed-year">{card.year}</div>
-                          <strong>{card.artist}</strong>
-                          <div className="song-title">{card.name}</div>
+                      <div
+                        ref={(el) => { dragCardRef.current = el; newCardRef.current = el; }}
+                        className={`card new-card-unrevealed`}
+                        style={{
+                          position: "relative",
+                          zIndex: isDragged ? 1000 : 1,
+                          transition: "none",
+                          cursor: dragging ? "grabbing" : "grab",
+                          userSelect: "none",
+                          touchAction: "none",
+                        }}
+                      >
+                        <div className={`card-inner ${result === "correct" ? "result-correct" : ""} ${result === "wrong" ? "result-wrong" : ""}`}>
+                          <div className="card-front new">
+                            {localStorage.getItem("token") && (
+                              <button
+                                className="play-button"
+                                onClick={e => { e.stopPropagation(); togglePlay(card.uri); }}
+                                onMouseDown={e => e.stopPropagation()}
+                                onTouchStart={e => e.stopPropagation()}
+                                disabled={!spotifyReady}
+                                title={spotifyReady ? "Play / Pause" : "Connecting to Spotify..."}
+                              >
+                                {playing ? "⏸" : "▶"}
+                              </button>
+                            )}
+                            <div className="drag-hint">Drag to place</div>
+                          </div>
+                          <div className="card-back">
+                            <img src={card.cover} className="cover-large" alt="" />
+                            <div className="revealed-year">{card.year}</div>
+                            <strong>{card.artist}</strong>
+                            <div className="song-title">{card.name}</div>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                ) : (
-                  <div
-                    ref={isNewCard ? (el) => { newCardRef.current = el; } : null}
-                    className={`card ${isNewCard ? "new-card-unrevealed" : "small-fixed"} ${isNewCard && revealed ? (horizontal ? "card-expanded-horizontal" : "card-expanded") : ""}`}
-                    style={{
-                      position: "relative",
-                      zIndex: isNewCard && revealed ? 100 : 1,
-                      transform: `translate(${shiftX}px, ${shiftY}px) scale(1)`,
-                      transition: "transform 0.18s ease",
-                      cursor: "default",
-                      userSelect: "none",
-                    }}
-                  >
-                    {isNewCard ? (
-                      <div className={`card-inner flipped ${result === "correct" ? "result-correct" : ""} ${result === "wrong" ? "result-wrong" : ""}`}>
-                        <div className="card-front new">
-                          {localStorage.getItem("token") && (
-                            <button
-                              className="play-button"
-                              onClick={e => { e.stopPropagation(); togglePlay(card.uri); }}
-                              onMouseDown={e => e.stopPropagation()}
-                              onTouchStart={e => e.stopPropagation()}
-                              disabled={!spotifyReady}
-                              title={spotifyReady ? "Play / Pause" : "Connecting to Spotify..."}
-                            >
-                              {playing ? "⏸" : "▶"}
-                            </button>
-                          )}
-                          <div className="drag-hint">Drag to place</div>
+                  ) : (
+                    <div
+                      ref={isNewCard
+                        ? (el) => {
+                            newCardRef.current = el;
+                            expandedCardRef.current = el;
+                          }
+                        : null}
+                      className={`card ${isNewCard ? "new-card-unrevealed" : "small-fixed"} ${isNewCard && revealed ? (horizontal ? "card-expanded-horizontal" : "card-expanded") : ""}`}
+                      style={{
+                        position: "relative",
+                        zIndex: isNewCard && revealed ? 100 : 1,
+                        transform: `translate(${shiftX}px, ${shiftY}px) scale(1)`,
+                        transition: isNewCard ? "none" : "transform 0.3s ease",
+                        cursor: "default",
+                        userSelect: "none",
+                      }}
+                    >
+                      {isNewCard ? (
+                        <div className={`card-inner flipped ${result === "correct" ? "result-correct" : ""} ${result === "wrong" ? "result-wrong" : ""}`}>
+                          <div className="card-front new">
+                            {localStorage.getItem("token") && (
+                              <button
+                                className="play-button"
+                                onClick={e => { e.stopPropagation(); togglePlay(card.uri); }}
+                                onMouseDown={e => e.stopPropagation()}
+                                onTouchStart={e => e.stopPropagation()}
+                                disabled={!spotifyReady}
+                                title={spotifyReady ? "Play / Pause" : "Connecting to Spotify..."}
+                              >
+                                {playing ? "⏸" : "▶"}
+                              </button>
+                            )}
+                            <div className="drag-hint">Drag to place</div>
+                          </div>
+                          <div className="card-back">
+                            <img src={card.cover} className="cover-large" alt="" />
+                            <div className="revealed-year">{card.year}</div>
+                            <strong>{card.artist}</strong>
+                            <div className="song-title">{card.name}</div>
+                          </div>
                         </div>
-                        <div className="card-back">
-                          <img src={card.cover} className="cover-large" alt="" />
-                          <div className="revealed-year">{card.year}</div>
-                          <strong>{card.artist}</strong>
-                          <div className="song-title">{card.name}</div>
+                      ) : (
+                        <div className="card-front fixed">
+                          <div>{card.year}</div>
                         </div>
-                      </div>
-                    ) : (
-                      <div className="card-front fixed">
-                        <div>{card.year}</div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 

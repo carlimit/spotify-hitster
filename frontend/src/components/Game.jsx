@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { socket } from "../socket";
-import { useSpotifyPlayer } from "./useSpotifyPlayer";
+import { useSpotifyPlayer } from "./UseSpotifyPlayer";
 
 function saveSession(data) {
   try { sessionStorage.setItem("hitster_session", JSON.stringify(data)); } catch {}
@@ -28,7 +28,7 @@ function Game({
   t,
   lang,
   isHost,
-  isOnlineMode = false // NEW
+  isOnlineMode = false
 }) {
   const [players, setLocalPlayers] = useState(initialPlayers);
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0);
@@ -38,7 +38,7 @@ function Game({
   const [showNextButton, setShowNextButton] = useState(false);
   const [revealed, setRevealed] = useState(false);
   const [isMyTurn, setIsMyTurn] = useState(false);
-  const [currentCard, setCurrentCard] = useState(null); // NEW - for spectators in online mode
+  const [currentCard, setCurrentCard] = useState(null);
 
   // Coins
   const [coins, setCoins] = useState({});
@@ -51,7 +51,6 @@ function Game({
 
   const [overviewMode, setOverviewMode] = useState(false);
 
-  // Use host's Spotify player in online mode, own player in local mode
   const shouldInitializeSpotify = isOnlineMode ? isHost : true;
   const { ready: spotifyReady, playing, togglePlay, stop } = useSpotifyPlayer(roomCode, shouldInitializeSpotify);
 
@@ -62,6 +61,10 @@ function Game({
   const zoomRef = useRef(1);
   const zoomWrapperRef = useRef(null);
   const ZOOM_OUT = 0.55;
+
+  // NEW: track expanded card height for post-reveal shifting
+  const [expandedCardHeight, setExpandedCardHeight] = useState(0);
+  const expandedCardRef = useRef(null);
 
   // Refs
   const selectedGenresRef = useRef(selectedGenres);
@@ -82,8 +85,6 @@ function Game({
   const scrollIntervalRef = useRef(null);
   const dragActiveRef = useRef(false);
   const lastDragUpdateRef = useRef(0);
-
-  // Scroll position recorded at drag-start for drift-free card movement
   const startScrollXRef = useRef(0);
   const startScrollYRef = useRef(0);
 
@@ -92,6 +93,24 @@ function Game({
   useEffect(() => { maxYearRef.current = maxYear; }, [maxYear]);
   useEffect(() => { cardsRef.current = cards; }, [cards]);
   useEffect(() => { revealedRef.current = revealed; }, [revealed]);
+
+  // Measure expanded card height after reveal so we know how much to shift neighbours
+  useEffect(() => {
+    if (revealed && expandedCardRef.current) {
+      // Use ResizeObserver so we get the measurement after CSS transition completes
+      const ro = new ResizeObserver(() => {
+        if (expandedCardRef.current) {
+          setExpandedCardHeight(expandedCardRef.current.getBoundingClientRect().height);
+        }
+      });
+      ro.observe(expandedCardRef.current);
+      // Also set immediately in case transition already finished
+      setExpandedCardHeight(expandedCardRef.current.getBoundingClientRect().height);
+      return () => ro.disconnect();
+    } else {
+      setExpandedCardHeight(0);
+    }
+  }, [revealed]);
 
   const updatePlayers = (p) => { setLocalPlayers(p); setPlayers(p); };
   const currentPlayer = players[currentPlayerIndex];
@@ -139,47 +158,32 @@ function Game({
   // ============================================================
 
   useEffect(() => {
-    if (!isOnlineMode) return; // Only in online mode
-    
+    if (!isOnlineMode) return;
+
     socket.on("new_card_broadcast", ({ card }) => {
       if (!isMyTurnRef.current) {
-        setCurrentCard(card); // Spectators see the card to play
+        setCurrentCard(card);
       }
     });
-    
+
     socket.on("playback_sync", ({ uri, action }) => {
-      // All players sync playback
-      if (action === "play") {
-        togglePlay(uri);
-      } else if (action === "pause") {
-        stop();
-      }
+      if (action === "play") togglePlay(uri);
+      else if (action === "pause") stop();
     });
-    
+
     return () => {
       socket.off("new_card_broadcast");
       socket.off("playback_sync");
     };
   }, [isOnlineMode, togglePlay, stop]);
 
-  // ============================================================
-  // SOCKET - HOST RECEIVES PLAYBACK CONTROL REQUESTS (ONLINE MODE)
-  // ============================================================
-
   useEffect(() => {
-    // Host receives playback control requests from other players in online mode
     if (isOnlineMode && isHost) {
       socket.on("control_playback", ({ uri, action }) => {
-        if (action === "play") {
-          togglePlay(uri);
-        } else if (action === "pause") {
-          stop();
-        }
+        if (action === "play") togglePlay(uri);
+        else if (action === "pause") stop();
       });
-      
-      return () => {
-        socket.off("control_playback");
-      };
+      return () => { socket.off("control_playback"); };
     }
   }, [isOnlineMode, isHost, togglePlay, stop]);
 
@@ -219,7 +223,8 @@ function Game({
       setMyCoinIndex(null);
       setCoinGiven(false);
       setOverviewMode(false);
-      setCurrentCard(null); // NEW - clear current card
+      setCurrentCard(null);
+      setExpandedCardHeight(0);
       stop();
       clearInterval(timerRef.current);
       setTimeLeft(null);
@@ -324,7 +329,6 @@ function Game({
       setCards(newCards);
       cardsRef.current = newCards;
 
-      // NEW: Broadcast card to all players in online mode
       if (isOnlineMode) {
         socket.emit("broadcast_card", { code: roomCode, card: newCard });
       }
@@ -370,21 +374,17 @@ function Game({
     draggingRef.current = false;
     dragActiveRef.current = true;
 
-    // Snapshot scroll so we can compensate for auto-scroll drift each frame
     const tl = timelineRef.current;
     startScrollXRef.current = tl ? tl.scrollLeft : 0;
     startScrollYRef.current = window.scrollY;
   };
 
-  // Store move/end in refs so the window listeners always call the latest
-  // version without being re-registered on every render.
   const handleDragMoveRef = useRef(null);
   const handleDragEndRef = useRef(null);
 
   handleDragMoveRef.current = (e) => {
     if (!dragActiveRef.current) return;
 
-    // Throttle drag updates to 60fps
     const now = Date.now();
     if (now - lastDragUpdateRef.current < 16) return;
     lastDragUpdateRef.current = now;
@@ -655,16 +655,16 @@ function Game({
   };
 
   // ============================================================
-  // PLAYBACK CONTROL - NEW
+  // PLAYBACK CONTROL
   // ============================================================
 
   const handlePlayToggle = (uri) => {
     togglePlay(uri);
     if (isOnlineMode) {
-      socket.emit("sync_playback", { 
-        code: roomCode, 
-        uri, 
-        action: playing ? "pause" : "play" 
+      socket.emit("sync_playback", {
+        code: roomCode,
+        uri,
+        action: playing ? "pause" : "play"
       });
     }
   };
@@ -686,6 +686,16 @@ function Game({
   Object.values(coins).forEach(({ insertIndex: idx }) => {
     coinsBySlot[idx] = (coinsBySlot[idx] || 0) + 1;
   });
+
+  const horizontal = window.innerWidth > window.innerHeight && window.innerWidth >= 768;
+
+  // How much extra height the expanded new card adds over a normal fixed card.
+  // We use this to push neighbours away after reveal in vertical mode.
+  // 180 is approx the collapsed card height — adjust if your CSS differs.
+  const COLLAPSED_CARD_H = 180;
+  const revealExtraH = revealed && !horizontal && expandedCardHeight > 0
+    ? Math.max(0, expandedCardHeight - COLLAPSED_CARD_H)
+    : 0;
 
   if (overviewMode) {
     const myTimeline = myPlayer?.timeline || [];
@@ -754,7 +764,7 @@ function Game({
         </div>
       </div>
 
-      {/* NEW: Spectator play button in online mode */}
+      {/* Spectator play button in online mode */}
       {isOnlineMode && !isMyTurn && currentCard && !revealed && (
         <div style={{ marginBottom: 20, textAlign: "center" }}>
           <button
@@ -762,9 +772,9 @@ function Game({
             onClick={() => handlePlayToggle(currentCard.uri)}
             disabled={!spotifyReady}
             title={spotifyReady ? "Play / Pause" : "Connecting to Spotify..."}
-            style={{ 
-              width: 120, 
-              height: 120, 
+            style={{
+              width: 120,
+              height: 120,
               fontSize: 48,
               margin: "0 auto 12px auto",
               display: "flex"
@@ -824,163 +834,182 @@ function Game({
           className="timeline-zoom-wrapper"
           ref={zoomWrapperRef}
         >
-        <div
-          className="timeline"
-          ref={timelineRef}
-          style={{ paddingBottom: "100px", ...(zoomed ? { transform: `scale(${ZOOM_OUT})` } : {}) }}
-        >
-          {cards.map((card, index) => {
-            const isNewCard = card.type === "new";
-            const isDragged = isNewCard && dragging;
-            const horizontal = isHorizontal();
-            let shiftY = 0;
-            let shiftX = 0;
-            if (dragging && !isNewCard && insertIndex !== null) {
-              const origIdx = newCardOriginalIndex;
-              const cardEls = timelineRef.current?.querySelectorAll(".card");
-              if (horizontal) {
-                const cardW = (cardEls?.[0]?.getBoundingClientRect().width || 200) + 12;
-                if (insertIndex <= origIdx && index >= insertIndex && index < origIdx) shiftX = cardW;
-                else if (insertIndex > origIdx + 1 && index > origIdx && index < insertIndex) shiftX = -cardW;
-              } else {
-                const cardH = (cardEls?.[0]?.getBoundingClientRect().height || 180) + 16;
-                if (insertIndex <= origIdx && index >= insertIndex && index < origIdx) shiftY = cardH;
-                else if (insertIndex > origIdx + 1 && index > origIdx && index < insertIndex) shiftY = -cardH;
+          <div
+            className="timeline"
+            ref={timelineRef}
+            style={{ paddingBottom: "100px", ...(zoomed ? { transform: `scale(${ZOOM_OUT})` } : {}) }}
+          >
+            {cards.map((card, index) => {
+              const isNewCard = card.type === "new";
+              const isDragged = isNewCard && dragging;
+
+              // ─── Shift calculation ──────────────────────────────────
+              // During drag: shift neighbours around the ghost position.
+              // After reveal: shift neighbours below the expanded card down.
+              let shiftY = 0;
+              let shiftX = 0;
+
+              if (!isNewCard) {
+                if (dragging && insertIndex !== null) {
+                  // Drag-time shifting (unchanged logic)
+                  const origIdx = newCardOriginalIndex;
+                  const cardEls = timelineRef.current?.querySelectorAll(".card");
+                  if (horizontal) {
+                    const cardW = (cardEls?.[0]?.getBoundingClientRect().width || 200) + 12;
+                    if (insertIndex <= origIdx && index >= insertIndex && index < origIdx) shiftX = cardW;
+                    else if (insertIndex > origIdx + 1 && index > origIdx && index < insertIndex) shiftX = -cardW;
+                  } else {
+                    const cardH = (cardEls?.[0]?.getBoundingClientRect().height || 180) + 16;
+                    if (insertIndex <= origIdx && index >= insertIndex && index < origIdx) shiftY = cardH;
+                    else if (insertIndex > origIdx + 1 && index > origIdx && index < insertIndex) shiftY = -cardH;
+                  }
+                } else if (revealed && !horizontal && revealExtraH > 0) {
+                  // Post-reveal: push cards BELOW the new card down by the extra height
+                  if (index > newCardOriginalIndex) {
+                    shiftY = revealExtraH;
+                  }
+                }
               }
-            }
+              // ────────────────────────────────────────────────────────
 
-            const coinsHere = coinsBySlot[index] || 0;
-            const myMyCoinHere = myCoinIndex === index;
+              const coinsHere = coinsBySlot[index] || 0;
+              const myMyCoinHere = myCoinIndex === index;
 
-            return (
-              <div key={card.id} style={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center" }}>
-                {!isMyTurn && !revealed && (
-                  <div className="coin-slot">
-                    {coinsHere - (myMyCoinHere ? 1 : 0) > 0 && (
-                      <div className="coins-on-slot">
-                        {"🪙".repeat(Math.min(coinsHere - (myMyCoinHere ? 1 : 0), 5))}
-                      </div>
-                    )}
-                    {myMyCoinHere ? (
-                      <button className="coin-btn coin-placed" onClick={removeCoin} title="Pick up coin">🪙</button>
-                    ) : !hasCoinPlaced && myCoins > 0 ? (
-                      <button className="coin-btn coin-plus" onClick={() => placeCoin(index)} title="Place coin here">+</button>
-                    ) : null}
-                  </div>
-                )}
-
-                {isNewCard && !revealed && isMyTurn ? (
-                  <div
-                    className="drag-wrapper"
-                    style={{ touchAction: "none", userSelect: "none" }}
-                    onMouseDown={handleDragStart}
-                    onTouchStart={(e) => {
-                      e.preventDefault();
-                      handleDragStart(e);
-                    }}
-                    onTouchMove={(e) => e.preventDefault()}
-                  >
-                    <div
-                      ref={(el) => { dragCardRef.current = el; newCardRef.current = el; }}
-                      className={`card new-card-unrevealed`}
-                      style={{
-                        position: "relative",
-                        zIndex: isDragged ? 1000 : 1,
-                        transition: isDragged ? "none" : "none",
-                        cursor: dragging ? "grabbing" : "grab",
-                        userSelect: "none",
-                        touchAction: "none",
-                      }}
-                    >
-                      <div className={`card-inner ${result === "correct" ? "result-correct" : ""} ${result === "wrong" ? "result-wrong" : ""}`}>
-                        <div className="card-front new">
-                          <button
-                            className="play-button"
-                            onClick={(e) => { e.stopPropagation(); handlePlayToggle(card.uri); }}
-                            onMouseDown={e => e.stopPropagation()}
-                            onTouchStart={e => e.stopPropagation()}
-                            disabled={!spotifyReady}
-                            title={spotifyReady ? "Play / Pause" : "Connecting to Spotify..."}
-                          >
-                            {playing ? "⏸" : "▶"}
-                          </button>
-                          <div className="drag-hint">{t?.dragToPlace || "Drag to place"}</div>
+              return (
+                <div key={card.id} style={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center" }}>
+                  {!isMyTurn && !revealed && (
+                    <div className="coin-slot">
+                      {coinsHere - (myMyCoinHere ? 1 : 0) > 0 && (
+                        <div className="coins-on-slot">
+                          {"🪙".repeat(Math.min(coinsHere - (myMyCoinHere ? 1 : 0), 5))}
                         </div>
-                        <div className="card-back">
-                          <img src={card.cover} className="cover-large" alt="" />
-                          <div className="revealed-year">{card.year}</div>
-                          <strong>{card.artist}</strong>
-                          <div className="song-title">{card.name}</div>
+                      )}
+                      {myMyCoinHere ? (
+                        <button className="coin-btn coin-placed" onClick={removeCoin} title="Pick up coin">🪙</button>
+                      ) : !hasCoinPlaced && myCoins > 0 ? (
+                        <button className="coin-btn coin-plus" onClick={() => placeCoin(index)} title="Place coin here">+</button>
+                      ) : null}
+                    </div>
+                  )}
+
+                  {isNewCard && !revealed && isMyTurn ? (
+                    <div
+                      className="drag-wrapper"
+                      style={{ touchAction: "none", userSelect: "none" }}
+                      onMouseDown={handleDragStart}
+                      onTouchStart={(e) => {
+                        e.preventDefault();
+                        handleDragStart(e);
+                      }}
+                      onTouchMove={(e) => e.preventDefault()}
+                    >
+                      <div
+                        ref={(el) => { dragCardRef.current = el; newCardRef.current = el; }}
+                        className={`card new-card-unrevealed`}
+                        style={{
+                          position: "relative",
+                          zIndex: isDragged ? 1000 : 1,
+                          transition: "none",
+                          cursor: dragging ? "grabbing" : "grab",
+                          userSelect: "none",
+                          touchAction: "none",
+                        }}
+                      >
+                        <div className={`card-inner ${result === "correct" ? "result-correct" : ""} ${result === "wrong" ? "result-wrong" : ""}`}>
+                          <div className="card-front new">
+                            <button
+                              className="play-button"
+                              onClick={(e) => { e.stopPropagation(); handlePlayToggle(card.uri); }}
+                              onMouseDown={e => e.stopPropagation()}
+                              onTouchStart={e => e.stopPropagation()}
+                              disabled={!spotifyReady}
+                              title={spotifyReady ? "Play / Pause" : "Connecting to Spotify..."}
+                            >
+                              {playing ? "⏸" : "▶"}
+                            </button>
+                            <div className="drag-hint">{t?.dragToPlace || "Drag to place"}</div>
+                          </div>
+                          <div className="card-back">
+                            <img src={card.cover} className="cover-large" alt="" />
+                            <div className="revealed-year">{card.year}</div>
+                            <strong>{card.artist}</strong>
+                            <div className="song-title">{card.name}</div>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                ) : (
-                  <div
-                    ref={isNewCard ? (el) => { newCardRef.current = el; } : null}
-                    className={`card ${isNewCard ? "new-card-unrevealed" : "small-fixed"} ${isNewCard && revealed ? (horizontal ? "card-expanded-horizontal" : "card-expanded") : ""}`}
-                    style={{
-                      position: "relative",
-                      zIndex: isNewCard && revealed ? 100 : 1,
-                      transform: `translate(${shiftX}px, ${shiftY}px) scale(1)`,
-                      transition: "transform 0.18s ease",
-                      cursor: "default",
-                      userSelect: "none",
-                    }}
-                  >
-                    {isNewCard ? (
-                      <div className={`card-inner flipped ${result === "correct" ? "result-correct" : ""} ${result === "wrong" ? "result-wrong" : ""}`}>
-                        <div className="card-front new">
-                          <button
-                            className="play-button"
-                            onClick={(e) => { e.stopPropagation(); handlePlayToggle(card.uri); }}
-                            onMouseDown={e => e.stopPropagation()}
-                            onTouchStart={e => e.stopPropagation()}
-                            title="Play / Pause"
-                          >
-                            {playing ? "⏸" : "▶"}
-                          </button>
-                          <div className="drag-hint">{t?.isPlaying(currentPlayer.name) || `${currentPlayer.name} is playing...`}</div>
+                  ) : (
+                    <div
+                      ref={isNewCard
+                        ? (el) => {
+                            newCardRef.current = el;
+                            // Also track this as the expanded card for height measurement
+                            expandedCardRef.current = el;
+                          }
+                        : null}
+                      className={`card ${isNewCard ? "new-card-unrevealed" : "small-fixed"} ${isNewCard && revealed ? (horizontal ? "card-expanded-horizontal" : "card-expanded") : ""}`}
+                      style={{
+                        position: "relative",
+                        zIndex: isNewCard && revealed ? 100 : 1,
+                        transform: `translate(${shiftX}px, ${shiftY}px) scale(1)`,
+                        transition: isNewCard ? "none" : "transform 0.3s ease",
+                        cursor: "default",
+                        userSelect: "none",
+                      }}
+                    >
+                      {isNewCard ? (
+                        <div className={`card-inner flipped ${result === "correct" ? "result-correct" : ""} ${result === "wrong" ? "result-wrong" : ""}`}>
+                          <div className="card-front new">
+                            <button
+                              className="play-button"
+                              onClick={(e) => { e.stopPropagation(); handlePlayToggle(card.uri); }}
+                              onMouseDown={e => e.stopPropagation()}
+                              onTouchStart={e => e.stopPropagation()}
+                              title="Play / Pause"
+                            >
+                              {playing ? "⏸" : "▶"}
+                            </button>
+                            <div className="drag-hint">{t?.isPlaying(currentPlayer.name) || `${currentPlayer.name} is playing...`}</div>
+                          </div>
+                          <div className="card-back">
+                            <img src={card.cover} className="cover-large" alt="" />
+                            <div className="revealed-year">{card.year}</div>
+                            <strong>{card.artist}</strong>
+                            <div className="song-title">{card.name}</div>
+                          </div>
                         </div>
-                        <div className="card-back">
-                          <img src={card.cover} className="cover-large" alt="" />
-                          <div className="revealed-year">{card.year}</div>
-                          <strong>{card.artist}</strong>
-                          <div className="song-title">{card.name}</div>
+                      ) : (
+                        <div className="card-front fixed">
+                          <div>{card.year}</div>
                         </div>
-                      </div>
-                    ) : (
-                      <div className="card-front fixed">
-                        <div>{card.year}</div>
-                      </div>
-                    )}
-                  </div>
-                )}
+                      )}
+                    </div>
+                  )}
 
-                {index === cards.length - 1 && !isMyTurn && !revealed && (
-                  <div className="coin-slot">
-                    {(() => {
-                      const bottomSlot = cards.length;
-                      const bottomCoins = coinsBySlot[bottomSlot] || 0;
-                      const myBottomCoin = myCoinIndex === bottomSlot;
-                      const othersCoins = bottomCoins - (myBottomCoin ? 1 : 0);
-                      return <>
-                        {othersCoins > 0 && (
-                          <div className="coins-on-slot">{"🪙".repeat(Math.min(othersCoins, 5))}</div>
-                        )}
-                        {myBottomCoin ? (
-                          <button className="coin-btn coin-placed" onClick={removeCoin}>🪙</button>
-                        ) : !hasCoinPlaced && myCoins > 0 ? (
-                          <button className="coin-btn coin-plus" onClick={() => placeCoin(bottomSlot)}>+</button>
-                        ) : null}
-                      </>;
-                    })()}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+                  {index === cards.length - 1 && !isMyTurn && !revealed && (
+                    <div className="coin-slot">
+                      {(() => {
+                        const bottomSlot = cards.length;
+                        const bottomCoins = coinsBySlot[bottomSlot] || 0;
+                        const myBottomCoin = myCoinIndex === bottomSlot;
+                        const othersCoins = bottomCoins - (myBottomCoin ? 1 : 0);
+                        return <>
+                          {othersCoins > 0 && (
+                            <div className="coins-on-slot">{"🪙".repeat(Math.min(othersCoins, 5))}</div>
+                          )}
+                          {myBottomCoin ? (
+                            <button className="coin-btn coin-placed" onClick={removeCoin}>🪙</button>
+                          ) : !hasCoinPlaced && myCoins > 0 ? (
+                            <button className="coin-btn coin-plus" onClick={() => placeCoin(bottomSlot)}>+</button>
+                          ) : null}
+                        </>;
+                      })()}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
