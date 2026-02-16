@@ -69,9 +69,9 @@ h1 {
   margin: 16px 0 28px 0;
   text-align: center;
   background: linear-gradient(135deg, #ff0aa8, #ff6b00, #ffd000, #0aa8ff);
+  background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  background-clip: text;
   letter-spacing: -0.5px;
   text-shadow: 0 0 30px rgba(255, 107, 0, 0.3);
   animation: titleGlow 3s ease-in-out infinite;
@@ -235,9 +235,9 @@ button:active {
   font-weight: 900;
   letter-spacing: 8px;
   background: linear-gradient(135deg, #ff0aa8, #ff6b00, #ffd000);
+  background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  background-clip: text;
   border: 3px solid rgba(255, 107, 0, 0.4);
   border-radius: 16px;
   padding: 16px 28px;
@@ -405,28 +405,63 @@ button:active {
 /* ── Card faces ─────────────────────────────────────────────── */
 
 .card-front.fixed {
-  background: linear-gradient(135deg, #2a2a2a, #1f1f1f);
-  border: 2px solid rgba(255, 107, 0, 0.3);
+  background: 
+    radial-gradient(circle at top left, rgba(255, 10, 168, 0.15), transparent 40%),
+    radial-gradient(circle at top right, rgba(10, 168, 255, 0.15), transparent 40%),
+    radial-gradient(circle at bottom, rgba(255, 215, 0, 0.1), transparent 50%),
+    linear-gradient(135deg, #2a2a2a, #1f1f1f);
+  border: 3px solid transparent;
+  border-radius: 20px;
+  background-clip: padding-box;
+  position: relative;
   font-size: clamp(32px, 8vw, 52px);
   font-weight: 800;
   color: #ff6b00;
   letter-spacing: -1px;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.4), 0 0 20px rgba(255, 107, 0, 0.1);
-  position: relative;
+  box-shadow: 
+    0 4px 16px rgba(0,0,0,0.6), 
+    0 0 30px rgba(255, 107, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  overflow: hidden;
 }
 
+/* Animated gradient border */
 .card-front.fixed::before {
   content: '';
   position: absolute;
-  top: 0; left: 0; right: 0;
-  height: 3px;
-  background: linear-gradient(90deg, transparent, #ff6b00, #ffd000, #ff6b00, transparent);
-  animation: shimmer 3s ease-in-out infinite;
+  inset: -3px;
+  background: linear-gradient(135deg, #ff0aa8, #ff6b00, #ffd000, #0aa8ff, #ff0aa8);
+  background-size: 300% 300%;
+  border-radius: 20px;
+  z-index: -1;
+  animation: rotateBorder 6s linear infinite;
 }
 
-@keyframes shimmer {
-  0%, 100% { opacity: 0.3; }
-  50% { opacity: 1; }
+@keyframes rotateBorder {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Shimmer effect */
+.card-front.fixed::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, 
+    transparent, 
+    rgba(255, 255, 255, 0.1) 50%, 
+    transparent
+  );
+  animation: shimmerSweep 3s ease-in-out infinite;
+}
+
+@keyframes shimmerSweep {
+  0% { left: -100%; }
+  50%, 100% { left: 100%; }
 }
 
 .play-button {
@@ -506,16 +541,38 @@ button:active {
 
 /* Floating confetti particles on new cards */
 .card-front.new::after {
-  content: '🎵 🎶 ✨ 💫 🎵 🎶';
+  content: '';
   position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-around;
-  font-size: 20px;
-  opacity: 0.3;
-  animation: float 6s ease-in-out infinite;
+  inset: -20px;
+  background-image: 
+    radial-gradient(circle, #ff0aa8 2px, transparent 2px),
+    radial-gradient(circle, #ff6b00 2px, transparent 2px),
+    radial-gradient(circle, #ffd000 2px, transparent 2px),
+    radial-gradient(circle, #0aa8ff 2px, transparent 2px);
+  background-size: 50px 50px;
+  background-position: 
+    0 0,
+    25px 25px,
+    50px 0,
+    0 50px;
+  opacity: 0.4;
+  animation: confettiFloat 8s linear infinite;
   pointer-events: none;
+  border-radius: 20px;
+}
+
+@keyframes confettiFloat {
+  0% { 
+    transform: translateY(0) rotate(0deg);
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 0.6;
+  }
+  100% { 
+    transform: translateY(-20px) rotate(360deg);
+    opacity: 0.4;
+  }
 }
 
 .card-back {
@@ -549,9 +606,9 @@ button:active {
   font-weight: 900;
   letter-spacing: -2px;
   background: linear-gradient(135deg, #ff0aa8, #ff6b00, #ffd000);
+  background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  background-clip: text;
   line-height: 1.1;
   margin-bottom: 8px;
   flex-shrink: 0;
@@ -585,10 +642,45 @@ button:active {
 }
 
 .result-correct .card-back {
-  background: linear-gradient(135deg, #00ff88, #00aa55);
-  border-color: #00ff88;
-  box-shadow: 0 12px 40px rgba(0, 255, 136, 0.5), 0 0 50px rgba(0, 255, 136, 0.3);
+  background: 
+    radial-gradient(circle at center, rgba(0, 255, 136, 0.2), transparent 60%),
+    linear-gradient(135deg, #00ff88, #00aa55);
+  border: 3px solid #00ff88;
+  box-shadow: 
+    0 12px 40px rgba(0, 255, 136, 0.6), 
+    0 0 60px rgba(0, 255, 136, 0.4),
+    inset 0 0 30px rgba(255, 255, 255, 0.1);
   animation: correctPulse 0.5s ease-out;
+  position: relative;
+}
+
+/* Checkmark circle decoration */
+.result-correct .card-back::before {
+  content: '✓';
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  width: 50px;
+  height: 50px;
+  background: linear-gradient(135deg, #00ff88, #00dd77);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  color: white;
+  font-weight: 900;
+  box-shadow: 
+    0 4px 15px rgba(0, 255, 136, 0.5),
+    0 0 30px rgba(0, 255, 136, 0.3),
+    inset 0 -2px 10px rgba(0, 0, 0, 0.2);
+  border: 3px solid rgba(255, 255, 255, 0.9);
+  animation: checkPop 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55) 0.3s backwards;
+}
+
+@keyframes checkPop {
+  0% { transform: scale(0) rotate(-180deg); opacity: 0; }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
 }
 
 @keyframes correctPulse {
@@ -598,10 +690,45 @@ button:active {
 }
 
 .result-wrong .card-back {
-  background: linear-gradient(135deg, #ff0055, #aa0033);
-  border-color: #ff5555;
-  box-shadow: 0 12px 40px rgba(255, 0, 85, 0.5), 0 0 50px rgba(255, 0, 85, 0.3);
+  background: 
+    radial-gradient(circle at center, rgba(255, 0, 85, 0.2), transparent 60%),
+    linear-gradient(135deg, #ff0055, #aa0033);
+  border: 3px solid #ff5555;
+  box-shadow: 
+    0 12px 40px rgba(255, 0, 85, 0.6), 
+    0 0 60px rgba(255, 0, 85, 0.4),
+    inset 0 0 30px rgba(255, 255, 255, 0.1);
   animation: wrongShake 0.5s ease-out;
+  position: relative;
+}
+
+/* X circle decoration */
+.result-wrong .card-back::before {
+  content: '✕';
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  width: 50px;
+  height: 50px;
+  background: linear-gradient(135deg, #ff0055, #dd0044);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  color: white;
+  font-weight: 900;
+  box-shadow: 
+    0 4px 15px rgba(255, 0, 85, 0.5),
+    0 0 30px rgba(255, 0, 85, 0.3),
+    inset 0 -2px 10px rgba(0, 0, 0, 0.2);
+  border: 3px solid rgba(255, 255, 255, 0.9);
+  animation: xPop 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55) 0.3s backwards;
+}
+
+@keyframes xPop {
+  0% { transform: scale(0) rotate(180deg); opacity: 0; }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
 }
 
 @keyframes wrongShake {
@@ -686,9 +813,9 @@ button:active {
   font-size: 48px;
   font-weight: 900;
   background: linear-gradient(135deg, #ff6b00, #ffd000);
+  background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  background-clip: text;
   width: 90px;
   height: 90px;
   border-radius: 50%;
@@ -736,6 +863,7 @@ button:active {
   min-width: 48px;
   text-align: center;
   background: linear-gradient(135deg, #ff6b00, #ffd000);
+  background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
@@ -777,6 +905,7 @@ button:active {
   font-size: 36px;
   font-weight: 900;
   background: linear-gradient(135deg, #ff6b00, #ffd000);
+  background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
@@ -879,6 +1008,7 @@ button:active {
   font-size: 17px;
   font-weight: 700;
   background: linear-gradient(135deg, #ff6b00, #ffd000);
+  background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   text-align: center;
