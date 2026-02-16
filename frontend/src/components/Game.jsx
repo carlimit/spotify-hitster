@@ -697,8 +697,8 @@ function Game({
               const isLandscape = window.innerWidth > window.innerHeight && window.innerWidth >= 768;
               if (isLandscape) {
   // Remove width constraints - let timeline be as wide as it needs
-  zoomWrapperRef.current.style.width = "";
-  zoomWrapperRef.current.style.minWidth = "";
+  zoomWrapperRef.current.style.width = "200%";
+  zoomWrapperRef.current.style.minWidth = "200%";
   zoomWrapperRef.current.style.height = "";
 } else {
                 const natural = timelineRef.current.scrollHeight;
