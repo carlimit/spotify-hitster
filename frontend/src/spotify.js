@@ -1,5 +1,5 @@
 const CLIENT_ID = "c6cc6b6bb4a5414781ab9d9f3baf416e";
-const REDIRECT_URI = "https://hitstream.vercel.app";
+const REDIRECT_URI = "https://hitstream.vercel.app/";
 const AUTH_ENDPOINT = "https://accounts.spotify.com/authorize";
 
 const SCOPES = [
