@@ -19,8 +19,7 @@ function Home({ t, lang,
   winGoal,
   setWinGoal,
   timerSeconds,
-  setTimerSeconds,
-  isOnlineMode // NEW
+  setTimerSeconds
 }) {
   const [playerName, setPlayerName] = useState("");
   const [inputCode, setInputCode] = useState("");
@@ -39,7 +38,7 @@ function Home({ t, lang,
   // ============================================================
 
   useEffect(() => {
-    // ✅ Ensure socket is connected on mount (may have dropped after OAuth redirect)
+    // Ensure socket is connected on mount (may have dropped after OAuth redirect)
     if (!socket.connected) socket.connect();
 
     socket.on("player_list", players => {
@@ -63,7 +62,7 @@ function Home({ t, lang,
       if (genres && genres.length) setSelectedGenres(genres);
       if (min) setMinYear(Number(min));
       if (max) setMaxYear(Number(max));
-      setPlaylistTracks(playlistTracks || null);  // Always update, even if null
+      setPlaylistTracks(playlistTracks || null);
       setScreen("playing");
     });
 
@@ -79,8 +78,6 @@ function Home({ t, lang,
   // ACTIONS
   // ============================================================
 
-  // ✅ If socket isn't connected at the moment of tap, reconnect first
-  // then emit once connected — prevents silent failures on mobile
   const createGame = () => {
     if (!playerName.trim()) return;
     if (!socket.connected) {
@@ -134,8 +131,7 @@ function Home({ t, lang,
       selectedGenres,
       playlistTracks: playlistInfo?.tracks || null,
       winGoal,
-      timerSeconds,
-      isOnlineMode // NEW - send to server
+      timerSeconds
     });
   };
 

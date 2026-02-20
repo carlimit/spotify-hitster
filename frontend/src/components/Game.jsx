@@ -27,8 +27,7 @@ function Game({
   timerSeconds = 0,
   t,
   lang,
-  isHost,
-  isOnlineMode = false
+  isHost
 }) {
   const [players, setLocalPlayers] = useState(initialPlayers);
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0);
@@ -38,7 +37,6 @@ function Game({
   const [showNextButton, setShowNextButton] = useState(false);
   const [revealed, setRevealed] = useState(false);
   const [isMyTurn, setIsMyTurn] = useState(false);
-  const [currentCard, setCurrentCard] = useState(null);
 
   // Coins
   const [coins, setCoins] = useState({});
@@ -51,8 +49,7 @@ function Game({
 
   const [overviewMode, setOverviewMode] = useState(false);
 
-  const shouldInitializeSpotify = isOnlineMode ? isHost : true;
-  const { ready: spotifyReady, playing, togglePlay, stop } = useSpotifyPlayer(roomCode, shouldInitializeSpotify);
+  const { ready: spotifyReady, playing, togglePlay, stop } = useSpotifyPlayer(roomCode);
 
   // Drag
   const [dragging, setDragging] = useState(false);
@@ -89,8 +86,6 @@ function Game({
   useEffect(() => { maxYearRef.current = maxYear; }, [maxYear]);
   useEffect(() => { cardsRef.current = cards; }, [cards]);
   useEffect(() => { revealedRef.current = revealed; }, [revealed]);
-
-
 
   const updatePlayers = (p) => { setLocalPlayers(p); setPlayers(p); };
   const currentPlayer = players[currentPlayerIndex];
@@ -134,41 +129,7 @@ function Game({
   }, [players, currentPlayerIndex]);
 
   // ============================================================
-  // SOCKET - ONLINE MODE LISTENERS
-  // ============================================================
-
-  useEffect(() => {
-    if (!isOnlineMode) return;
-
-    socket.on("new_card_broadcast", ({ card }) => {
-      if (!isMyTurnRef.current) {
-        setCurrentCard(card);
-      }
-    });
-
-    socket.on("playback_sync", ({ uri, action }) => {
-      if (action === "play") togglePlay(uri);
-      else if (action === "pause") stop();
-    });
-
-    return () => {
-      socket.off("new_card_broadcast");
-      socket.off("playback_sync");
-    };
-  }, [isOnlineMode, togglePlay, stop]);
-
-  useEffect(() => {
-    if (isOnlineMode && isHost) {
-      socket.on("control_playback", ({ uri, action }) => {
-        if (action === "play") togglePlay(uri);
-        else if (action === "pause") stop();
-      });
-      return () => { socket.off("control_playback"); };
-    }
-  }, [isOnlineMode, isHost, togglePlay, stop]);
-
-  // ============================================================
-  // SOCKET - STANDARD LISTENERS
+  // SOCKET LISTENERS
   // ============================================================
 
   useEffect(() => {
@@ -203,7 +164,6 @@ function Game({
       setMyCoinIndex(null);
       setCoinGiven(false);
       setOverviewMode(false);
-      setCurrentCard(null);
       stop();
       clearInterval(timerRef.current);
       setTimeLeft(null);
@@ -307,10 +267,6 @@ function Game({
       ];
       setCards(newCards);
       cardsRef.current = newCards;
-
-      if (isOnlineMode) {
-        socket.emit("broadcast_card", { code: roomCode, card: newCard });
-      }
 
       setTimeout(() => {
         newCardRef.current?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
@@ -634,21 +590,6 @@ function Game({
   };
 
   // ============================================================
-  // PLAYBACK CONTROL
-  // ============================================================
-
-  const handlePlayToggle = (uri) => {
-    togglePlay(uri);
-    if (isOnlineMode) {
-      socket.emit("sync_playback", {
-        code: roomCode,
-        uri,
-        action: playing ? "pause" : "play"
-      });
-    }
-  };
-
-  // ============================================================
   // UI
   // ============================================================
 
@@ -735,30 +676,6 @@ function Game({
         </div>
       </div>
 
-      {/* Spectator play button in online mode */}
-      {isOnlineMode && !isMyTurn && currentCard && !revealed && (
-        <div style={{ marginBottom: 20, textAlign: "center" }}>
-          <button
-            className="play-button"
-            onClick={() => handlePlayToggle(currentCard.uri)}
-            disabled={!spotifyReady}
-            title={spotifyReady ? "Play / Pause" : "Connecting to Spotify..."}
-            style={{
-              width: 120,
-              height: 120,
-              fontSize: 48,
-              margin: "0 auto 12px auto",
-              display: "flex"
-            }}
-          >
-            {playing ? "⏸" : "▶"}
-          </button>
-          <p style={{ color: "#b3b3b3", fontSize: 14 }}>
-            {lang === "de" ? `${currentPlayer.name} spielt...` : `${currentPlayer.name} is playing...`}
-          </p>
-        </div>
-      )}
-
       {loading && <div className="loading-card">{t?.loadingSong || "Loading song..."}</div>}
 
       {timeLeft !== null && isMyTurn && (
@@ -814,7 +731,7 @@ function Game({
               const isNewCard = card.type === "new";
               const isDragged = isNewCard && dragging;
 
-              // ─── Drag-time shift (transform only — purely visual during drag) ───
+              // Drag-time shift (transform only — purely visual during drag)
               let shiftY = 0;
               let shiftX = 0;
 
@@ -832,9 +749,6 @@ function Game({
                 }
               }
 
-              // Post-reveal: add real margin to the card immediately after the
-              // new card so the expanded card pushes it down in the normal flow.
-              // Only the first card below needs the margin — layout handles the rest.
               const isFirstCardBelowNew = !horizontal && revealed && index === newCardOriginalIndex + 1;
 
               const coinsHere = coinsBySlot[index] || 0;
@@ -846,7 +760,6 @@ function Game({
                   display: "flex",
                   flexDirection: "column",
                   alignItems: "center",
-                  // Push this card down in real layout space when the new card above it expands
                   marginTop: isFirstCardBelowNew ? "220px" : undefined,
                   transition: "margin-top 0.3s ease",
                 }}>
@@ -892,7 +805,7 @@ function Game({
                           <div className="card-front new">
                             <button
                               className="play-button"
-                              onClick={(e) => { e.stopPropagation(); handlePlayToggle(card.uri); }}
+                              onClick={(e) => { e.stopPropagation(); togglePlay(card.uri); }}
                               onMouseDown={e => e.stopPropagation()}
                               onTouchStart={e => e.stopPropagation()}
                               disabled={!spotifyReady}
@@ -933,7 +846,7 @@ function Game({
                           <div className="card-front new">
                             <button
                               className="play-button"
-                              onClick={(e) => { e.stopPropagation(); handlePlayToggle(card.uri); }}
+                              onClick={(e) => { e.stopPropagation(); togglePlay(card.uri); }}
                               onMouseDown={e => e.stopPropagation()}
                               onTouchStart={e => e.stopPropagation()}
                               title="Play / Pause"

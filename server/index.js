@@ -42,9 +42,6 @@ async function getSpotifyToken() {
 
 /* =========================================
    🎵 YEAR HELPER
-   Spotify's release_date can be a re-release date.
-   We always use the earliest/original year by preferring
-   the album's release_date and stripping to just the year.
 ========================================= */
 function extractYear(track) {
   const date = track.album?.release_date || "";
@@ -53,14 +50,6 @@ function extractYear(track) {
 
 /* =========================================
    🎵 ORIGINAL YEAR LOOKUP
-   Searches Spotify for the track name + artist and returns the
-   earliest release year found across all results. This catches the
-   original studio release even when a playlist contains a remaster
-   or re-release. Falls back to the album's own release_date if the
-   search returns nothing useful.
-
-   Only used for playlist loading (called once per track at load time,
-   results are cached in the track objects sent to clients).
 ========================================= */
 async function getOriginalYear(track) {
   const trackName = track.name;
@@ -68,7 +57,6 @@ async function getOriginalYear(track) {
   const albumYear = track.album?.release_date?.substring(0, 4) || "";
 
   try {
-    // Search for all versions of this track by this artist
     const query = `track:"${trackName}" artist:"${artistName}"`;
     const response = await axios.get("https://api.spotify.com/v1/search", {
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -78,7 +66,6 @@ async function getOriginalYear(track) {
     const items = response.data.tracks?.items || [];
     if (!items.length) return albumYear;
 
-    // Keep only tracks where at least one artist matches (case-insensitive)
     const artistLower = artistName.toLowerCase();
     const sameArtist = items.filter(t =>
       t.artists?.some(a =>
@@ -89,7 +76,6 @@ async function getOriginalYear(track) {
 
     const candidates = sameArtist.length > 0 ? sameArtist : items;
 
-    // Collect valid years
     const years = candidates
       .map(t => parseInt(t.album?.release_date?.substring(0, 4) || ""))
       .filter(y => !isNaN(y) && y > 1900 && y <= new Date().getFullYear());
@@ -98,8 +84,6 @@ async function getOriginalYear(track) {
 
     const earliest = Math.min(...years).toString();
 
-    // Sanity guard: if earliest is more than 60 years before the album date,
-    // something weird matched — trust the album date instead
     if (albumYear) {
       const diff = parseInt(albumYear) - parseInt(earliest);
       if (diff > 60) return albumYear;
@@ -107,7 +91,6 @@ async function getOriginalYear(track) {
 
     return earliest;
   } catch {
-    // Any network / parse error → fall back silently
     return albumYear;
   }
 }
@@ -119,7 +102,6 @@ async function getOriginalYear(track) {
 app.get("/api/track", async (req, res) => {
   const { genre, minYear, maxYear, usedUris } = req.query;
 
-  // Parse used URIs from query so server can exclude them
   let used = new Set();
   try { if (usedUris) used = new Set(JSON.parse(usedUris)); } catch {}
 
@@ -136,11 +118,9 @@ app.get("/api/track", async (req, res) => {
     let tracks = response.data.tracks?.items || [];
     if (!tracks.length) return res.status(404).json({ error: "No tracks found" });
 
-    // Filter out already-used URIs to prevent repeats
     const unused = tracks.filter(t => !used.has(t.uri));
     const pool = unused.length >= 3 ? unused : tracks;
 
-    // Prefer popular tracks
     const popular = pool.filter(t => t.popularity > 40);
     const candidates = popular.length >= 3 ? popular : pool;
 
@@ -161,8 +141,6 @@ app.get("/api/track", async (req, res) => {
 
 /* =========================================
    🎵 PLAYLIST ENDPOINT
-   For each track, we do a secondary search to find the earliest
-   known release year — so remasters/re-releases get the original date.
 ========================================= */
 
 app.get("/api/playlist", async (req, res) => {
@@ -211,9 +189,6 @@ app.get("/api/playlist", async (req, res) => {
       }
     );
 
-    // ✅ FIX: For each track, look up the earliest known release year.
-    // We process in batches of 10 to avoid hammering the API and stay
-    // within rate limits, while still being fast enough for reasonable playlists.
     const BATCH = 10;
     const resolvedTracks = [];
 
@@ -225,7 +200,7 @@ app.get("/api/playlist", async (req, res) => {
           return {
             name: t.name,
             artist: t.artists[0].name,
-            year: originalYear,             // ← earliest year found, not album date
+            year: originalYear,
             uri: t.uri,
             cover: t.album.images?.[0]?.url,
             popularity: t.popularity
@@ -235,7 +210,6 @@ app.get("/api/playlist", async (req, res) => {
       resolvedTracks.push(...resolved);
     }
 
-    // Filter out any tracks where year resolution failed completely
     const validResolved = resolvedTracks.filter(t => t.year && !isNaN(parseInt(t.year)));
 
     res.json({
@@ -255,7 +229,7 @@ app.get("/api/playlist", async (req, res) => {
 });
 
 /* =========================================
-   🎮 MULTIPLAYER ROOMS
+   🎮 MULTIPLAYER ROOMS (Local pass-and-play)
 ========================================= */
 
 const games = {};
@@ -275,8 +249,7 @@ io.on("connection", (socket) => {
       currentPlayerIndex: 0,
       started: false,
       minYear: 1990,
-      maxYear: 2024,
-      isOnlineMode: false
+      maxYear: 2024
     };
     socket.join(code);
     socket.emit("game_created", { code });
@@ -295,7 +268,7 @@ io.on("connection", (socket) => {
     io.to(code).emit("player_list", game.players);
   });
 
-  socket.on("start_game", ({ code, minYear, maxYear, selectedGenres, playlistTracks, winGoal, timerSeconds, isOnlineMode }) => {
+  socket.on("start_game", ({ code, minYear, maxYear, selectedGenres, playlistTracks, winGoal, timerSeconds }) => {
     const game = games[code];
     if (!game) return;
 
@@ -306,7 +279,6 @@ io.on("connection", (socket) => {
     game.currentPlayerIndex = 0;
     game.winGoal = winGoal || 10;
     game.timerSeconds = timerSeconds || 0;
-    game.isOnlineMode = isOnlineMode || false;
 
     if (playlistTracks && playlistTracks.length) {
       const years = playlistTracks.map(t => parseInt(t.year)).filter(y => !isNaN(y));
@@ -335,8 +307,7 @@ io.on("connection", (socket) => {
       maxYear: game.maxYear,
       playlistTracks: game.playlistTracks,
       winGoal: game.winGoal,
-      timerSeconds: game.timerSeconds,
-      isOnlineMode: game.isOnlineMode
+      timerSeconds: game.timerSeconds
     });
   });
 
@@ -353,29 +324,6 @@ io.on("connection", (socket) => {
     const game = games[code];
     if (!game) return;
     socket.to(code).emit("card_revealed", { result, cards });
-  });
-
-  // NEW: Broadcast new card to all players in online mode
-  socket.on("broadcast_card", ({ code, card }) => {
-    const game = games[code];
-    if (!game || !game.isOnlineMode) return;
-    socket.to(code).emit("new_card_broadcast", { card });
-  });
-
-  // NEW: Sync playback across all devices in online mode
-  socket.on("sync_playback", ({ code, uri, action }) => {
-    const game = games[code];
-    if (!game || !game.isOnlineMode) return;
-    socket.to(code).emit("playback_sync", { uri, action });
-  });
-
-  // NEW: Handle playback requests from non-host players in online mode
-  socket.on("request_playback", ({ code, uri, action }) => {
-    const game = games[code];
-    if (!game || !game.isOnlineMode) return;
-    
-    // Forward the request to the host who controls the SDK
-    io.to(game.host).emit("control_playback", { uri, action });
   });
 
   socket.on("play_track", ({ code, uri }) => {
@@ -479,8 +427,7 @@ io.on("connection", (socket) => {
       maxYear: game.maxYear,
       playlistTracks: game.playlistTracks,
       usedUris: Array.from(game.usedUris),
-      coins: {},
-      isOnlineMode: game.isOnlineMode
+      coins: {}
     });
   });
 
@@ -503,8 +450,7 @@ io.on("connection", (socket) => {
       maxYear: game.maxYear,
       playlistTracks: game.playlistTracks,
       usedUris: Array.from(game.usedUris),
-      coins: {},
-      isOnlineMode: game.isOnlineMode
+      coins: {}
     });
   });
 

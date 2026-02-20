@@ -26,7 +26,6 @@ function App() {
   const [singleLoginUrl, setSingleLoginUrl] = useState(null);
   const [loginError, setLoginError] = useState(null);
   const [showHowToPlay, setShowHowToPlay] = useState(false);
-  const [isOnlineMode, setIsOnlineMode] = useState(false); // NEW
 
   // Pre-compute login URL immediately so button tap is instant (no async gap)
   useEffect(() => {
@@ -119,22 +118,14 @@ function App() {
         <h1>{t.appName}</h1>
         
         {/* LOCAL MULTIPLAYER */}
-        <button onClick={() => { setIsHost(true); setIsOnlineMode(false); setScreen("host-login"); }}>
-          {t.hostGame} (Local)
+        <button onClick={() => { setIsHost(true); setScreen("host-login"); }}>
+          {t.hostGame}
         </button>
         
-        {/* ONLINE MULTIPLAYER - NEW */}
-        <button 
-          style={{ marginTop: "15px", background: "#3b82f6" }} 
-          onClick={() => { setIsHost(true); setIsOnlineMode(true); setScreen("host-login-online"); }}
-        >
-          🌐 {lang === "de" ? "Online-Spiel hosten" : "Host Online Game"}
-        </button>
-        
-        {/* JOIN ONLINE */}
+        {/* JOIN */}
         <button 
           style={{ marginTop: "15px", background: "#444" }} 
-          onClick={() => { setIsHost(false); setIsOnlineMode(false); setScreen("lobby"); }}
+          onClick={() => { setIsHost(false); setScreen("lobby"); }}
         >
           {t.joinGame}
         </button>
@@ -156,7 +147,7 @@ function App() {
   }
 
   // ============================================================
-  // 🟢 HOST LOGIN SCREEN (LOCAL)
+  // 🟢 HOST LOGIN SCREEN
   // ============================================================
 
   if (screen === "host-login") {
@@ -181,36 +172,6 @@ function App() {
   }
 
   // ============================================================
-  // 🟢 HOST LOGIN SCREEN (ONLINE) - NEW
-  // ============================================================
-
-  if (screen === "host-login-online") {
-    return (
-      <div className="container">
-        <h1>{t.appName}</h1>
-        <h2>{lang === "de" ? "Spotify Login für Online-Spiel" : "Login to Host Online"}</h2>
-        <p style={{color: "#b3b3b3", textAlign: "center", maxWidth: 400, margin: "16px auto"}}>
-          {lang === "de" 
-            ? "Nur der Host benötigt Spotify Premium. Alle anderen Spieler können ohne Premium beitreten."
-            : "Only the host needs Spotify Premium. All other players can join without Premium."}
-        </p>
-        <button
-          disabled={!loginUrl}
-          onClick={() => {
-            if (!loginUrl) return;
-            const url = loginUrl;
-            setLoginUrl(null);
-            getLoginUrl("lobby").then(u => setLoginUrl(u));
-            window.location.href = url;
-          }}
-        >
-          {loginUrl ? t.loginWithSpotify : "…"}
-        </button>
-      </div>
-    );
-  }
-
-  // ============================================================
   // 🟢 LOBBY
   // ============================================================
 
@@ -225,7 +186,6 @@ function App() {
         setPlaylistTracks={setPlaylistTracks}
         winGoal={winGoal} setWinGoal={setWinGoal}
         timerSeconds={timerSeconds} setTimerSeconds={setTimerSeconds}
-        isOnlineMode={isOnlineMode}
       />
     );
   }
@@ -241,7 +201,6 @@ function App() {
         winGoal={winGoal} timerSeconds={timerSeconds}
         isHost={isHost}
         lang={lang}
-        isOnlineMode={isOnlineMode}
       />
     );
   }

@@ -1,14 +1,8 @@
 import { useState, useEffect, useRef } from "react";
-import { socket } from "../socket";
 
 // ─────────────────────────────────────────────────────────────
 // Shared helper — initialises the Spotify Web Playback SDK once
 // and calls `onReady(player, deviceId)` when the device is ready.
-//
-// KEY FIX: We must set window.onSpotifyWebPlaybackSDKReady BEFORE
-// injecting the <script> tag, and also handle the case where the
-// SDK is already loaded (window.Spotify already exists) by calling
-// the init function directly instead of waiting for the callback.
 // ─────────────────────────────────────────────────────────────
 function initSDK(token, name, onReady, onStateChange) {
   const initPlayer = () => {
@@ -36,11 +30,9 @@ function initSDK(token, name, onReady, onStateChange) {
   };
 
   if (window.Spotify) {
-    // SDK already present — init immediately, no callback needed
     return initPlayer();
   }
 
-  // SDK not yet loaded — set callback first, then inject script
   window.onSpotifyWebPlaybackSDKReady = initPlayer;
 
   if (!document.querySelector('script[src="https://sdk.scdn.co/spotify-player.js"]')) {
@@ -50,13 +42,13 @@ function initSDK(token, name, onReady, onStateChange) {
     document.body.appendChild(script);
   }
 
-  return null; // player created async via callback
+  return null;
 }
 
 // ─────────────────────────────────────────────────────────────
 // Multiplayer hook — used in Game.jsx
 // ─────────────────────────────────────────────────────────────
-export function useSpotifyPlayer(roomCode, shouldInitialize = true) {
+export function useSpotifyPlayer(roomCode) {
   const [ready, setReady] = useState(false);
   const [playing, setPlaying] = useState(false);
   const playerRef = useRef(null);
@@ -65,13 +57,6 @@ export function useSpotifyPlayer(roomCode, shouldInitialize = true) {
 
   useEffect(() => {
     const token = localStorage.getItem("token");
-
-    if (!shouldInitialize) {
-      // Non-host players in online mode: mark ready so UI shows play buttons.
-      // They send socket events instead of controlling SDK directly.
-      setReady(true);
-      return;
-    }
 
     if (!token) {
       console.warn("No Spotify token — play button will be disabled");
@@ -92,7 +77,6 @@ export function useSpotifyPlayer(roomCode, shouldInitialize = true) {
       }
     );
 
-    // initSDK returns the player synchronously only when SDK was already loaded
     if (player) playerRef.current = player;
 
     return () => {
@@ -102,20 +86,9 @@ export function useSpotifyPlayer(roomCode, shouldInitialize = true) {
         deviceIdRef.current = null;
       }
     };
-  }, [shouldInitialize]);
+  }, []);
 
   const togglePlay = async (uri) => {
-    if (!shouldInitialize) {
-      // Non-host: ask host via socket
-      socket.emit("request_playback", {
-        code: roomCode,
-        uri,
-        action: playing ? "pause" : "play",
-      });
-      setPlaying((p) => !p); // optimistic update
-      return;
-    }
-
     const token = localStorage.getItem("token");
     if (!playerRef.current || !deviceIdRef.current || !token) {
       console.warn("Cannot play — player not ready or no token");
@@ -147,11 +120,6 @@ export function useSpotifyPlayer(roomCode, shouldInitialize = true) {
   };
 
   const stop = async () => {
-    if (!shouldInitialize) {
-      socket.emit("request_playback", { code: roomCode, action: "pause" });
-      setPlaying(false);
-      return;
-    }
     if (!playerRef.current) return;
     try {
       await playerRef.current.pause();
