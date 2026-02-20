@@ -49,7 +49,8 @@ function Game({
 
   const [overviewMode, setOverviewMode] = useState(false);
 
-  const { ready: spotifyReady, playing, togglePlay, stop } = useSpotifyPlayer(roomCode);
+  // isHost controls whether this device runs the Spotify SDK or relays via socket
+  const { ready: spotifyReady, playing, togglePlay, stop } = useSpotifyPlayer(roomCode, isHost);
 
   // Drag
   const [dragging, setDragging] = useState(false);
@@ -849,7 +850,8 @@ function Game({
                               onClick={(e) => { e.stopPropagation(); togglePlay(card.uri); }}
                               onMouseDown={e => e.stopPropagation()}
                               onTouchStart={e => e.stopPropagation()}
-                              title="Play / Pause"
+                              disabled={!spotifyReady}
+                              title={spotifyReady ? "Play / Pause" : "Connecting to Spotify..."}
                             >
                               {playing ? "⏸" : "▶"}
                             </button>

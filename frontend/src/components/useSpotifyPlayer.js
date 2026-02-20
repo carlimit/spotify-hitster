@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { socket } from "../socket";
 
 // ─────────────────────────────────────────────────────────────
 // Shared helper — initialises the Spotify Web Playback SDK once
@@ -47,8 +48,13 @@ function initSDK(token, name, onReady, onStateChange) {
 
 // ─────────────────────────────────────────────────────────────
 // Multiplayer hook — used in Game.jsx
+//
+// The host initialises the Spotify SDK and controls playback.
+// Non-host players send play/pause requests to the host via
+// socket, and receive playback state updates back so their UI
+// stays in sync.
 // ─────────────────────────────────────────────────────────────
-export function useSpotifyPlayer(roomCode) {
+export function useSpotifyPlayer(roomCode, isHost) {
   const [ready, setReady] = useState(false);
   const [playing, setPlaying] = useState(false);
   const playerRef = useRef(null);
@@ -56,8 +62,24 @@ export function useSpotifyPlayer(roomCode) {
   const currentUriRef = useRef(null);
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
+    if (!isHost) {
+      // Non-host: mark ready so the play button is enabled (not greyed out).
+      // Actual playback is relayed to the host via socket.
+      setReady(true);
 
+      // Listen for playback state broadcasts from the host
+      const onPlayerState = ({ playing: isPlaying }) => {
+        setPlaying(isPlaying);
+      };
+      socket.on("player_state", onPlayerState);
+
+      return () => {
+        socket.off("player_state", onPlayerState);
+      };
+    }
+
+    // ── Host path: initialise the Spotify SDK ──
+    const token = localStorage.getItem("token");
     if (!token) {
       console.warn("No Spotify token — play button will be disabled");
       return;
@@ -72,23 +94,74 @@ export function useSpotifyPlayer(roomCode) {
         setReady(true);
       },
       (state) => {
-        setPlaying(!state.paused);
+        const isPlaying = !state.paused;
+        setPlaying(isPlaying);
         currentUriRef.current = state.track_window?.current_track?.uri || null;
+        // Broadcast state to non-host players so their UI stays in sync
+        socket.emit("player_state", { code: roomCode, playing: isPlaying });
       }
     );
 
     if (player) playerRef.current = player;
 
+    // Host listens for play/pause requests from non-host players
+    const onPlayTrack = ({ uri }) => {
+      hostPlayUri(uri);
+    };
+    const onPauseTrack = () => {
+      if (playerRef.current) {
+        playerRef.current.pause();
+      }
+    };
+    socket.on("play_track", onPlayTrack);
+    socket.on("pause_track", onPauseTrack);
+
     return () => {
+      socket.off("play_track", onPlayTrack);
+      socket.off("pause_track", onPauseTrack);
       if (playerRef.current) {
         playerRef.current.disconnect();
         playerRef.current = null;
         deviceIdRef.current = null;
       }
     };
-  }, []);
+  }, [isHost, roomCode]);
+
+  // Internal helper for the host to start playing a URI
+  const hostPlayUri = async (uri) => {
+    const token = localStorage.getItem("token");
+    if (!playerRef.current || !deviceIdRef.current || !token) return;
+    try {
+      await fetch(
+        `https://api.spotify.com/v1/me/player/play?device_id=${deviceIdRef.current}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ uris: [uri] }),
+        }
+      );
+    } catch (err) {
+      console.error("Host playback error:", err);
+    }
+  };
 
   const togglePlay = async (uri) => {
+    if (!isHost) {
+      // Non-host: relay request to host via socket
+      if (playing) {
+        socket.emit("pause_track", { code: roomCode });
+      } else {
+        socket.emit("play_track", { code: roomCode, uri });
+      }
+      // Optimistic UI update — will be corrected by player_state broadcast
+      setPlaying((p) => !p);
+      return;
+    }
+
+    // Host: control SDK directly
     const token = localStorage.getItem("token");
     if (!playerRef.current || !deviceIdRef.current || !token) {
       console.warn("Cannot play — player not ready or no token");
@@ -120,6 +193,11 @@ export function useSpotifyPlayer(roomCode) {
   };
 
   const stop = async () => {
+    if (!isHost) {
+      socket.emit("pause_track", { code: roomCode });
+      setPlaying(false);
+      return;
+    }
     if (!playerRef.current) return;
     try {
       await playerRef.current.pause();
