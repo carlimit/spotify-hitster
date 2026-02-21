@@ -85,13 +85,21 @@ async function transferPlayback(token, deviceId) {
   await new Promise(r => setTimeout(r, 300));
 }
 
-async function connectPlay(token, uri) {
+// Quick play attempt — just hits the play endpoint, no device lookup dance
+async function quickPlay(token, uri) {
   const res = await fetch("https://api.spotify.com/v1/me/player/play", {
     method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ uris: [uri] }),
+  });
+  return res.ok;
+}
+
+async function connectPlay(token, uri) {
+  // First: fast attempt, no fallback
+  const res = await fetch("https://api.spotify.com/v1/me/player/play", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     body: JSON.stringify({ uris: [uri] }),
   });
 
@@ -107,10 +115,7 @@ async function connectPlay(token, uri) {
       `https://api.spotify.com/v1/me/player/play?device_id=${device.id}`,
       {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ uris: [uri] }),
       }
     );
@@ -130,28 +135,29 @@ async function connectPause(token) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Fast retry helper — polls Spotify every 300ms for up to 8s
-// after returning from the Spotify app, instead of waiting a
-// fixed 1s delay. Much snappier UX.
+// Fast retry helper — polls with quickPlay (no slow device
+// discovery) so each attempt is just one fast HTTP request.
+// On success, calls onSuccess() immediately.
 // ─────────────────────────────────────────────────────────────
 async function retryUntilReady(token, uri, onSuccess, signal) {
-  const MAX_ATTEMPTS = 30; // 30 × 100ms = 3s max
-  const INTERVAL = 100;
+  const MAX_ATTEMPTS = 40; // 40 × 150ms = 6s max
+  const INTERVAL = 150;
 
   for (let i = 0; i < MAX_ATTEMPTS; i++) {
     if (signal?.aborted) return;
-    // First attempt immediate, then 100ms between each
+    // No delay on first attempt — try immediately
     if (i > 0) await new Promise(r => setTimeout(r, INTERVAL));
     if (signal?.aborted) return;
 
     try {
-      const result = await connectPlay(token, uri);
-      if (result.ok) {
+      // Use quickPlay — just one HTTP request, no device lookup overhead
+      const ok = await quickPlay(token, uri);
+      if (ok) {
         onSuccess();
         return;
       }
     } catch {
-      // keep trying
+      // network hiccup — keep trying
     }
   }
 }
