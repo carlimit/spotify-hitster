@@ -9,6 +9,7 @@ import { getLoginUrl } from "./spotify";
 import { socket } from "./socket";
 import translations from "./translations";
 import HowToPlay from "./components/HowToPlay";
+import InstallPrompt from "./components/InstallPrompt";
 
 function App() {
 
@@ -142,6 +143,8 @@ function App() {
         </button>
 
         {showHowToPlay && <HowToPlay lang={lang} onClose={() => setShowHowToPlay(false)} />}
+
+        <InstallPrompt lang={lang} />
       </div>
     );
   }
