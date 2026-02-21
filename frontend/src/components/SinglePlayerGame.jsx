@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import axios from "axios";
 import { useSpotifyDirect } from "./useSpotifyPlayer";
+import SpotifyAppPrompt from "./SpotifyAppPrompt";
 
 function SinglePlayerGame({ t,
   setScreen,
@@ -8,7 +9,8 @@ function SinglePlayerGame({ t,
   minYear,
   maxYear,
   playlistTracks,
-  timerSeconds = 0
+  timerSeconds = 0,
+  lang = "en"
 }) {
   const [cards, setCards] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -20,7 +22,7 @@ function SinglePlayerGame({ t,
   const [totalPlayed, setTotalPlayed] = useState(0);
   const [gameOver, setGameOver] = useState(false);
   const [timeLeft, setTimeLeft] = useState(null);
-  const { ready: spotifyReady, playing, togglePlay, stop } = useSpotifyDirect();
+  const { ready: spotifyReady, playing, togglePlay, stop, needsSpotifyApp, retryPlayback } = useSpotifyDirect();
 
   // Drag
   const [dragging, setDragging] = useState(false);
@@ -430,6 +432,10 @@ function SinglePlayerGame({ t,
 
       {loading && <div className="loading-card">{t?.loadingSong || "Loading song..."}</div>}
 
+      {needsSpotifyApp && (
+        <SpotifyAppPrompt onRetry={retryPlayback} lang={lang} />
+      )}
+
       {timeLeft !== null && (
         <div className={`timer-display ${timeLeft <= 5 ? "timer-urgent" : ""}`}>{timeLeft}s</div>
       )}
@@ -483,7 +489,6 @@ function SinglePlayerGame({ t,
               const isNewCard = card.type === "new";
               const isDragged = isNewCard && dragging;
 
-              // ─── Drag-time shift (transform only — purely visual during drag) ───
               let shiftY = 0;
               let shiftX = 0;
 
@@ -501,8 +506,6 @@ function SinglePlayerGame({ t,
                 }
               }
 
-              // Post-reveal: only the first card below the new card needs a margin —
-              // the rest naturally follow in the flow.
               const isFirstCardBelowNew = !horizontal && revealed && index === newCardOriginalIndex + 1;
 
               return (

@@ -227,6 +227,7 @@ function App() {
         minYear={singlePlayerMinYear} maxYear={singlePlayerMaxYear}
         playlistTracks={singlePlayerPlaylist?.tracks || null}
         timerSeconds={timerSeconds}
+        lang={lang}
       />
     );
   }
