@@ -128,7 +128,7 @@ app.get("/api/track", async (req, res) => {
 
     res.json({
       name: randomTrack.name,
-      artist: randomTrack.artists[0].name,
+      artist: randomTrack.artists.map(a => a.name).join(", "),
       year: extractYear(randomTrack),
       uri: randomTrack.uri,
       cover: randomTrack.album.images[0]?.url
@@ -199,7 +199,7 @@ app.get("/api/playlist", async (req, res) => {
           const originalYear = await getOriginalYear(t);
           return {
             name: t.name,
-            artist: t.artists[0].name,
+            artist: t.artists.map(a => a.name).join(", "),
             year: originalYear,
             uri: t.uri,
             cover: t.album.images?.[0]?.url,
@@ -266,6 +266,45 @@ io.on("connection", (socket) => {
     socket.join(code);
     socket.emit("joined_success", { code });
     io.to(code).emit("player_list", game.players);
+  });
+
+  // Rejoin after disconnect (phone screen off, network drop, etc.)
+  // Finds the player by name, remaps their old socket ID to the new one,
+  // and sends them the full current game state so they can recover.
+  socket.on("rejoin_game", ({ code, name }) => {
+    const game = games[code];
+    if (!game) return socket.emit("error", { message: "Game not found" });
+
+    const player = game.players.find(p => p.name === name);
+    if (!player) return socket.emit("error", { message: "Player not found" });
+
+    const oldId = player.id;
+    player.id = socket.id;
+
+    // Update host reference if this was the host
+    if (game.host === oldId) {
+      game.host = socket.id;
+    }
+
+    socket.join(code);
+
+    // Send full game state so client can recover
+    socket.emit("rejoin_success", {
+      code,
+      players: game.players,
+      currentPlayerIndex: game.currentPlayerIndex,
+      selectedGenres: game.selectedGenres || [],
+      minYear: game.minYear,
+      maxYear: game.maxYear,
+      playlistTracks: game.playlistTracks || null,
+      usedUris: Array.from(game.usedUris || []),
+      winGoal: game.winGoal || 10,
+      timerSeconds: game.timerSeconds || 0,
+      coins: game.coins || {},
+      started: game.started,
+    });
+
+    console.log(`🔄 Player "${name}" rejoined game ${code} (${oldId} → ${socket.id})`);
   });
 
   socket.on("start_game", ({ code, minYear, maxYear, selectedGenres, playlistTracks, winGoal, timerSeconds }) => {

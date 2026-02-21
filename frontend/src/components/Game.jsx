@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { socket } from "../socket";
 import { useSpotifyPlayer } from "./useSpotifyPlayer";
+import SpotifyAppPrompt from "./SpotifyAppPrompt";
 
 function saveSession(data) {
   try { sessionStorage.setItem("hitster_session", JSON.stringify(data)); } catch {}
@@ -49,8 +50,7 @@ function Game({
 
   const [overviewMode, setOverviewMode] = useState(false);
 
-  // isHost controls whether this device runs the Spotify SDK or relays via socket
-  const { ready: spotifyReady, playing, togglePlay, stop } = useSpotifyPlayer(roomCode, isHost);
+  const { ready: spotifyReady, playing, togglePlay, stop, needsSpotifyApp, retryPlayback, isMobile } = useSpotifyPlayer(roomCode, isHost);
 
   // Drag
   const [dragging, setDragging] = useState(false);
@@ -208,6 +208,67 @@ function Game({
       socket.off("card_revealed");
     };
   }, []);
+
+  // ============================================================
+  // RECONNECTION — handles phone screen off, network drops, etc.
+  // When socket reconnects with a new ID, we rejoin the game room
+  // so the server remaps our old ID to the new one.
+  // ============================================================
+
+  useEffect(() => {
+    const myPlayer = players.find(p => p.id === socket.id);
+    const myName = myPlayer?.name;
+
+    const handleReconnect = () => {
+      if (!roomCode || !myName) return;
+      console.log("🔄 Socket reconnected — rejoining game...");
+      socket.emit("rejoin_game", { code: roomCode, name: myName });
+    };
+
+    const handleRejoinSuccess = ({
+      players: newPlayers,
+      currentPlayerIndex: newIndex,
+      selectedGenres: genres,
+      minYear: min,
+      maxYear: max,
+      playlistTracks: pt,
+      usedUris,
+      coins: newCoins,
+    }) => {
+      console.log("✅ Rejoin successful");
+
+      if (genres?.length) selectedGenresRef.current = genres;
+      if (min) minYearRef.current = Number(min);
+      if (max) maxYearRef.current = Number(max);
+      if (pt !== undefined) playlistTracksRef.current = pt;
+      if (usedUris) usedUrisRef.current = new Set(usedUris);
+
+      updatePlayers(newPlayers);
+      setCurrentPlayerIndex(newIndex);
+      setCoins(newCoins || {});
+
+      const myTurn = newPlayers[newIndex]?.id === socket.id;
+      isMyTurnRef.current = myTurn;
+      setIsMyTurn(myTurn);
+
+      // If it's our turn and we don't have a card loaded, load one
+      if (myTurn && !cardsRef.current.find(c => c.type === "new")) {
+        loadNewCard(newPlayers[newIndex]);
+      } else if (!myTurn) {
+        const c = newPlayers[newIndex]?.timeline || [];
+        setCards(c);
+        cardsRef.current = c;
+      }
+    };
+
+    socket.on("connect", handleReconnect);
+    socket.on("rejoin_success", handleRejoinSuccess);
+
+    return () => {
+      socket.off("connect", handleReconnect);
+      socket.off("rejoin_success", handleRejoinSuccess);
+    };
+  }, [roomCode, players]);
 
   // ============================================================
   // GENERATE + LOAD CARD
@@ -678,6 +739,10 @@ function Game({
       </div>
 
       {loading && <div className="loading-card">{t?.loadingSong || "Loading song..."}</div>}
+
+      {needsSpotifyApp && (
+        <SpotifyAppPrompt onRetry={retryPlayback} lang={lang} />
+      )}
 
       {timeLeft !== null && isMyTurn && (
         <div className={`timer-display ${timeLeft <= 5 ? "timer-urgent" : ""}`}>{timeLeft}s</div>
