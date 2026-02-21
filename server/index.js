@@ -140,6 +140,40 @@ app.get("/api/track", async (req, res) => {
 });
 
 /* =========================================
+   🔍 SEARCH PLAYLISTS ENDPOINT
+   Searches Spotify for playlists by name.
+========================================= */
+
+app.get("/api/search-playlists", async (req, res) => {
+  const { q } = req.query;
+  if (!q) return res.status(400).json({ error: "No query provided" });
+
+  try {
+    const response = await axios.get("https://api.spotify.com/v1/search", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      params: { q, type: "playlist", limit: 20 }
+    });
+
+    const items = response.data.playlists?.items || [];
+    const playlists = items
+      .filter(p => p && p.id && p.tracks?.total > 0)
+      .map(p => ({
+        id: p.id,
+        name: p.name,
+        owner: p.owner?.display_name || "Unknown",
+        tracks: p.tracks?.total || 0,
+        image: p.images?.[0]?.url || null,
+        url: `https://open.spotify.com/playlist/${p.id}`
+      }));
+
+    res.json({ playlists });
+  } catch (err) {
+    console.error("Search playlists error:", err.message);
+    res.status(500).json({ error: "Search failed" });
+  }
+});
+
+/* =========================================
    🎵 PLAYLIST ENDPOINT
 ========================================= */
 

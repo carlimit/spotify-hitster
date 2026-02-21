@@ -1,0 +1,52 @@
+[
+  {
+    "category": "Hitster Original",
+    "playlists": [
+      { "name": "Hitster – The Original", "url": "https://open.spotify.com/playlist/REPLACE_WITH_ID" },
+      { "name": "Hitster – Party Edition", "url": "https://open.spotify.com/playlist/REPLACE_WITH_ID" }
+    ]
+  },
+  {
+    "category": "Decades",
+    "playlists": [
+      { "name": "Hitster – 60s & 70s", "url": "https://open.spotify.com/playlist/REPLACE_WITH_ID" },
+      { "name": "Hitster – 80s", "url": "https://open.spotify.com/playlist/REPLACE_WITH_ID" },
+      { "name": "Hitster – 90s", "url": "https://open.spotify.com/playlist/REPLACE_WITH_ID" },
+      { "name": "Hitster – 2000s", "url": "https://open.spotify.com/playlist/REPLACE_WITH_ID" },
+      { "name": "Hitster – 2010s", "url": "https://open.spotify.com/playlist/REPLACE_WITH_ID" },
+      { "name": "Hitster – 2020s", "url": "https://open.spotify.com/playlist/REPLACE_WITH_ID" }
+    ]
+  },
+  {
+    "category": "Genres",
+    "playlists": [
+      { "name": "Hitster – Hip-Hop & Rap", "url": "https://open.spotify.com/playlist/REPLACE_WITH_ID" },
+      { "name": "Hitster – Rock Classics", "url": "https://open.spotify.com/playlist/REPLACE_WITH_ID" },
+      { "name": "Hitster – EDM & Dance", "url": "https://open.spotify.com/playlist/REPLACE_WITH_ID" },
+      { "name": "Hitster – R&B & Soul", "url": "https://open.spotify.com/playlist/REPLACE_WITH_ID" },
+      { "name": "Hitster – Metal", "url": "https://open.spotify.com/playlist/REPLACE_WITH_ID" },
+      { "name": "Hitster – Jazz", "url": "https://open.spotify.com/playlist/REPLACE_WITH_ID" },
+      { "name": "Hitster – Country", "url": "https://open.spotify.com/playlist/REPLACE_WITH_ID" }
+    ]
+  },
+  {
+    "category": "Regional",
+    "playlists": [
+      { "name": "Hitster – Deutsch", "url": "https://open.spotify.com/playlist/REPLACE_WITH_ID" },
+      { "name": "Hitster – Schlager", "url": "https://open.spotify.com/playlist/REPLACE_WITH_ID" },
+      { "name": "Hitster – Latin", "url": "https://open.spotify.com/playlist/REPLACE_WITH_ID" },
+      { "name": "Hitster – K-Pop", "url": "https://open.spotify.com/playlist/REPLACE_WITH_ID" },
+      { "name": "Hitster – Bollywood", "url": "https://open.spotify.com/playlist/REPLACE_WITH_ID" },
+      { "name": "Hitster – Français", "url": "https://open.spotify.com/playlist/REPLACE_WITH_ID" }
+    ]
+  },
+  {
+    "category": "Specials",
+    "playlists": [
+      { "name": "Hitster – Movie Soundtracks", "url": "https://open.spotify.com/playlist/REPLACE_WITH_ID" },
+      { "name": "Hitster – Gaming Music", "url": "https://open.spotify.com/playlist/REPLACE_WITH_ID" },
+      { "name": "Hitster – One-Hit Wonders", "url": "https://open.spotify.com/playlist/REPLACE_WITH_ID" },
+      { "name": "Hitster – Festival Anthems", "url": "https://open.spotify.com/playlist/REPLACE_WITH_ID" }
+    ]
+  }
+]

@@ -3,6 +3,7 @@ import Slider from "rc-slider";
 import "rc-slider/assets/index.css";
 import axios from "axios";
 import { socket } from "../socket";
+import PlaylistPicker from "./PlaylistPicker";
 
 function Home({ t, lang,
   setScreen,
@@ -28,10 +29,7 @@ function Home({ t, lang,
   const [hasJoined, setHasJoined] = useState(false);
 
   // Playlist mode
-  const [playlistUrl, setPlaylistUrl] = useState("");
   const [playlistInfo, setPlaylistInfo] = useState(null);
-  const [playlistLoading, setPlaylistLoading] = useState(false);
-  const [playlistError, setPlaylistError] = useState(null);
 
   // ============================================================
   // SOCKET LISTENERS
@@ -96,30 +94,6 @@ function Home({ t, lang,
     } else {
       socket.emit("join_game", { code: inputCode.toUpperCase(), name: playerName });
     }
-  };
-
-  const loadPlaylist = async () => {
-    if (!playlistUrl.trim()) return;
-    setPlaylistLoading(true);
-    setPlaylistError(null);
-    setPlaylistInfo(null);
-    try {
-      const res = await axios.get(`/api/playlist?url=${encodeURIComponent(playlistUrl)}`);
-      setPlaylistInfo(res.data);
-    } catch (err) {
-      const detail = err.response?.data?.detail;
-      setPlaylistError(detail
-        ? `Spotify error: ${detail}`
-        : "Couldn't load playlist. Make sure it's a public Spotify playlist URL.");
-    } finally {
-      setPlaylistLoading(false);
-    }
-  };
-
-  const clearPlaylist = () => {
-    setPlaylistInfo(null);
-    setPlaylistUrl("");
-    setPlaylistError(null);
   };
 
   const startGame = () => {
@@ -200,24 +174,12 @@ function Home({ t, lang,
 
               <div className="home-section">
                 <h2>{t.orUsePlaylist}</h2>
-                {!playlistInfo ? (
-                  <>
-                    <input type="text" placeholder={t.pastePlaceholder} value={playlistUrl}
-                      onChange={e => setPlaylistUrl(e.target.value)}
-                      onKeyPress={e => e.key === "Enter" && loadPlaylist()}
-                    />
-                    <button onClick={loadPlaylist} disabled={playlistLoading || !playlistUrl.trim()} style={{ background: "#444" }}>
-                      {playlistLoading ? t.loading : t.loadPlaylist}
-                    </button>
-                    {playlistError && <p style={{ color: "#ff5555", fontSize: "13px", marginTop: "8px" }}>{playlistError}</p>}
-                  </>
-                ) : (
-                  <div className="playlist-info">
-                    <div className="playlist-name">🎵 {playlistInfo.name}</div>
-                    <div className="playlist-count">{playlistInfo.trackCount} tracks</div>
-                    <button onClick={clearPlaylist} style={{ background: "#444", marginTop: "8px" }}>{t.remove}</button>
-                  </div>
-                )}
+                <PlaylistPicker
+                  t={t}
+                  lang={lang}
+                  playlist={playlistInfo}
+                  setPlaylist={setPlaylistInfo}
+                />
               </div>
 
               <div className="home-section">

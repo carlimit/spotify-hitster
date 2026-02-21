@@ -1,7 +1,7 @@
 import { useState } from "react";
 import Slider from "rc-slider";
 import "rc-slider/assets/index.css";
-import axios from "axios";
+import PlaylistPicker from "./PlaylistPicker";
 
 function SinglePlayerSetup({ t,
   setScreen,
@@ -12,30 +12,11 @@ function SinglePlayerSetup({ t,
   timerSeconds, setTimerSeconds,
   loginUrl, refreshLoginUrl
 }) {
-  const [playlistUrl, setPlaylistUrl] = useState("");
-  const [playlistLoading, setPlaylistLoading] = useState(false);
-  const [playlistError, setPlaylistError] = useState(null);
-
-  // ✅ FIX: Check if already logged in — hides the login banner after OAuth redirect
+  // Check if already logged in — hides the login banner after OAuth redirect
   const [loggedIn, setLoggedIn] = useState(!!localStorage.getItem("token"));
 
   const toggleGenre = (g) => {
     setGenres(prev => prev.includes(g) ? prev.filter(x => x !== g) : [...prev, g]);
-  };
-
-  const loadPlaylist = async () => {
-    if (!playlistUrl.trim()) return;
-    setPlaylistLoading(true);
-    setPlaylistError(null);
-    setPlaylist(null);
-    try {
-      const res = await axios.get(`/api/playlist?url=${encodeURIComponent(playlistUrl)}`);
-      setPlaylist(res.data);
-    } catch (err) {
-      setPlaylistError(err.response?.data?.detail || "Couldn't load playlist. Make sure it's a public Spotify URL.");
-    } finally {
-      setPlaylistLoading(false);
-    }
   };
 
   const handleLogin = () => {
@@ -57,7 +38,7 @@ function SinglePlayerSetup({ t,
         {t?.soloDesc || "Place as many songs as you can correctly. See how long your streak goes!"}
       </p>
 
-      {/* ✅ FIX: Show "connected" state if already logged in, login prompt if not */}
+      {/* Show "connected" state if already logged in, login prompt if not */}
       {loggedIn ? (
         <div className="spotify-login-banner">
           <p>✅ {t?.spotifyConnected || "Spotify connected!"}</p>
@@ -95,27 +76,12 @@ function SinglePlayerSetup({ t,
 
       <div className="home-section">
         <h2>{ t?.orUsePlaylist || "Or use a Playlist" }</h2>
-        {!playlist ? (
-          <>
-            <input
-              type="text"
-              placeholder={t?.pastePlaceholder || 'Paste Spotify playlist link...'}
-              value={playlistUrl}
-              onChange={e => setPlaylistUrl(e.target.value)}
-              onKeyPress={e => e.key === "Enter" && loadPlaylist()}
-            />
-            <button onClick={loadPlaylist} disabled={playlistLoading || !playlistUrl.trim()} style={{ background: "#444" }}>
-              {playlistLoading ? (t?.loading || "Loading...") : (t?.loadPlaylist || "Load Playlist")}
-            </button>
-            {playlistError && <p style={{ color: "#ff5555", fontSize: "13px", marginTop: 8 }}>{playlistError}</p>}
-          </>
-        ) : (
-          <div className="playlist-info">
-            <div className="playlist-name">🎵 {playlist.name}</div>
-            <div className="playlist-count">{playlist.trackCount} tracks</div>
-            <button onClick={() => setPlaylist(null)} style={{ background: "#444", marginTop: 8 }}>{ t?.remove || "Remove" }</button>
-          </div>
-        )}
+        <PlaylistPicker
+          t={t}
+          lang="en"
+          playlist={playlist}
+          setPlaylist={setPlaylist}
+        />
       </div>
 
       <div className="home-section">
