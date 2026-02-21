@@ -82,6 +82,19 @@ function Game({
   const startScrollXRef = useRef(0);
   const startScrollYRef = useRef(0);
 
+  // Track orientation for coin slots
+  const [horizontal, setHorizontal] = useState(
+    window.innerWidth > window.innerHeight && window.innerWidth >= 768
+  );
+
+  useEffect(() => {
+    const onResize = () => {
+      setHorizontal(window.innerWidth > window.innerHeight && window.innerWidth >= 768);
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
   useEffect(() => { selectedGenresRef.current = selectedGenres; }, [selectedGenres]);
   useEffect(() => { minYearRef.current = minYear; }, [minYear]);
   useEffect(() => { maxYearRef.current = maxYear; }, [maxYear]);
@@ -210,9 +223,7 @@ function Game({
   }, []);
 
   // ============================================================
-  // RECONNECTION — handles phone screen off, network drops, etc.
-  // When socket reconnects with a new ID, we rejoin the game room
-  // so the server remaps our old ID to the new one.
+  // RECONNECTION
   // ============================================================
 
   useEffect(() => {
@@ -251,7 +262,6 @@ function Game({
       isMyTurnRef.current = myTurn;
       setIsMyTurn(myTurn);
 
-      // If it's our turn and we don't have a card loaded, load one
       if (myTurn && !cardsRef.current.find(c => c.type === "new")) {
         loadNewCard(newPlayers[newIndex]);
       } else if (!myTurn) {
@@ -652,6 +662,60 @@ function Game({
   };
 
   // ============================================================
+  // COIN SLOT RENDERER
+  // ============================================================
+
+  const renderCoinSlot = (slotIndex) => {
+    if (isMyTurn || revealed) return null;
+    const coinsHere = coinsBySlot[slotIndex] || 0;
+    const myHere = myCoinIndex === slotIndex;
+    const othersCount = coinsHere - (myHere ? 1 : 0);
+
+    return (
+      <div
+        key={`coin-slot-${slotIndex}`}
+        style={{
+          display: "flex",
+          flexDirection: horizontal ? "column" : "row",
+          alignItems: "center",
+          justifyContent: "center",
+          // In landscape: a narrow vertical strip between cards
+          // In portrait: a thin horizontal strip between cards
+          width: horizontal ? 44 : "100%",
+          minWidth: horizontal ? 44 : undefined,
+          height: horizontal ? "100%" : 44,
+          minHeight: horizontal ? undefined : 44,
+          flexShrink: 0,
+          gap: 4,
+        }}
+      >
+        {othersCount > 0 && (
+          <div style={{ fontSize: 16, lineHeight: 1 }}>
+            {"🪙".repeat(Math.min(othersCount, 5))}
+          </div>
+        )}
+        {myHere ? (
+          <button
+            className="coin-btn coin-placed"
+            onClick={removeCoin}
+            style={{ margin: 0 }}
+          >
+            🪙
+          </button>
+        ) : !hasCoinPlaced && myCoins > 0 ? (
+          <button
+            className="coin-btn coin-plus"
+            onClick={() => placeCoin(slotIndex)}
+            style={{ margin: 0 }}
+          >
+            +
+          </button>
+        ) : null}
+      </div>
+    );
+  };
+
+  // ============================================================
   // UI
   // ============================================================
 
@@ -668,8 +732,6 @@ function Game({
   Object.values(coins).forEach(({ insertIndex: idx }) => {
     coinsBySlot[idx] = (coinsBySlot[idx] || 0) + 1;
   });
-
-  const horizontal = window.innerWidth > window.innerHeight && window.innerWidth >= 768;
 
   if (overviewMode) {
     const myTimeline = myPlayer?.timeline || [];
@@ -791,13 +853,21 @@ function Game({
           <div
             className="timeline"
             ref={timelineRef}
-            style={{ paddingBottom: "100px", ...(zoomed ? { transform: `scale(${ZOOM_OUT})` } : {}) }}
+            style={{
+              paddingBottom: horizontal ? 0 : "100px",
+              paddingRight: horizontal ? "100px" : 0,
+              flexDirection: horizontal ? "row" : "column",
+              alignItems: horizontal ? "center" : undefined,
+              ...(zoomed ? { transform: `scale(${ZOOM_OUT})` } : {})
+            }}
           >
+            {/* Coin slot BEFORE the first card (slot 0) */}
+            {renderCoinSlot(0)}
+
             {cards.map((card, index) => {
               const isNewCard = card.type === "new";
               const isDragged = isNewCard && dragging;
 
-              // Drag-time shift (transform only — purely visual during drag)
               let shiftY = 0;
               let shiftX = 0;
 
@@ -817,33 +887,21 @@ function Game({
 
               const isFirstCardBelowNew = !horizontal && revealed && index === newCardOriginalIndex + 1;
 
-              const coinsHere = coinsBySlot[index] || 0;
-              const myMyCoinHere = myCoinIndex === index;
-
               return (
-                <div key={card.id} style={{
-                  width: "100%",
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  marginTop: isFirstCardBelowNew ? "220px" : undefined,
-                  transition: "margin-top 0.3s ease",
-                }}>
-                  {!isMyTurn && !revealed && (
-                    <div className="coin-slot">
-                      {coinsHere - (myMyCoinHere ? 1 : 0) > 0 && (
-                        <div className="coins-on-slot">
-                          {"🪙".repeat(Math.min(coinsHere - (myMyCoinHere ? 1 : 0), 5))}
-                        </div>
-                      )}
-                      {myMyCoinHere ? (
-                        <button className="coin-btn coin-placed" onClick={removeCoin} title="Pick up coin">🪙</button>
-                      ) : !hasCoinPlaced && myCoins > 0 ? (
-                        <button className="coin-btn coin-plus" onClick={() => placeCoin(index)} title="Place coin here">+</button>
-                      ) : null}
-                    </div>
-                  )}
-
+                <div
+                  key={card.id}
+                  style={{
+                    display: "flex",
+                    // In landscape: row = card then coin slot to the right
+                    // In portrait: column = card then coin slot below
+                    flexDirection: horizontal ? "row" : "column",
+                    alignItems: "center",
+                    marginTop: isFirstCardBelowNew ? "220px" : undefined,
+                    transition: "margin-top 0.3s ease",
+                    flexShrink: 0,
+                  }}
+                >
+                  {/* The card itself */}
                   {isNewCard && !revealed && isMyTurn ? (
                     <div
                       className="drag-wrapper"
@@ -892,11 +950,7 @@ function Game({
                     </div>
                   ) : (
                     <div
-                      ref={isNewCard
-                        ? (el) => {
-                            newCardRef.current = el;
-                          }
-                        : null}
+                      ref={isNewCard ? (el) => { newCardRef.current = el; } : null}
                       className={`card ${isNewCard ? "new-card-unrevealed" : "small-fixed"} ${isNewCard && revealed ? (horizontal ? "card-expanded-horizontal" : "card-expanded") : ""}`}
                       style={{
                         position: "relative",
@@ -937,26 +991,8 @@ function Game({
                     </div>
                   )}
 
-                  {index === cards.length - 1 && !isMyTurn && !revealed && (
-                    <div className="coin-slot">
-                      {(() => {
-                        const bottomSlot = cards.length;
-                        const bottomCoins = coinsBySlot[bottomSlot] || 0;
-                        const myBottomCoin = myCoinIndex === bottomSlot;
-                        const othersCoins = bottomCoins - (myBottomCoin ? 1 : 0);
-                        return <>
-                          {othersCoins > 0 && (
-                            <div className="coins-on-slot">{"🪙".repeat(Math.min(othersCoins, 5))}</div>
-                          )}
-                          {myBottomCoin ? (
-                            <button className="coin-btn coin-placed" onClick={removeCoin}>🪙</button>
-                          ) : !hasCoinPlaced && myCoins > 0 ? (
-                            <button className="coin-btn coin-plus" onClick={() => placeCoin(bottomSlot)}>+</button>
-                          ) : null}
-                        </>;
-                      })()}
-                    </div>
-                  )}
+                  {/* Coin slot AFTER each card (slot index + 1) */}
+                  {renderCoinSlot(index + 1)}
                 </div>
               );
             })}
