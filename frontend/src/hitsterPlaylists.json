@@ -2,51 +2,107 @@
   {
     "category": "Hitster Original",
     "playlists": [
-      { "name": "Hitster – The Original", "url": "https://open.spotify.com/playlist/REPLACE_WITH_ID" },
-      { "name": "Hitster – Party Edition", "url": "https://open.spotify.com/playlist/REPLACE_WITH_ID" }
+      { "name": "Hitster – The Original - US", "url": "https://open.spotify.com/playlist/3r4Rx7OnTGfIM4Cboxnv7p?si=1nsleMAZRLanEJMs_webag" },
+      { "name": "Hitster – The Original - Deutsch", "url": "https://open.spotify.com/playlist/26zIHVncgI9HmHlgYWwnDi?si=m8PVKlXyS2q7qeXLm7f0qw" },
+      { "name": "Hitster – Platinum Edition", "url": "https://open.spotify.com/playlist/6a0Z098RE1Bwrii6cuLDAE?si=PNytjO0GQh6phTBUZzM-cQ" }
     ]
   },
-  {
-    "category": "Decades",
-    "playlists": [
-      { "name": "Hitster – 60s & 70s", "url": "https://open.spotify.com/playlist/REPLACE_WITH_ID" },
-      { "name": "Hitster – 80s", "url": "https://open.spotify.com/playlist/REPLACE_WITH_ID" },
-      { "name": "Hitster – 90s", "url": "https://open.spotify.com/playlist/REPLACE_WITH_ID" },
-      { "name": "Hitster – 2000s", "url": "https://open.spotify.com/playlist/REPLACE_WITH_ID" },
-      { "name": "Hitster – 2010s", "url": "https://open.spotify.com/playlist/REPLACE_WITH_ID" },
-      { "name": "Hitster – 2020s", "url": "https://open.spotify.com/playlist/REPLACE_WITH_ID" }
-    ]
-  },
+
   {
     "category": "Genres",
     "playlists": [
-      { "name": "Hitster – Hip-Hop & Rap", "url": "https://open.spotify.com/playlist/REPLACE_WITH_ID" },
-      { "name": "Hitster – Rock Classics", "url": "https://open.spotify.com/playlist/REPLACE_WITH_ID" },
-      { "name": "Hitster – EDM & Dance", "url": "https://open.spotify.com/playlist/REPLACE_WITH_ID" },
-      { "name": "Hitster – R&B & Soul", "url": "https://open.spotify.com/playlist/REPLACE_WITH_ID" },
-      { "name": "Hitster – Metal", "url": "https://open.spotify.com/playlist/REPLACE_WITH_ID" },
-      { "name": "Hitster – Jazz", "url": "https://open.spotify.com/playlist/REPLACE_WITH_ID" },
-      { "name": "Hitster – Country", "url": "https://open.spotify.com/playlist/REPLACE_WITH_ID" }
+      { "name": "Hitster – Schlager Party", "url": "https://open.spotify.com/playlist/0USUpphpG4nAuz9IUudfl9?si=S-s9MyGuTmu6TCGk6EjAPQ" },
+      { "name": "Hitster – Rock - Nederlands", "url": "https://open.spotify.com/playlist/2SHUg7ATjUKt11XTS6cqyp?si=nzSNKlFYSMSTVjcw8EIPqQ" },
+      { "name": "Hitster – Rock - Deutschland", "url": "https://open.spotify.com/playlist/4oYTRg0JI48jucsJOLily1?si=0WwnmlHqTqu76YMoikTtXg" },
+      { "name": "Hitster – Rock - Nordics", "url": "https://open.spotify.com/playlist/12WZQyglCMIJ6qWVuqvr7L?si=wQeBsEWJQt-y-pSX3pF1Bw" },
+      { "name": "Hitster – Rock - Español", "url": "https://open.spotify.com/playlist/2cT61hYCfIkwHAyVMwej9D?si=yu2JTckDSlG1GbwlghmFpQ" },
+      { "name": "Hitster – Rock - Polska", "url": "https://open.spotify.com/playlist/4f4ouOMiMCLwS9y5DerBdU?si=aOnNPDw_TQqYVapPmfMo9g" },
+      { "name": "Hitster – Rock - Hungary", "url": "https://open.spotify.com/playlist/0OOliZdVIfV9Af0jjMilpF?si=nbMpDhC7QCO45hEskivESA" },
+      { "name": "Hitster – Latino", "url": "https://open.spotify.com/playlist/1QY9CyIL36FDfzrwouPIPe?si=sOHFgEuhTd-2CaqAiwf1dg" },
+      { "name": "Hitster – Urban & Hip-Hop - Nederlands", "url": "https://open.spotify.com/playlist/35y8diwRzYjfNUvcvtvRXx?si=E0R_nL4-RkicuMBV40fSeQ" },
+      { "name": "Hitster – Urban & Hip-Hop - Deutschland", "url": "https://open.spotify.com/playlist/5NDdlam4SRu2MOiv3xkXVK?si=YST-Ix6MRy6hbm5pWbzDQA" },
+      { "name": "Hitster – Urban & Hip-Hop - Français", "url": "https://open.spotify.com/playlist/2O8O84Z3peWqcfu8EyCmLp?si=n14SWYzcQc2iYKbsvJWHGA" }
     ]
   },
   {
     "category": "Regional",
     "playlists": [
-      { "name": "Hitster – Deutsch", "url": "https://open.spotify.com/playlist/REPLACE_WITH_ID" },
-      { "name": "Hitster – Schlager", "url": "https://open.spotify.com/playlist/REPLACE_WITH_ID" },
-      { "name": "Hitster – Latin", "url": "https://open.spotify.com/playlist/REPLACE_WITH_ID" },
-      { "name": "Hitster – K-Pop", "url": "https://open.spotify.com/playlist/REPLACE_WITH_ID" },
-      { "name": "Hitster – Bollywood", "url": "https://open.spotify.com/playlist/REPLACE_WITH_ID" },
-      { "name": "Hitster – Français", "url": "https://open.spotify.com/playlist/REPLACE_WITH_ID" }
+      { "name": "Hitster – Deutsch", "url": "https://open.spotify.com/playlist/26zIHVncgI9HmHlgYWwnDi?si=m8PVKlXyS2q7qeXLm7f0qw" },
+      { "name": "Hitster – Nederlands", "url": "https://open.spotify.com/playlist/321iL49aeqqqtKfrQLO91I?si=Hbf-EQQsSWigtNHqSffnCQ" },
+      { "name": "Hitster – Español", "url": "https://open.spotify.com/playlist/1C3NDNNfg6c0SlPhyikGVU?si=2eLChBULRYSxiuXtMzE77w" },
+      { "name": "Hitster – US", "url": "https://open.spotify.com/playlist/3r4Rx7OnTGfIM4Cboxnv7p?si=1nsleMAZRLanEJMs_webag" },
+      { "name": "Hitster – Italia", "url": "https://open.spotify.com/playlist/3KoGQhO5DBWhtJqcwDx0iW?si=-VazpAJGQqiIL0jsA9YZgg" },
+      { "name": "Hitster – UK", "url": "https://open.spotify.com/playlist/0Mpj1KwRmY2pHzmj7mfbdh?si=VW_3bCpQSzmz6Wqh28-vkg" },
+      { "name": "Hitster – Potugal", "url": "https://open.spotify.com/playlist/0dl4hUEIgJqTSJoRra3F4n?si=nlrn6KqRQkCtOuY_7TxahA" },
+      { "name": "Hitster – Mexico", "url": "https://open.spotify.com/playlist/0YDFdU2UM9q1PnfPkgv4eG?si=qeCvk6SjQDGRvvpKlEym2A" },
+      { "name": "Hitster – Canada", "url": "https://open.spotify.com/playlist/3Pft9VkD2PXIK9EPOlVo9Z?si=UaCWUMZ3THSANwFy6CsD3A" },
+      { "name": "Hitster – Australia", "url": "https://open.spotify.com/playlist/6nguvVABON3seJnfqMlIM4?si=hwlrkrZlQIKG8TS74vYh3Q" },
+      { "name": "Hitster – Français", "url": "https://open.spotify.com/playlist/04IBrtXOq1k9RLUwXvFD9b?si=CK7DjzDDTF2rCLQaQjO05A" },
+      { "name": "Hitster – Έλληνα", "url": "https://open.spotify.com/playlist/6Qe8YlMBveLulbbiMP4lGx?si=OcuXNZ-sR9K-_GVzu3bRBg" },
+      { "name": "Hitster – New Zealand", "url": "https://open.spotify.com/playlist/53Mzk0Ppl5QiO0fZxnJHRA?si=ucQkgs79QhS0XqaiboUAzA" },
+      { "name": "Hitster – Schweiz", "url": "https://open.spotify.com/playlist/0Mu3BnQN5SEFovmoDHVFLT?si=k9QoAK4nT_azl82rYfOW8g" },
+      { "name": "Hitster – Baltics", "url": "https://open.spotify.com/playlist/5wqxbcq8dpaV1wqkMRvQIK?si=gXoVYd_wRL2QFIrol4Razg" },
+      { "name": "Hitster – Israel", "url": "https://open.spotify.com/playlist/0mZFsuicBMCPWmSgQM20ZE?si=lYSagVA4RF2MR2uAkbumgA" },
+      { "name": "Hitster – Menart", "url": "https://open.spotify.com/playlist/4FRROKjoNeiPtu0uynoU7p?si=CnqDVLJXT2-etlK3yVZ1YA" },
+      { "name": "Hitster – Hungary - Magyar Kiadás", "url": "https://open.spotify.com/playlist/2plfoej13rKHP2Ubn1HjpW?si=T6N0o9XLToaSswOrrttWHQ" },
+      { "name": "Hitster – Philippines", "url": "https://open.spotify.com/playlist/4oQsiePx2sjHO9Nt4PmUWQ?si=FtVeIxbHSouibstEqRgMwA" },
+      { "name": "Hitster – Polska", "url": "https://open.spotify.com/playlist/7j6R0NiyP7cIkg3AO6eF2D?si=z8DfpQi7TcO2eIYD87_bbw" },
+      { "name": "Hitster – Norway", "url": "https://open.spotify.com/playlist/0aPlDZsvBsCBBvrWym09Lf?si=URVARw_JSyGt7GTvyk2_wA" },
+      { "name": "Hitster – Denmark", "url": "https://open.spotify.com/playlist/7IIQP0uTMPsXnKdBuNCjpB?si=zQJBLhYPTQSnFChXALnGgg" },
+      { "name": "Hitster – Finland", "url": "https://open.spotify.com/playlist/10hgq5tTogDiN36RzNEskN?si=n6tRIMJiRyiQZ_7RY9na3Q" },
+      { "name": "Hitster – Iceland - SMELLUR", "url": "https://open.spotify.com/playlist/2e1GRrlEn3HvLEMrBcAkIA?si=hrU5ciZlR_SzepaC9u3fow" },
+      { "name": "Hitster – Peru", "url": "https://open.spotify.com/playlist/5EgzBllYgzUtyQUW19Q2xm?si=FD6n9HRZROS-AsCLOVS_Eg" },
+      { "name": "Hitster – Lebanon", "url": "https://open.spotify.com/playlist/020PPY5kQFClIqwJ2bXadZ?si=SdISTV9FSHuNO4EVTesPDA" },
+      { "name": "Hitster – Brasil", "url": "https://open.spotify.com/playlist/4gW0C5yxuyq5ZbFqjpIg8S?si=aydYN9rAQ9Ob2zPfIbPV_Q" },
+      { "name": "Hitster – Korea", "url": "https://open.spotify.com/playlist/5oiASWZK7TY3kvP5GWxWqo?si=89dKRcFgR3uWWCM-q2OiMA" },
+      { "name": "Hitster – Hong Kong", "url": "https://open.spotify.com/playlist/1Lb0Q2XTAIIL4oz1XtLt6k?si=m2riMDf2Q-CErnLDe6OQNQ" },
+      { "name": "Hitster – Taiwan", "url": "https://open.spotify.com/playlist/71PHr8b22M6NRN1Y0xDNLq?si=honw4FgHQtqEesWZpClANg" },
+      { "name": "Hitster – Argentina", "url": "https://open.spotify.com/playlist/6VC9rrN0E9zseAZm9IrHic?si=4XFpch7qR0i--LCbZ9WV3g" },
+      { "name": "Hitster – Japan", "url": "https://open.spotify.com/playlist/5soJfEGu41dOPVyN2ye2p7?si=TcWIOuKWSF-qKJcha9jMzw" },
+      { "name": "Hitster – Sweden", "url": "https://open.spotify.com/playlist/6AkPSXrefOXADb7onndgvp?si=W_Se6X50T2usL4lr6hyDhg" }
     ]
   },
   {
     "category": "Specials",
     "playlists": [
-      { "name": "Hitster – Movie Soundtracks", "url": "https://open.spotify.com/playlist/REPLACE_WITH_ID" },
-      { "name": "Hitster – Gaming Music", "url": "https://open.spotify.com/playlist/REPLACE_WITH_ID" },
-      { "name": "Hitster – One-Hit Wonders", "url": "https://open.spotify.com/playlist/REPLACE_WITH_ID" },
-      { "name": "Hitster – Festival Anthems", "url": "https://open.spotify.com/playlist/REPLACE_WITH_ID" }
+      { "name": "Hitster – Summer Party - Deutschland", "url": "https://open.spotify.com/playlist/15hZ0ez6sHYhTeCCshxJTN?si=BJWSZ5hCQb2r6qf_V5I34Q" },
+      { "name": "Hitster – Summer Party - Español", "url": "https://open.spotify.com/playlist/0UY3oVANXRqflE5QjHhaH4?si=aRejYozTRLiYuZ1zC4p-Og" },
+      { "name": "Hitster – Summer Party - Nederlands", "url": "https://open.spotify.com/playlist/2hJrEVC4F2JGDpuUZKJzLF?si=XWj78QF6R3meeiVL2RWCYg" },
+      { "name": "Hitster – Summer Party - Français", "url": "https://open.spotify.com/playlist/1892AMorKSvOjAoBUuzdeb?si=SnMdivu_Q3W65ORj_BKAWQ" },
+      { "name": "Hitster – Summer Party - Canada", "url": "https://open.spotify.com/playlist/4vOGQbOv6AkNQEgO6gE32p?si=f8oJHSFwSISNL_CW0pd1oQ" },
+      { "name": "Hitster – Summer Party - UK", "url": "https://open.spotify.com/playlist/2hZhVv7z6cpGcRBEgvlXLz?si=sTw3JzWjSk2lDbFGoAxSuw" },
+      { "name": "Hitster – Summer Party - Polska", "url": "https://open.spotify.com/playlist/7ExrCy7sggn76TQWhRk8bM?si=PlVZy6hZRB-34bUWBME0XA" },
+      { "name": "Hitster – Förläng Festen - Sweden", "url": "https://open.spotify.com/playlist/0rmMXGd3fIHaWoQYIvycbi?si=8PooXah-RCSAl3-l1Kf43A" },
+      { "name": "Hitster – Guilty Pleasures - Deutschland", "url": "https://open.spotify.com/playlist/2u0vgWYqU1TWVcDehJnZuN?si=SeHmOKFVSRWT-zSPxdWvAg" },
+      { "name": "Hitster – Guilty Pleasures - UK", "url": "https://open.spotify.com/playlist/3wUKjSzUUyJyy8OXO4AtJ7?si=ajLHFE_xQvObAgKFEW1j8A" },
+      { "name": "Hitster – Guilty Pleasures - US", "url": "https://open.spotify.com/playlist/4jKBA77Nr1kzMePxZbGVoD?si=X4XYi7dLSq6RJ6IGySdI9A" },
+      { "name": "Hitster – Guilty Pleasures - Nederlands", "url": "https://open.spotify.com/playlist/2JSmyZbQzHwBztJAlATde4?si=cYiwZMfYTSCOMlQtERWhyA" },
+      { "name": "Hitster – Guilty Pleasures - Canada", "url": "https://open.spotify.com/playlist/7oODqAyY63TKMSgaFern8c?si=FN08Zy79RD6BfTOmYAygAQ" },
+      { "name": "Hitster – Guilty Pleasures - Baltics", "url": "https://open.spotify.com/playlist/6rZq2LELg9dm8i9kDe81eS?si=Q5figVdiSyedFk_TJ25xFQ" },
+      { "name": "Hitster – Plaisirs Coupables - Français", "url": "https://open.spotify.com/playlist/2YAlOApPDlQr9mwYImMnM8?si=q1LvG_LhQQGXulr1Noq53g" },
+      { "name": "Hitster – Temazos - Español", "url": "https://open.spotify.com/playlist/0i8fEuY6ffN6Ou53BeIcxY?si=CMdvpzr-Qjyw5XJzWuLQaw" },
+      { "name": "Hitster – Guilty Pleasures - Nordics", "url": "https://open.spotify.com/playlist/30kvgJ8HdmCSdB13352Z0l?si=GnrYFIWHQBav2kmyUIiZNQ" },
+      { "name": "Hitster – Movies & TV Soundtracks - Deutschland", "url": "https://open.spotify.com/playlist/2jlbmBYM1RLZrsyY67wuDQ?si=h-7CH0skS5OYaW76cK9EBw" },
+      { "name": "Hitster – Movies & TV Soundtracks - Nederlands", "url": "https://open.spotify.com/playlist/7Az33NkIvFxjSR2vfxpXyt?si=r2qZOwPoRJObeEF2UmUiow" },
+      { "name": "Hitster – Movies & TV Soundtracks - Nordics", "url": "https://open.spotify.com/playlist/4NQaek60nhU8ZT7mDWi59R?si=a5C5ICr9RvuoIlM1nKYupg" },
+      { "name": "Hitster – Film & Serie TV - Italia", "url": "https://open.spotify.com/playlist/5Jmc3HQRrG6PltOmRqeqsu?si=o3TXeagpTCqgcX2le78U0w" },
+      { "name": "Hitster – Bayern 1 - Deutschland", "url": "https://open.spotify.com/playlist/2zWVMuxHcoLgThgaBhDzmK?si=sNOeSam9TR6K9F1zh6WCsA" },
+      { "name": "Hitster – Radio Italia - Italia", "url": "https://open.spotify.com/playlist/2ZtWw2QQVM4ZnuoTgoJWXz?si=iw5iTCOoS0Ks2ouLAdRTnA" },
+      { "name": "Hitster – Radio Connect - Belgium", "url": "https://open.spotify.com/playlist/7p7flPWmilzjZUwQFgS9FX?si=gQBAlVLSRA2TXLrmBkHh4A" },
+      { "name": "Hitster – Bingo - Español", "url": "https://open.spotify.com/playlist/46b3PrSVhVEQLnUQVyUPpw?si=MvIuq5T0R_-nlxrxST6Qhw" },
+      { "name": "Hitster – Bingo - Français", "url": "https://open.spotify.com/playlist/6V78mjvzXG7GgGNmLOJFl4?si=N7yDvuYYSzKtVKm1cynACg" },
+      { "name": "Hitster – Bingo - Nederlands", "url": "https://open.spotify.com/playlist/4wEfXjSyGPI22nPftvtl30?si=ZlYJAtSnTGyPXl2KP1YWLg" },
+      { "name": "Hitster – Bingo - Deutsch", "url": "https://open.spotify.com/playlist/58y9xPPIRWd8tqlOaKoDOI?si=RYhmCBk9S2yuccMDsU0eEA" },
+      { "name": "Hitster – Bingo - UK", "url": "https://open.spotify.com/playlist/0BRAHVe41SRLfK1EVsmGyH?si=Jng4e0G4RMGDN0HSyWy7Fw" },
+      { "name": "Hitster – Bingo - Portugal", "url": "https://open.spotify.com/playlist/6TUshdaMsDPEyHOuM2gshn?si=jerKW5lzSM6xBXgwxAKC1A" },
+      { "name": "Hitster – Bingo - Polska", "url": "https://open.spotify.com/playlist/6Pz1HdUAIjWpekhrUhGGbp?si=M4NtxM1KTf6mLbZ0g4ywag" },
+      { "name": "Hitster – Bingo - Nordics", "url": "https://open.spotify.com/playlist/68diUu5RCtTQRKX62szZui?si=bRXF6Et5SEK3vj36mUO5fg" },
+      { "name": "Hitster – Celebration - Deutschland", "url": "https://open.spotify.com/playlist/3QWNtOG8LrhClKhHqFRBHS?si=7tRuT7HiSVG01XmUWI0BtQ" },
+      { "name": "Hitster – Celebration - Nederlands", "url": "https://open.spotify.com/playlist/0xkEvV9nuXz8F7ud4HC2IL?si=fG-WfPFdSd2MLNU7pZv-hw" },
+      { "name": "Hitster – Christmas Edition - Deutschland", "url": "https://open.spotify.com/playlist/7rBNYFYokNHxPRKaMD4jPp?si=XvB8wj1TQLShM4Z-NLX4zg" },
+      { "name": "Hitster – Christmas Edition - Nordics", "url": "https://open.spotify.com/playlist/4wz60nQNnSfMaIQvQGVuto?si=gNa6hwRQRfGpo4NKdCisNw" },
+      { "name": "Hitster – Christmas Edition - Nederlands", "url": "https://open.spotify.com/playlist/1TUhoIBbCFCCyDM4ELKdUE?si=r73xJao_Ssa3B0h8J7SQKQ" },
+      { "name": "Hitster – 100% NL - Nederlands", "url": "https://open.spotify.com/playlist/6plvDP2Wfm32ZliZ8ZfszH?si=ZqrSaoecSdOUOp9k4LhWwQ" }
     ]
   }
 ]
