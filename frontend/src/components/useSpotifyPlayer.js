@@ -135,12 +135,13 @@ async function connectPause(token) {
 // fixed 1s delay. Much snappier UX.
 // ─────────────────────────────────────────────────────────────
 async function retryUntilReady(token, uri, onSuccess, signal) {
-  const MAX_ATTEMPTS = 20; // 20 × 300ms = 6s max
-  const INTERVAL = 300;
+  const MAX_ATTEMPTS = 30; // 30 × 100ms = 3s max
+  const INTERVAL = 100;
 
   for (let i = 0; i < MAX_ATTEMPTS; i++) {
     if (signal?.aborted) return;
-    await new Promise(r => setTimeout(r, INTERVAL));
+    // First attempt immediate, then 100ms between each
+    if (i > 0) await new Promise(r => setTimeout(r, INTERVAL));
     if (signal?.aborted) return;
 
     try {
@@ -173,32 +174,33 @@ export function useSpotifyPlayer(roomCode, isHost) {
   useEffect(() => {
     if (!isHost || !mobileRef.current) return;
 
-    const handleVisibility = async () => {
-      if (document.visibilityState === "visible" && pendingUriRef.current) {
-        const token = localStorage.getItem("token");
-        if (!token) return;
-
-        const uri = pendingUriRef.current;
-
-        // Cancel any previous retry loop
-        retryAbortRef.current?.abort();
-        const controller = new AbortController();
-        retryAbortRef.current = controller;
-
-        // Start polling immediately — no 1s wait
-        await retryUntilReady(token, uri, () => {
-          pendingUriRef.current = null;
-          retryAbortRef.current = null;
-          setNeedsSpotifyApp(false);
-          setPlaying(true);
-          currentUriRef.current = uri;
-          socket.emit("player_state", { code: roomCode, playing: true });
-        }, controller.signal);
-      }
+    const startRetry = async () => {
+      if (!pendingUriRef.current) return;
+      const token = localStorage.getItem("token");
+      if (!token) return;
+      const uri = pendingUriRef.current;
+      retryAbortRef.current?.abort();
+      const controller = new AbortController();
+      retryAbortRef.current = controller;
+      await retryUntilReady(token, uri, () => {
+        pendingUriRef.current = null;
+        retryAbortRef.current = null;
+        setNeedsSpotifyApp(false);
+        setPlaying(true);
+        currentUriRef.current = uri;
+        socket.emit("player_state", { code: roomCode, playing: true });
+      }, controller.signal);
     };
 
+    const handleVisibility = () => { if (document.visibilityState === "visible") startRetry(); };
+    const handleFocus = () => startRetry();
+
     document.addEventListener("visibilitychange", handleVisibility);
-    return () => document.removeEventListener("visibilitychange", handleVisibility);
+    window.addEventListener("focus", handleFocus);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
+      window.removeEventListener("focus", handleFocus);
+    };
   }, [isHost, roomCode]);
 
   useEffect(() => {
@@ -439,29 +441,32 @@ export function useSpotifyDirect() {
   useEffect(() => {
     if (!mobileRef.current) return;
 
-    const handleVisibility = async () => {
-      if (document.visibilityState === "visible" && pendingUriRef.current) {
-        const token = localStorage.getItem("token");
-        if (!token) return;
-
-        const uri = pendingUriRef.current;
-
-        retryAbortRef.current?.abort();
-        const controller = new AbortController();
-        retryAbortRef.current = controller;
-
-        await retryUntilReady(token, uri, () => {
-          pendingUriRef.current = null;
-          retryAbortRef.current = null;
-          setNeedsSpotifyApp(false);
-          setPlaying(true);
-          currentUriRef.current = uri;
-        }, controller.signal);
-      }
+    const startRetry = async () => {
+      if (!pendingUriRef.current) return;
+      const token = localStorage.getItem("token");
+      if (!token) return;
+      const uri = pendingUriRef.current;
+      retryAbortRef.current?.abort();
+      const controller = new AbortController();
+      retryAbortRef.current = controller;
+      await retryUntilReady(token, uri, () => {
+        pendingUriRef.current = null;
+        retryAbortRef.current = null;
+        setNeedsSpotifyApp(false);
+        setPlaying(true);
+        currentUriRef.current = uri;
+      }, controller.signal);
     };
 
+    const handleVisibility = () => { if (document.visibilityState === "visible") startRetry(); };
+    const handleFocus = () => startRetry();
+
     document.addEventListener("visibilitychange", handleVisibility);
-    return () => document.removeEventListener("visibilitychange", handleVisibility);
+    window.addEventListener("focus", handleFocus);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
+      window.removeEventListener("focus", handleFocus);
+    };
   }, []);
 
   useEffect(() => {
