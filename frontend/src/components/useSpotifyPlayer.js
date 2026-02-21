@@ -180,10 +180,14 @@ export function useSpotifyPlayer(roomCode, isHost) {
   useEffect(() => {
     if (!isHost || !mobileRef.current) return;
 
+    let isRetrying = false;
+
     const startRetry = async () => {
       if (!pendingUriRef.current) return;
+      if (isRetrying) return; // already running — don't stack
+      isRetrying = true;
       const token = localStorage.getItem("token");
-      if (!token) return;
+      if (!token) { isRetrying = false; return; }
       const uri = pendingUriRef.current;
       retryAbortRef.current?.abort();
       const controller = new AbortController();
@@ -196,6 +200,7 @@ export function useSpotifyPlayer(roomCode, isHost) {
         currentUriRef.current = uri;
         socket.emit("player_state", { code: roomCode, playing: true });
       }, controller.signal);
+      isRetrying = false;
     };
 
     const handleVisibility = () => { if (document.visibilityState === "visible") startRetry(); };
@@ -447,10 +452,14 @@ export function useSpotifyDirect() {
   useEffect(() => {
     if (!mobileRef.current) return;
 
+    let isRetrying = false;
+
     const startRetry = async () => {
       if (!pendingUriRef.current) return;
+      if (isRetrying) return; // already running — don't stack
+      isRetrying = true;
       const token = localStorage.getItem("token");
-      if (!token) return;
+      if (!token) { isRetrying = false; return; }
       const uri = pendingUriRef.current;
       retryAbortRef.current?.abort();
       const controller = new AbortController();
@@ -462,6 +471,7 @@ export function useSpotifyDirect() {
         setPlaying(true);
         currentUriRef.current = uri;
       }, controller.signal);
+      isRetrying = false;
     };
 
     const handleVisibility = () => { if (document.visibilityState === "visible") startRetry(); };
