@@ -50,6 +50,9 @@ function Game({
 
   const [overviewMode, setOverviewMode] = useState(false);
 
+  // Remote drag indicator for spectators
+  const [remoteDragIndex, setRemoteDragIndex] = useState(null);
+
   const { ready: spotifyReady, playing, togglePlay, stop, needsSpotifyApp, retryPlayback, isMobile } = useSpotifyPlayer(roomCode, isHost);
 
   // Drag
@@ -174,6 +177,7 @@ function Game({
       setDragging(false);
       draggingRef.current = false;
       setInsertIndex(null);
+      setRemoteDragIndex(null);
       setCoins(newCoins || {});
       setMyCoinIndex(null);
       setCoinGiven(false);
@@ -209,9 +213,21 @@ function Game({
       setResult(revealResult);
       setRevealed(true);
       revealedRef.current = true;
+      setRemoteDragIndex(null);
       setTimeout(() => {
         newCardRef.current?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
       }, 300);
+    });
+
+    // ── Live drag sync from active player ──
+    socket.on("drag_move", ({ insertIndex: remoteIdx }) => {
+      if (!isMyTurnRef.current) {
+        setRemoteDragIndex(remoteIdx);
+      }
+    });
+
+    socket.on("drag_end", () => {
+      setRemoteDragIndex(null);
     });
 
     return () => {
@@ -219,6 +235,8 @@ function Game({
       socket.off("coins_updated");
       socket.off("coins_updated_players");
       socket.off("card_revealed");
+      socket.off("drag_move");
+      socket.off("drag_end");
     };
   }, []);
 
@@ -400,11 +418,11 @@ function Game({
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const deltaY = clientY - startYRef.current;
     const deltaX = clientX - startXRef.current;
-    const horizontal = isHorizontal();
+    const horiz = isHorizontal();
 
     if (!draggingRef.current) {
-      const primary = horizontal ? Math.abs(deltaX) : Math.abs(deltaY);
-      const secondary = horizontal ? Math.abs(deltaY) : Math.abs(deltaX);
+      const primary = horiz ? Math.abs(deltaX) : Math.abs(deltaY);
+      const secondary = horiz ? Math.abs(deltaY) : Math.abs(deltaX);
       if (primary < 4) return;
       if (secondary > primary * 1.5) {
         dragActiveRef.current = false;
@@ -422,13 +440,12 @@ function Game({
       const scrollDeltaX = tl ? tl.scrollLeft - startScrollXRef.current : 0;
       const scrollDeltaY = window.scrollY - startScrollYRef.current;
 
-      if (horizontal) {
+      if (horiz) {
         dragCardRef.current.style.transform = `translateX(${(deltaX + scrollDeltaX) / z}px)`;
-        dragCardRef.current.style.scale = "1.04";
       } else {
         dragCardRef.current.style.transform = `translateY(${(deltaY + scrollDeltaY) / z}px)`;
-        dragCardRef.current.style.scale = "1.04";
       }
+      dragCardRef.current.style.scale = "1.04";
       dragCardRef.current.style.boxShadow = "0 28px 70px rgba(29,185,84,0.55)";
       dragCardRef.current.style.zIndex = "1000";
     }
@@ -443,7 +460,7 @@ function Game({
       let direction = 0;
       let proximity = 0;
 
-      if (horizontal) {
+      if (horiz) {
         if (clientX < tlRect.left + SCROLL_ZONE) {
           direction = -1;
           proximity = 1 - ((clientX - tlRect.left) / SCROLL_ZONE);
@@ -454,9 +471,9 @@ function Game({
         if (direction !== 0) {
           const speed = Math.max(1, Math.pow(proximity, 2) * MAX_SPEED);
           const tick = () => {
-            const tl = timelineRef.current;
-            if (!tl || !draggingRef.current) return;
-            tl.scrollLeft += direction * speed;
+            const tl2 = timelineRef.current;
+            if (!tl2 || !draggingRef.current) return;
+            tl2.scrollLeft += direction * speed;
             scrollIntervalRef.current = requestAnimationFrame(tick);
           };
           scrollIntervalRef.current = requestAnimationFrame(tick);
@@ -472,9 +489,9 @@ function Game({
         if (direction !== 0) {
           const speed = Math.max(1, Math.pow(proximity, 2) * MAX_SPEED);
           const tick = () => {
-            const tl = timelineRef.current;
-            if (!tl || !draggingRef.current) return;
-            const r = tl.getBoundingClientRect();
+            const tl2 = timelineRef.current;
+            if (!tl2 || !draggingRef.current) return;
+            const r = tl2.getBoundingClientRect();
             if (direction === -1 && r.top >= 0) return;
             if (direction === 1 && r.bottom <= window.innerHeight) return;
             window.scrollBy(0, direction * speed);
@@ -497,13 +514,13 @@ function Game({
       if (c.type !== "new" && allCardEls[i]) {
         const r = allCardEls[i].getBoundingClientRect();
         fixedMidpoints.push({
-          mid: horizontal ? r.left + r.width / 2 : r.top + r.height / 2,
+          mid: horiz ? r.left + r.width / 2 : r.top + r.height / 2,
           originalIndex: i
         });
       }
     });
 
-    const draggedCenter = horizontal
+    const draggedCenter = horiz
       ? draggedRect.left + draggedRect.width / 2
       : draggedRect.top + draggedRect.height / 2;
 
@@ -515,6 +532,9 @@ function Game({
     arraySlot = Math.max(0, Math.min(currentCards.length, arraySlot));
     insertIndexRef.current = arraySlot;
     setInsertIndex(prev => prev === arraySlot ? prev : arraySlot);
+
+    // ── Emit live drag position to other players ──
+    socket.emit("drag_move", { code: roomCode, insertIndex: arraySlot });
   };
 
   handleDragEndRef.current = () => {
@@ -546,6 +566,9 @@ function Game({
     insertIndexRef.current = null;
     startYRef.current = 0;
     startXRef.current = 0;
+
+    // ── Tell others drag ended ──
+    socket.emit("drag_end", { code: roomCode });
   };
 
   useEffect(() => {
@@ -674,13 +697,12 @@ function Game({
     return (
       <div
         key={`coin-slot-${slotIndex}`}
+        className="coin-slot-wrapper"
         style={{
           display: "flex",
           flexDirection: horizontal ? "column" : "row",
           alignItems: "center",
           justifyContent: "center",
-          // In landscape: a narrow vertical strip between cards
-          // In portrait: a thin horizontal strip between cards
           width: horizontal ? 44 : "100%",
           minWidth: horizontal ? 44 : undefined,
           height: horizontal ? "100%" : 44,
@@ -695,23 +717,32 @@ function Game({
           </div>
         )}
         {myHere ? (
-          <button
-            className="coin-btn coin-placed"
-            onClick={removeCoin}
-            style={{ margin: 0 }}
-          >
-            🪙
-          </button>
+          <button className="coin-btn coin-placed" onClick={removeCoin} style={{ margin: 0 }}>🪙</button>
         ) : !hasCoinPlaced && myCoins > 0 ? (
-          <button
-            className="coin-btn coin-plus"
-            onClick={() => placeCoin(slotIndex)}
-            style={{ margin: 0 }}
-          >
-            +
-          </button>
+          <button className="coin-btn coin-plus" onClick={() => placeCoin(slotIndex)} style={{ margin: 0 }}>+</button>
         ) : null}
       </div>
+    );
+  };
+
+  // ============================================================
+  // REMOTE DRAG INDICATOR (for spectators)
+  // ============================================================
+
+  const renderRemoteDragIndicator = (beforeIndex) => {
+    if (isMyTurn || remoteDragIndex === null || revealed) return null;
+    if (remoteDragIndex !== beforeIndex) return null;
+    return (
+      <div style={{
+        width: horizontal ? 4 : "80%",
+        height: horizontal ? "80%" : 4,
+        background: "#1DB954",
+        borderRadius: 2,
+        alignSelf: "center",
+        boxShadow: "0 0 12px rgba(29,185,84,0.6)",
+        transition: "all 0.15s ease",
+        flexShrink: 0,
+      }} />
     );
   };
 
@@ -861,6 +892,9 @@ function Game({
               ...(zoomed ? { transform: `scale(${ZOOM_OUT})` } : {})
             }}
           >
+            {/* Remote drag indicator before first card */}
+            {renderRemoteDragIndicator(0)}
+
             {/* Coin slot BEFORE the first card (slot 0) */}
             {renderCoinSlot(0)}
 
@@ -892,8 +926,6 @@ function Game({
                   key={card.id}
                   style={{
                     display: "flex",
-                    // In landscape: row = card then coin slot to the right
-                    // In portrait: column = card then coin slot below
                     flexDirection: horizontal ? "row" : "column",
                     alignItems: "center",
                     marginTop: isFirstCardBelowNew ? "220px" : undefined,
@@ -990,6 +1022,9 @@ function Game({
                       )}
                     </div>
                   )}
+
+                  {/* Remote drag indicator after this card */}
+                  {renderRemoteDragIndicator(index + 1)}
 
                   {/* Coin slot AFTER each card (slot index + 1) */}
                   {renderCoinSlot(index + 1)}

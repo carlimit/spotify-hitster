@@ -1,259 +1,962 @@
-import { useState, useEffect } from "react";
-import Home from "./components/Home";
-import Game from "./components/Game";
-import Winner from "./components/Winner";
-import SinglePlayerSetup from "./components/SinglePlayerSetup";
-import SinglePlayerGame from "./components/SinglePlayerGame";
-import "./App.css";
-import { getLoginUrl } from "./spotify";
-import { socket } from "./socket";
-import translations from "./translations";
-import HowToPlay from "./components/HowToPlay";
-import InstallPrompt from "./components/InstallPrompt";
-
-function App() {
-  const [lang, setLang] = useState(() => localStorage.getItem("lang") || "en");
-  const t = translations[lang];
-
-  const switchLang = (l) => {
-    setLang(l);
-    localStorage.setItem("lang", l);
-  };
-
-  const [token, setToken] = useState(null);
-  const [isHost, setIsHost] = useState(false);
-  const [screen, setScreen] = useState("start");
-  const [loginUrl, setLoginUrl] = useState(null);
-  const [singleLoginUrl, setSingleLoginUrl] = useState(null);
-  const [loginError, setLoginError] = useState(null);
-  const [showHowToPlay, setShowHowToPlay] = useState(false);
-
-  useEffect(() => {
-    getLoginUrl("lobby").then(url => setLoginUrl(url));
-    getLoginUrl("singleplayer-setup").then(url => setSingleLoginUrl(url));
-  }, []);
-
-  const [players, setPlayers] = useState([]);
-  const [selectedGenres, setSelectedGenres] = useState([]);
-  const [winner, setWinner] = useState(null);
-  const [minYear, setMinYear] = useState(1990);
-  const [maxYear, setMaxYear] = useState(2024);
-  const [roomCode, setRoomCode] = useState(null);
-  const [playlistTracks, setPlaylistTracks] = useState(null);
-  const [winGoal, setWinGoal] = useState(10);
-  const [timerSeconds, setTimerSeconds] = useState(0);
-
-  const [singlePlayerGenres, setSinglePlayerGenres] = useState([]);
-  const [singlePlayerMinYear, setSinglePlayerMinYear] = useState(1990);
-  const [singlePlayerMaxYear, setSinglePlayerMaxYear] = useState(2024);
-  const [singlePlayerPlaylist, setSinglePlayerPlaylist] = useState(null);
-
-  // ============================================================
-  // 🔐 Spotify Redirect
-  // ============================================================
-
-  useEffect(() => {
-    // Load multiplayer token from localStorage on startup
-    const storedToken = localStorage.getItem("token");
-    if (storedToken) setToken(storedToken);
-
-    const params = new URLSearchParams(window.location.search);
-    const spotifyCode = params.get("code");
-
-    if (spotifyCode) {
-      let codeVerifier = null;
-      let loginOrigin = "lobby";
-      const stateParam = params.get("state");
-      if (stateParam) {
-        try {
-          const decoded = JSON.parse(atob(stateParam));
-          codeVerifier = decoded.codeVerifier;
-          loginOrigin = decoded.loginOrigin || "lobby";
-        } catch {
-          codeVerifier = sessionStorage.getItem("code_verifier") || localStorage.getItem("code_verifier");
-          loginOrigin = localStorage.getItem("login_origin") || "lobby";
-        }
-      } else {
-        codeVerifier = sessionStorage.getItem("code_verifier") || localStorage.getItem("code_verifier");
-        loginOrigin = localStorage.getItem("login_origin") || "lobby";
-      }
-
-      fetch(`/api/token?code=${spotifyCode}`, {
-        headers: { "x-code-verifier": codeVerifier }
-      })
-        .then(res => res.json())
-        .then(data => {
-          if (!data.access_token) {
-            const msg = data.error_description || data.error || JSON.stringify(data);
-            setLoginError(msg);
-            window.history.replaceState({}, document.title, "/");
-            return;
-          }
-
-          if (loginOrigin === "singleplayer-setup") {
-            // Solo: store in sessionStorage only — clears on tab close/reload
-            // Also store in localStorage so useSpotifyDirect can find it
-            sessionStorage.setItem("sp_token", data.access_token);
-            localStorage.setItem("token", data.access_token);
-          } else {
-            // Multiplayer: persist in localStorage
-            localStorage.setItem("token", data.access_token);
-          }
-
-          setToken(data.access_token);
-          setIsHost(loginOrigin !== "singleplayer-setup");
-          window.history.replaceState({}, document.title, "/");
-          setScreen(loginOrigin);
-        })
-        .catch(err => {
-          setLoginError(err.message);
-          window.history.replaceState({}, document.title, "/");
-        });
-    }
-  }, []);
-
-  // ============================================================
-  // START SCREEN
-  // ============================================================
-
-  if (screen === "start") {
-    return (
-      <div className="container">
-        {loginError && (
-          <div style={{ background: "#ff4444", color: "#fff", padding: "12px", borderRadius: "8px", marginBottom: "16px", fontSize: "13px", wordBreak: "break-all" }}>
-            ⚠️ Login failed: {loginError}
-          </div>
-        )}
-        <div className="lang-toggle">
-          <button onClick={() => switchLang("en")} className={lang === "en" ? "lang-active" : ""}>🇬🇧 EN</button>
-          <button onClick={() => switchLang("de")} className={lang === "de" ? "lang-active" : ""}>🇩🇪 DE</button>
-        </div>
-        <h1>{t.appName}</h1>
-
-        <button onClick={() => { setIsHost(true); setScreen("host-login"); }}>
-          {t.hostGame}
-        </button>
-
-        <button
-          style={{ marginTop: "15px", background: "#444" }}
-          onClick={() => { setIsHost(false); setScreen("lobby"); }}
-        >
-          {t.joinGame}
-        </button>
-
-        <button style={{ marginTop: "15px", background: "#1a472a" }} onClick={() => setScreen("singleplayer-setup")}>
-          {t.soloMode}
-        </button>
-
-        <button
-          style={{ marginTop: "15px", background: "transparent", border: "1px solid #555", color: "#aaa" }}
-          onClick={() => setShowHowToPlay(true)}
-        >
-          {lang === "de" ? "📖 Spielanleitung" : "📖 How to Play"}
-        </button>
-
-        {showHowToPlay && <HowToPlay lang={lang} onClose={() => setShowHowToPlay(false)} />}
-
-        <InstallPrompt lang={lang} />
-      </div>
-    );
-  }
-
-  // ============================================================
-  // HOST LOGIN
-  // ============================================================
-
-  if (screen === "host-login") {
-    return (
-      <div className="container">
-        <h1>{t.appName}</h1>
-        <h2>{t.loginToHost}</h2>
-        <button
-          disabled={!loginUrl}
-          onClick={() => {
-            if (!loginUrl) return;
-            const url = loginUrl;
-            setLoginUrl(null);
-            getLoginUrl("lobby").then(u => setLoginUrl(u));
-            window.location.href = url;
-          }}
-        >
-          {loginUrl ? t.loginWithSpotify : "…"}
-        </button>
-      </div>
-    );
-  }
-
-  // ============================================================
-  // LOBBY
-  // ============================================================
-
-  if (screen === "lobby") {
-    return (
-      <Home t={t} lang={lang}
-        setScreen={setScreen} setPlayers={setPlayers}
-        selectedGenres={selectedGenres} setSelectedGenres={setSelectedGenres}
-        minYear={minYear} setMinYear={setMinYear}
-        maxYear={maxYear} setMaxYear={setMaxYear}
-        isHost={isHost} setRoomCode={setRoomCode}
-        setPlaylistTracks={setPlaylistTracks}
-        winGoal={winGoal} setWinGoal={setWinGoal}
-        timerSeconds={timerSeconds} setTimerSeconds={setTimerSeconds}
-      />
-    );
-  }
-
-  if (screen === "playing") {
-    return (
-      <Game t={t}
-        players={players} setPlayers={setPlayers}
-        selectedGenres={selectedGenres}
-        minYear={minYear} maxYear={maxYear}
-        roomCode={roomCode} setScreen={setScreen} setWinner={setWinner}
-        playlistTracks={playlistTracks}
-        winGoal={winGoal} timerSeconds={timerSeconds}
-        isHost={isHost}
-        lang={lang}
-      />
-    );
-  }
-
-  if (screen === "singleplayer-setup") {
-    return (
-      <SinglePlayerSetup t={t}
-        setScreen={setScreen}
-        genres={singlePlayerGenres} setGenres={setSinglePlayerGenres}
-        minYear={singlePlayerMinYear} setMinYear={setSinglePlayerMinYear}
-        maxYear={singlePlayerMaxYear} setMaxYear={setSinglePlayerMaxYear}
-        playlist={singlePlayerPlaylist} setPlaylist={setSinglePlayerPlaylist}
-        timerSeconds={timerSeconds} setTimerSeconds={setTimerSeconds}
-        loginUrl={singleLoginUrl}
-        refreshLoginUrl={() => getLoginUrl("singleplayer-setup").then(u => setSingleLoginUrl(u))}
-        lang={lang}
-      />
-    );
-  }
-
-  if (screen === "singleplayer") {
-    return (
-      <SinglePlayerGame t={t}
-        setScreen={setScreen}
-        selectedGenres={singlePlayerGenres}
-        minYear={singlePlayerMinYear} maxYear={singlePlayerMaxYear}
-        playlistTracks={singlePlayerPlaylist?.tracks || null}
-        timerSeconds={timerSeconds}
-        lang={lang}
-      />
-    );
-  }
-
-  if (screen === "winner") {
-    return (
-      <Winner t={t} winner={winner} onBack={() => setScreen("start")} />
-    );
-  }
-
-  return null;
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
-export default App;
+body {
+  background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  color: #ffffff;
+  -webkit-tap-highlight-color: transparent;
+  overflow-x: hidden;
+  min-height: 100vh;
+}
+
+#root {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+.container {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px 16px 160px 16px;
+  width: 100%;
+  max-width: 100%;
+}
+
+h1 {
+  font-size: clamp(28px, 7vw, 42px);
+  font-weight: 900;
+  margin: 16px 0 28px 0;
+  text-align: center;
+  background: linear-gradient(135deg, #1DB954, #1ed760);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: -0.5px;
+}
+
+h2 {
+  font-size: clamp(20px, 5vw, 26px);
+  font-weight: 700;
+  margin: 8px 0;
+  text-align: center;
+}
+
+h3 {
+  font-size: clamp(14px, 4vw, 17px);
+  font-weight: 500;
+  margin: 4px 0 20px 0;
+  text-align: center;
+  color: #b3b3b3;
+}
+
+input[type="text"] {
+  width: 100%;
+  max-width: 400px;
+  padding: 14px 18px;
+  font-size: 16px;
+  border-radius: 14px;
+  border: 2px solid #2a2a2a;
+  background: #1a1a1a;
+  color: white;
+  margin: 10px auto;
+  display: block;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+input[type="text"]:focus {
+  border-color: #1DB954;
+  box-shadow: 0 0 0 3px rgba(29, 185, 84, 0.12);
+}
+
+input[type="text"]::placeholder { color: #555; }
+
+button {
+  padding: 14px 28px;
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 30px;
+  border: none;
+  background: linear-gradient(135deg, #1DB954, #1ed760);
+  color: white;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: 0 4px 15px rgba(29, 185, 84, 0.3);
+  margin: 8px;
+  min-width: 140px;
+}
+
+button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(29, 185, 84, 0.4);
+}
+
+button:active { transform: scale(0.97); }
+
+.home-section {
+  width: 100%;
+  max-width: 480px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 16px auto;
+}
+
+.player-list {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.container p {
+  width: 100%;
+  max-width: 400px;
+  padding: 12px 18px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  margin: 5px auto;
+  border-left: 3px solid #1DB954;
+  font-weight: 500;
+  font-size: 15px;
+  color: #e0e0e0;
+}
+
+.genre-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.genre-buttons button {
+  min-width: auto;
+  padding: 10px 18px;
+  font-size: 14px;
+  font-weight: 500;
+  text-transform: capitalize;
+  margin: 0;
+  border-radius: 20px;
+  box-shadow: none;
+}
+
+.start-button {
+  margin-top: 24px !important;
+  min-width: 200px !important;
+}
+
+.room-code {
+  font-size: clamp(32px, 9vw, 48px);
+  font-weight: 900;
+  letter-spacing: 8px;
+  color: #1DB954;
+  background: rgba(29, 185, 84, 0.08);
+  border: 2px solid rgba(29, 185, 84, 0.25);
+  border-radius: 16px;
+  padding: 16px 28px;
+  margin: 10px 0;
+  text-align: center;
+}
+
+.rc-slider {
+  width: 100%;
+  max-width: 400px;
+  margin: 20px 0 12px 0;
+}
+
+.rc-slider-rail { background: #2a2a2a; height: 6px; }
+
+.rc-slider-track {
+  background: linear-gradient(90deg, #1DB954, #1ed760);
+  height: 6px;
+}
+
+.rc-slider-handle {
+  width: 22px;
+  height: 22px;
+  background: #1DB954;
+  border: 3px solid white;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  margin-top: -8px;
+  opacity: 1;
+}
+
+.rc-slider-handle-dragging {
+  border-color: #1DB954 !important;
+  box-shadow: 0 0 0 5px rgba(29, 185, 84, 0.2) !important;
+}
+
+/* ============================================================
+   VERTICAL TIMELINE (portrait / default)
+   ============================================================ */
+
+.timeline {
+  width: 100%;
+  max-width: 520px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin: 16px auto 0 auto;
+  align-items: center;
+  padding: 0 0 40px 0;
+}
+
+.timeline > div {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+}
+
+/* ── Cards ──────────────────────────────────────────────────── */
+
+.card {
+  width: 100%;
+  max-width: 480px;
+  min-height: 180px;
+  position: relative;
+  border-radius: 20px;
+  perspective: 1200px;
+  flex-shrink: 0;
+}
+
+.card.small-fixed {
+  width: 100% !important;
+  max-width: 480px !important;
+  height: 180px !important;
+}
+
+.card.new-card-unrevealed {
+  width: 100% !important;
+  max-width: 480px !important;
+  height: 180px !important;
+}
+
+.drag-wrapper {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.card.card-expanded {
+  height: auto !important;
+}
+
+.card.card-expanded-horizontal {
+  height: auto !important;
+  min-height: unset !important;
+  aspect-ratio: unset !important;
+}
+
+@media (max-width: 480px) {
+  .card,
+  .card.small-fixed,
+  .card.new-card-unrevealed {
+    max-width: 100% !important;
+    height: 160px !important;
+    border-radius: 16px;
+  }
+}
+
+/* ── Card inner ─────────────────────────────────────────────── */
+
+.card-inner {
+  width: 100%;
+  min-height: 100%;
+  position: relative;
+  transform-style: preserve-3d;
+  transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.card-inner.flipped {
+  transform: rotateY(180deg);
+  height: auto !important;
+}
+
+.card-front,
+.card-back {
+  position: absolute;
+  inset: 0;
+  border-radius: 18px;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.card-inner.flipped .card-back {
+  position: relative !important;
+  inset: unset !important;
+  height: auto !important;
+  min-height: 180px;
+  overflow: visible !important;
+  padding: 20px;
+}
+
+.card-inner.flipped .card-front { display: none; }
+
+/* ── Card faces ─────────────────────────────────────────────── */
+
+.card-front.fixed {
+  background: linear-gradient(135deg, #2a2a2a, #1f1f1f);
+  border: 2px solid #333;
+  font-size: clamp(32px, 8vw, 52px);
+  font-weight: 800;
+  color: #1DB954;
+  letter-spacing: -1px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+}
+
+.card-front.fixed::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, #1DB954, transparent);
+}
+
+.play-button {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.35);
+  border: 3px solid rgba(255, 255, 255, 0.7) !important;
+  color: white;
+  font-size: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
+  margin: 0 0 12px 0 !important;
+  min-width: unset !important;
+  padding: 0 !important;
+  transition: transform 0.15s ease, background 0.15s ease !important;
+  flex-shrink: 0;
+}
+
+.play-button:hover:not(:disabled) {
+  transform: scale(1.08) !important;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.play-button:active:not(:disabled) { transform: scale(0.95) !important; }
+.play-button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.drag-hint {
+  font-size: 15px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.95);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.card-front.new {
+  background: linear-gradient(135deg, #1DB954, #1ed760);
+  border: 3px solid rgba(255,255,255,0.2);
+  box-shadow: 0 10px 36px rgba(29, 185, 84, 0.45);
+  font-size: 17px;
+  font-weight: 700;
+  color: white;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.card-front.new::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 40%, rgba(255,255,255,0.15), transparent 65%);
+  pointer-events: none;
+}
+
+.card-back {
+  background: linear-gradient(135deg, #242424, #181818);
+  border: 2px solid #333;
+  transform: rotateY(180deg);
+  padding: 20px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.6);
+  gap: 8px;
+  justify-content: flex-start;
+}
+
+.cover-large {
+  width: 100%;
+  max-width: 280px;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 10px;
+  margin-bottom: 12px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.5);
+  flex-shrink: 0;
+}
+
+@media (max-width: 480px) {
+  .cover-large { max-width: 240px; }
+}
+
+.revealed-year {
+  font-size: clamp(38px, 9vw, 56px);
+  font-weight: 900;
+  letter-spacing: -2px;
+  background: linear-gradient(135deg, #1DB954, #1ed760);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 1.1;
+  margin-bottom: 8px;
+  flex-shrink: 0;
+}
+
+.card-back strong {
+  font-size: 17px;
+  font-weight: 700;
+  text-align: center;
+  color: white;
+  line-height: 1.3;
+  flex-shrink: 0;
+  width: 100%;
+  margin-bottom: 4px;
+}
+
+.song-title {
+  font-size: 15px;
+  color: #aaa;
+  text-align: center;
+  line-height: 1.4;
+  word-break: break-word;
+  width: 100%;
+  flex-shrink: 0;
+}
+
+.result-correct .card-back {
+  background: linear-gradient(135deg, #1DB954, #107a33);
+  border-color: #1ed760;
+  box-shadow: 0 12px 40px rgba(29, 185, 84, 0.5);
+}
+
+.result-wrong .card-back {
+  background: linear-gradient(135deg, #e03131, #7a1010);
+  border-color: #ff5555;
+  box-shadow: 0 12px 40px rgba(220, 50, 50, 0.5);
+}
+
+.result-correct .revealed-year,
+.result-wrong .revealed-year {
+  background: none;
+  -webkit-text-fill-color: white;
+}
+
+/* ── Action bar ─────────────────────────────────────────────── */
+
+.action-container {
+  position: fixed;
+  bottom: 24px;
+  left: 0;
+  right: 0;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.action-container button {
+  pointer-events: auto;
+  width: 100%;
+  max-width: 480px;
+  padding: 22px;
+  font-size: 20px;
+  font-weight: 700;
+  border-radius: 16px;
+  margin: 0;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  box-shadow: 0 8px 24px rgba(29, 185, 84, 0.4);
+}
+
+/* ── Zoom ────────────────────────────────────────────────────── */
+
+.zoom-btn {
+  position: fixed;
+  bottom: 104px;
+  right: 16px;
+  z-index: 201;
+  width: 48px !important;
+  height: 48px !important;
+  min-width: unset !important;
+  padding: 0 !important;
+  border-radius: 50% !important;
+  font-size: 20px !important;
+  margin: 0 !important;
+  background: rgba(40,40,40,0.92) !important;
+  border: 2px solid #555 !important;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.5) !important;
+  color: white !important;
+  backdrop-filter: blur(8px);
+  pointer-events: auto;
+}
+
+.timeline-zoom-wrapper {
+  width: 100%;
+  overflow: visible;
+  min-height: 100%;
+}
+
+.timeline-zoom-wrapper .timeline {
+  transform-origin: top center;
+  transition: transform 0.25s ease;
+}
+
+/* ── Timer ─────────────────────────────────────────────────── */
+
+.timer-display {
+  font-size: 48px;
+  font-weight: 900;
+  color: #1DB954;
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  border: 4px solid #1DB954;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 8px auto;
+  transition: color 0.3s, border-color 0.3s;
+}
+
+.timer-urgent {
+  color: #ff4444 !important;
+  border-color: #ff4444 !important;
+  animation: timerPulse 0.5s ease-in-out infinite;
+}
+
+@keyframes timerPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+
+.number-picker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  margin: 8px 0;
+}
+
+.number-picker button {
+  width: 44px !important;
+  height: 44px !important;
+  min-width: unset !important;
+  border-radius: 50% !important;
+  font-size: 24px !important;
+  padding: 0 !important;
+  background: #444 !important;
+}
+
+.number-picker span {
+  font-size: 32px;
+  font-weight: 800;
+  min-width: 48px;
+  text-align: center;
+}
+
+.timer-options {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin: 8px 0;
+}
+
+.timer-options button {
+  min-width: 56px !important;
+  padding: 8px 12px !important;
+}
+
+/* ── Solo stats ─────────────────────────────────────────────── */
+
+.sp-stats {
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+  margin: 24px 0;
+  flex-wrap: wrap;
+}
+
+.sp-stat {
+  background: rgba(255,255,255,0.07);
+  border-radius: 16px;
+  padding: 16px 24px;
+  text-align: center;
+  min-width: 90px;
+}
+
+.sp-stat-num {
+  font-size: 36px;
+  font-weight: 900;
+  color: #1DB954;
+}
+
+.sp-stat-label {
+  font-size: 13px;
+  color: #b3b3b3;
+  margin-top: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.streak-badge {
+  font-size: 22px;
+  font-weight: 800;
+  color: #ff9500;
+  background: rgba(255, 149, 0, 0.15);
+  border: 2px solid rgba(255, 149, 0, 0.4);
+  border-radius: 20px;
+  padding: 4px 12px;
+}
+
+.spotify-login-banner {
+  width: 100%;
+  max-width: 480px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  border-radius: 16px;
+  padding: 16px 20px;
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.spotify-login-banner p {
+  color: #b3b3b3;
+  font-size: 14px;
+  margin-bottom: 12px;
+}
+
+.spotify-connected-banner {
+  width: 100%;
+  max-width: 480px;
+  background: rgba(29, 185, 84, 0.1);
+  border: 2px solid rgba(29, 185, 84, 0.3);
+  border-radius: 16px;
+  padding: 10px 20px;
+  text-align: center;
+  color: #1DB954;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+
+.lang-toggle {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.lang-toggle button {
+  background: #333 !important;
+  min-width: unset !important;
+  padding: 6px 14px !important;
+  font-size: 14px !important;
+  border-radius: 20px !important;
+  border: 2px solid transparent !important;
+  color: #b3b3b3 !important;
+}
+
+.lang-toggle button.lang-active {
+  border-color: #1DB954 !important;
+  color: #fff !important;
+  background: rgba(29,185,84,0.15) !important;
+}
+
+.playlist-info {
+  width: 100%;
+  background: rgba(29, 185, 84, 0.1);
+  border: 2px solid rgba(29, 185, 84, 0.3);
+  border-radius: 14px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.playlist-name {
+  font-size: 17px;
+  font-weight: 700;
+  color: #1DB954;
+  text-align: center;
+}
+
+.playlist-count {
+  font-size: 13px;
+  color: #b3b3b3;
+}
+
+.game-header {
+  width: 100%;
+  max-width: 480px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+  text-align: center;
+}
+
+.game-header > div:first-child {
+  flex: 1;
+  text-align: center;
+}
+
+.game-header h2, .game-header h3 {
+  text-align: center;
+  margin: 4px 0;
+}
+
+/* ── Coins ─────────────────────────────────────────────────── */
+
+.coin-display {
+  font-size: 28px;
+  font-weight: 800;
+  color: #f0c040;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(240, 192, 64, 0.12);
+  border: 2px solid rgba(240, 192, 64, 0.3);
+  border-radius: 12px;
+  padding: 8px 14px;
+  flex-shrink: 0;
+}
+
+.coin-display span { font-size: 22px; }
+
+.coin-slot {
+  width: 100%;
+  max-width: 480px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 2px 0;
+}
+
+.coins-on-slot {
+  font-size: 18px;
+  letter-spacing: 2px;
+}
+
+.coin-btn {
+  width: 36px !important;
+  height: 36px !important;
+  min-width: unset !important;
+  padding: 0 !important;
+  border-radius: 50% !important;
+  font-size: 18px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  margin: 0 !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3) !important;
+  flex-shrink: 0;
+}
+
+.coin-plus {
+  background: rgba(255,255,255,0.12) !important;
+  border: 2px dashed rgba(255,255,255,0.35) !important;
+  color: white !important;
+  font-size: 22px !important;
+  font-weight: 300 !important;
+}
+
+.coin-plus:hover {
+  background: rgba(255,255,255,0.22) !important;
+  transform: scale(1.15) !important;
+}
+
+.coin-placed {
+  background: rgba(240, 192, 64, 0.25) !important;
+  border: 2px solid rgba(240, 192, 64, 0.7) !important;
+  animation: coinPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes coinPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+.give-coin-btn {
+  background: linear-gradient(135deg, #a855f7, #7c3aed) !important;
+  box-shadow: 0 8px 24px rgba(168, 85, 247, 0.4) !important;
+}
+
+.recognition-btn {
+  background: linear-gradient(135deg, #f0c040, #e0a020) !important;
+  color: #1a1a1a !important;
+  font-weight: 700 !important;
+  animation: recognitionPop 0.3s ease;
+}
+
+@keyframes recognitionPop {
+  0% { transform: scale(0.8); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.loading-card {
+  width: 100%;
+  max-width: 480px;
+  height: 190px;
+  border-radius: 20px;
+  background: linear-gradient(135deg, #2a2a2a, #1f1f1f);
+  border: 2px solid #333;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 17px;
+  color: #888;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+@supports (padding: max(0px)) {
+  .container {
+    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
+    padding-bottom: max(160px, calc(env(safe-area-inset-bottom) + 140px));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+* { touch-action: manipulation; }
+
+/* ============================================================
+   LANDSCAPE / HORIZONTAL TIMELINE
+   ============================================================ */
+
+@media (min-width: 768px) and (orientation: landscape) {
+
+  .timeline {
+    flex-direction: row !important;
+    overflow-x: auto !important;
+    overflow-y: visible !important;
+    align-items: flex-start !important;
+    gap: 12px !important;
+    padding: 12px 32px 130px 32px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    -webkit-overflow-scrolling: touch;
+    transform-origin: left center;
+  }
+
+  .timeline-zoom-wrapper {
+    min-width: 100%;
+  }
+
+  .timeline-zoom-wrapper .timeline {
+    min-width: 100%;
+  }
+
+  /* FIXED: Use row so card + coin slot sit side by side in landscape */
+  .timeline > div {
+    flex-shrink: 0 !important;
+    width: auto !important;
+    max-width: none !important;
+    align-items: center !important;
+    flex-direction: row !important;
+  }
+
+  /* Coin slot wrapper in landscape: narrow column beside the card */
+  .timeline .coin-slot-wrapper {
+    flex-direction: column !important;
+    width: 44px !important;
+    min-width: 44px !important;
+    height: auto !important;
+    min-height: unset !important;
+  }
+
+  .timeline .card,
+  .timeline .card.small-fixed,
+  .timeline .card.new-card-unrevealed {
+    width: 200px !important;
+    max-width: 200px !important;
+    height: 120px !important;
+    min-height: 120px !important;
+    aspect-ratio: unset !important;
+  }
+
+  .timeline .drag-wrapper {
+    width: 200px !important;
+    height: 120px !important;
+  }
+
+  .timeline .card.card-expanded-horizontal {
+    width: 200px !important;
+    max-width: 200px !important;
+    height: auto !important;
+    min-height: unset !important;
+    aspect-ratio: unset !important;
+  }
+
+  .card-expanded-horizontal .cover-large {
+    max-width: 130px;
+    margin-bottom: 6px;
+  }
+
+  .card-expanded-horizontal .revealed-year {
+    font-size: 22px !important;
+    margin-bottom: 4px !important;
+    letter-spacing: -1px !important;
+  }
+
+  .card-expanded-horizontal .card-back strong { font-size: 12px; }
+
+  .card-expanded-horizontal .song-title {
+    font-size: 11px !important;
+    line-height: 1.3 !important;
+  }
+
+  .card-expanded-horizontal .card-inner.flipped .card-back {
+    min-height: unset !important;
+  }
+
+  .coin-slot {
+    flex-direction: column !important;
+    width: 36px !important;
+    height: auto !important;
+    align-self: center !important;
+    margin: 0 !important;
+  }
+
+  .zoom-btn {
+    bottom: 120px;
+    right: 24px;
+  }
+}

@@ -431,6 +431,19 @@ io.on("connection", (socket) => {
     socket.to(code).emit("player_state", { playing });
   });
 
+  // Live drag sync — relay active player's drag position to all others
+  socket.on("drag_move", ({ code, insertIndex }) => {
+    const game = games[code];
+    if (!game) return;
+    socket.to(code).emit("drag_move", { insertIndex });
+  });
+
+  socket.on("drag_end", ({ code }) => {
+    const game = games[code];
+    if (!game) return;
+    socket.to(code).emit("drag_end");
+  });
+
   socket.on("give_coin", ({ code }) => {
     const game = games[code];
     if (!game) return;
