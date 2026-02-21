@@ -1,4 +1,5 @@
-const axios = require("axios");
+// api/search-playlists.js
+import axios from "axios";
 
 async function getSpotifyToken() {
   const response = await axios.post(
@@ -18,7 +19,7 @@ async function getSpotifyToken() {
   return response.data.access_token;
 }
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   const { q } = req.query;
   if (!q) return res.status(400).json({ error: "No query provided", playlists: [] });
 
@@ -46,4 +47,4 @@ module.exports = async function handler(req, res) {
     console.error("Search error:", err.response?.data || err.message);
     res.status(500).json({ error: "Search failed", playlists: [] });
   }
-};
+}
