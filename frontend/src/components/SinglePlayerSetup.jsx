@@ -15,11 +15,11 @@ function SinglePlayerSetup({ t,
   loginUrl, refreshLoginUrl,
   lang = "en"
 }) {
-  // sessionStorage clears when the tab is closed or reloaded
-  // so the user always has to re-login on a fresh session
-  const [loggedIn, setLoggedIn] = useState(!!sessionStorage.getItem("token"));
+  // sp_token lives in sessionStorage — cleared on tab close/reload
+  // App.jsx writes it there after solo OAuth redirect
+  const [loggedIn, setLoggedIn] = useState(!!sessionStorage.getItem("sp_token"));
 
-  const [musicMode, setMusicMode] = useState("random"); // "random" | "playlist"
+  const [musicMode, setMusicMode] = useState("random");
 
   const toggleGenre = (g) => {
     setGenres(prev => prev.includes(g) ? prev.filter(x => x !== g) : [...prev, g]);
@@ -33,6 +33,7 @@ function SinglePlayerSetup({ t,
   };
 
   const handleLogout = () => {
+    sessionStorage.removeItem("sp_token");
     localStorage.removeItem("token");
     setLoggedIn(false);
   };
@@ -76,18 +77,12 @@ function SinglePlayerSetup({ t,
           <button
             onClick={() => { setMusicMode("random"); setPlaylist(null); }}
             style={{
-              flex: 1,
-              padding: "10px 8px",
-              fontSize: 14,
+              flex: 1, padding: "10px 8px", fontSize: 14,
               fontWeight: musicMode === "random" ? 700 : 500,
               background: musicMode === "random" ? "#1DB954" : "transparent",
               color: musicMode === "random" ? "#fff" : "#888",
-              border: "none",
-              borderRadius: 10,
-              cursor: "pointer",
-              boxShadow: "none",
-              minWidth: "unset",
-              margin: 0,
+              border: "none", borderRadius: 10, cursor: "pointer",
+              boxShadow: "none", minWidth: "unset", margin: 0,
               transition: "all 0.2s ease",
             }}
           >
@@ -96,18 +91,12 @@ function SinglePlayerSetup({ t,
           <button
             onClick={() => setMusicMode("playlist")}
             style={{
-              flex: 1,
-              padding: "10px 8px",
-              fontSize: 14,
+              flex: 1, padding: "10px 8px", fontSize: 14,
               fontWeight: musicMode === "playlist" ? 700 : 500,
               background: musicMode === "playlist" ? "#1DB954" : "transparent",
               color: musicMode === "playlist" ? "#fff" : "#888",
-              border: "none",
-              borderRadius: 10,
-              cursor: "pointer",
-              boxShadow: "none",
-              minWidth: "unset",
-              margin: 0,
+              border: "none", borderRadius: 10, cursor: "pointer",
+              boxShadow: "none", minWidth: "unset", margin: 0,
               transition: "all 0.2s ease",
             }}
           >
@@ -116,7 +105,6 @@ function SinglePlayerSetup({ t,
         </div>
       </div>
 
-      {/* ── Random mode: genres + year ── */}
       {musicMode === "random" && (
         <>
           <div className="home-section">
@@ -137,9 +125,7 @@ function SinglePlayerSetup({ t,
           <div className="home-section">
             <h2>{t?.yearRange || "Year Range"}</h2>
             <Slider
-              range
-              min={1920}
-              max={currentYear}
+              range min={1920} max={currentYear}
               value={[minYear, maxYear]}
               onChange={v => { setMinYear(v[0]); setMaxYear(v[1]); }}
             />
@@ -148,15 +134,9 @@ function SinglePlayerSetup({ t,
         </>
       )}
 
-      {/* ── Playlist mode ── */}
       {musicMode === "playlist" && (
         <div className="home-section">
-          <PlaylistPicker
-            t={t}
-            lang={lang}
-            playlist={playlist}
-            setPlaylist={setPlaylist}
-          />
+          <PlaylistPicker t={t} lang={lang} playlist={playlist} setPlaylist={setPlaylist} />
         </div>
       )}
 

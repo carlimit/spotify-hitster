@@ -12,7 +12,6 @@ import HowToPlay from "./components/HowToPlay";
 import InstallPrompt from "./components/InstallPrompt";
 
 function App() {
-
   const [lang, setLang] = useState(() => localStorage.getItem("lang") || "en");
   const t = translations[lang];
 
@@ -20,6 +19,7 @@ function App() {
     setLang(l);
     localStorage.setItem("lang", l);
   };
+
   const [token, setToken] = useState(null);
   const [isHost, setIsHost] = useState(false);
   const [screen, setScreen] = useState("start");
@@ -28,11 +28,11 @@ function App() {
   const [loginError, setLoginError] = useState(null);
   const [showHowToPlay, setShowHowToPlay] = useState(false);
 
-  // Pre-compute login URL immediately so button tap is instant (no async gap)
   useEffect(() => {
     getLoginUrl("lobby").then(url => setLoginUrl(url));
     getLoginUrl("singleplayer-setup").then(url => setSingleLoginUrl(url));
   }, []);
+
   const [players, setPlayers] = useState([]);
   const [selectedGenres, setSelectedGenres] = useState([]);
   const [winner, setWinner] = useState(null);
@@ -41,18 +41,19 @@ function App() {
   const [roomCode, setRoomCode] = useState(null);
   const [playlistTracks, setPlaylistTracks] = useState(null);
   const [winGoal, setWinGoal] = useState(10);
-  const [timerSeconds, setTimerSeconds] = useState(0); // 0 = no timer
-  // Singleplayer settings (reuse genre/year/playlist)
+  const [timerSeconds, setTimerSeconds] = useState(0);
+
   const [singlePlayerGenres, setSinglePlayerGenres] = useState([]);
   const [singlePlayerMinYear, setSinglePlayerMinYear] = useState(1990);
   const [singlePlayerMaxYear, setSinglePlayerMaxYear] = useState(2024);
   const [singlePlayerPlaylist, setSinglePlayerPlaylist] = useState(null);
 
   // ============================================================
-  // 🔐 Spotify Redirect — runs on load, handles OAuth callback
+  // 🔐 Spotify Redirect
   // ============================================================
 
   useEffect(() => {
+    // Load multiplayer token from localStorage on startup
     const storedToken = localStorage.getItem("token");
     if (storedToken) setToken(storedToken);
 
@@ -60,7 +61,6 @@ function App() {
     const spotifyCode = params.get("code");
 
     if (spotifyCode) {
-      // Read verifier + origin from state param — avoids Brave wiping localStorage/sessionStorage
       let codeVerifier = null;
       let loginOrigin = "lobby";
       const stateParam = params.get("state");
@@ -70,7 +70,6 @@ function App() {
           codeVerifier = decoded.codeVerifier;
           loginOrigin = decoded.loginOrigin || "lobby";
         } catch {
-          // Fallback to storage if state isn't our encoded format
           codeVerifier = sessionStorage.getItem("code_verifier") || localStorage.getItem("code_verifier");
           loginOrigin = localStorage.getItem("login_origin") || "lobby";
         }
@@ -90,25 +89,38 @@ function App() {
             window.history.replaceState({}, document.title, "/");
             return;
           }
-          localStorage.setItem("token", data.access_token);
+
+          if (loginOrigin === "singleplayer-setup") {
+            // Solo: store in sessionStorage only — clears on tab close/reload
+            // Also store in localStorage so useSpotifyDirect can find it
+            sessionStorage.setItem("sp_token", data.access_token);
+            localStorage.setItem("token", data.access_token);
+          } else {
+            // Multiplayer: persist in localStorage
+            localStorage.setItem("token", data.access_token);
+          }
+
           setToken(data.access_token);
           setIsHost(loginOrigin !== "singleplayer-setup");
           window.history.replaceState({}, document.title, "/");
           setScreen(loginOrigin);
         })
-        .catch(err => { setLoginError(err.message); window.history.replaceState({}, document.title, "/"); });
+        .catch(err => {
+          setLoginError(err.message);
+          window.history.replaceState({}, document.title, "/");
+        });
     }
   }, []);
 
   // ============================================================
-  // 🟢 START SCREEN
+  // START SCREEN
   // ============================================================
 
   if (screen === "start") {
     return (
       <div className="container">
         {loginError && (
-          <div style={{background:"#ff4444",color:"#fff",padding:"12px",borderRadius:"8px",marginBottom:"16px",fontSize:"13px",wordBreak:"break-all"}}>
+          <div style={{ background: "#ff4444", color: "#fff", padding: "12px", borderRadius: "8px", marginBottom: "16px", fontSize: "13px", wordBreak: "break-all" }}>
             ⚠️ Login failed: {loginError}
           </div>
         )}
@@ -117,24 +129,22 @@ function App() {
           <button onClick={() => switchLang("de")} className={lang === "de" ? "lang-active" : ""}>🇩🇪 DE</button>
         </div>
         <h1>{t.appName}</h1>
-        
-        {/* LOCAL MULTIPLAYER */}
+
         <button onClick={() => { setIsHost(true); setScreen("host-login"); }}>
           {t.hostGame}
         </button>
-        
-        {/* JOIN */}
-        <button 
-          style={{ marginTop: "15px", background: "#444" }} 
+
+        <button
+          style={{ marginTop: "15px", background: "#444" }}
           onClick={() => { setIsHost(false); setScreen("lobby"); }}
         >
           {t.joinGame}
         </button>
-        
+
         <button style={{ marginTop: "15px", background: "#1a472a" }} onClick={() => setScreen("singleplayer-setup")}>
           {t.soloMode}
         </button>
-        
+
         <button
           style={{ marginTop: "15px", background: "transparent", border: "1px solid #555", color: "#aaa" }}
           onClick={() => setShowHowToPlay(true)}
@@ -150,7 +160,7 @@ function App() {
   }
 
   // ============================================================
-  // 🟢 HOST LOGIN SCREEN
+  // HOST LOGIN
   // ============================================================
 
   if (screen === "host-login") {
@@ -163,9 +173,9 @@ function App() {
           onClick={() => {
             if (!loginUrl) return;
             const url = loginUrl;
-            setLoginUrl(null); // clear so it regenerates
-            getLoginUrl("lobby").then(u => setLoginUrl(u)); // pre-compute next one
-            window.location.href = url; // synchronous — mobile won't block it
+            setLoginUrl(null);
+            getLoginUrl("lobby").then(u => setLoginUrl(u));
+            window.location.href = url;
           }}
         >
           {loginUrl ? t.loginWithSpotify : "…"}
@@ -175,7 +185,7 @@ function App() {
   }
 
   // ============================================================
-  // 🟢 LOBBY
+  // LOBBY
   // ============================================================
 
   if (screen === "lobby") {
@@ -217,7 +227,8 @@ function App() {
         maxYear={singlePlayerMaxYear} setMaxYear={setSinglePlayerMaxYear}
         playlist={singlePlayerPlaylist} setPlaylist={setSinglePlayerPlaylist}
         timerSeconds={timerSeconds} setTimerSeconds={setTimerSeconds}
-        loginUrl={singleLoginUrl} refreshLoginUrl={() => getLoginUrl("singleplayer-setup").then(u => setSingleLoginUrl(u))}
+        loginUrl={singleLoginUrl}
+        refreshLoginUrl={() => getLoginUrl("singleplayer-setup").then(u => setSingleLoginUrl(u))}
         lang={lang}
       />
     );
