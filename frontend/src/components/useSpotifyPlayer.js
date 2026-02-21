@@ -1,9 +1,18 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { socket } from "../socket";
 
 // ─────────────────────────────────────────────────────────────
+// Mobile detection — the Spotify Web Playback SDK does NOT work
+// on iOS/Android browsers. On mobile we fall back to Spotify
+// Connect, which plays on the user's Spotify app instead.
+// ─────────────────────────────────────────────────────────────
+function isMobileBrowser() {
+  return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+}
+
+// ─────────────────────────────────────────────────────────────
 // Shared helper — initialises the Spotify Web Playback SDK once
-// and calls `onReady(player, deviceId)` when the device is ready.
+// (desktop only) and calls `onReady(player, deviceId)` when ready.
 // ─────────────────────────────────────────────────────────────
 function initSDK(token, name, onReady, onStateChange) {
   const initPlayer = () => {
@@ -47,12 +56,44 @@ function initSDK(token, name, onReady, onStateChange) {
 }
 
 // ─────────────────────────────────────────────────────────────
+// Spotify Connect fallback — plays on the user's active Spotify
+// device (e.g. their phone app). Used on mobile where the Web
+// Playback SDK doesn't work.
+// ─────────────────────────────────────────────────────────────
+async function connectPlay(token, uri) {
+  await fetch("https://api.spotify.com/v1/me/player/play", {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    // No device_id — Spotify routes to the last active device
+    body: JSON.stringify({ uris: [uri] }),
+  });
+}
+
+async function connectPause(token) {
+  await fetch("https://api.spotify.com/v1/me/player/pause", {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+async function connectGetState(token) {
+  const res = await fetch("https://api.spotify.com/v1/me/player", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (res.status === 204) return null; // no active device
+  if (!res.ok) return null;
+  return res.json();
+}
+
+// ─────────────────────────────────────────────────────────────
 // Multiplayer hook — used in Game.jsx
 //
-// The host initialises the Spotify SDK and controls playback.
-// Non-host players send play/pause requests to the host via
-// socket, and receive playback state updates back so their UI
-// stays in sync.
+// Host on desktop  → Web Playback SDK (plays in browser)
+// Host on mobile   → Spotify Connect (plays on Spotify app)
+// Non-host         → relay play/pause to host via socket
 // ─────────────────────────────────────────────────────────────
 export function useSpotifyPlayer(roomCode, isHost) {
   const [ready, setReady] = useState(false);
@@ -60,14 +101,14 @@ export function useSpotifyPlayer(roomCode, isHost) {
   const playerRef = useRef(null);
   const deviceIdRef = useRef(null);
   const currentUriRef = useRef(null);
+  const mobileRef = useRef(isMobileBrowser());
 
   useEffect(() => {
     if (!isHost) {
-      // Non-host: mark ready so the play button is enabled (not greyed out).
-      // Actual playback is relayed to the host via socket.
+      // Non-host: mark ready so play button is enabled.
+      // Playback is relayed to host via socket.
       setReady(true);
 
-      // Listen for playback state broadcasts from the host
       const onPlayerState = ({ playing: isPlaying }) => {
         setPlaying(isPlaying);
       };
@@ -78,13 +119,35 @@ export function useSpotifyPlayer(roomCode, isHost) {
       };
     }
 
-    // ── Host path: initialise the Spotify SDK ──
+    // ── Host path ──
     const token = localStorage.getItem("token");
     if (!token) {
       console.warn("No Spotify token — play button will be disabled");
       return;
     }
 
+    if (mobileRef.current) {
+      // Mobile host: skip SDK, use Spotify Connect
+      console.log("📱 Mobile detected — using Spotify Connect fallback");
+      setReady(true);
+
+      // Listen for play/pause requests from non-host players
+      const onPlayTrack = ({ uri }) => {
+        connectPlay(token, uri).catch(err => console.error("Connect play error:", err));
+      };
+      const onPauseTrack = () => {
+        connectPause(token).catch(err => console.error("Connect pause error:", err));
+      };
+      socket.on("play_track", onPlayTrack);
+      socket.on("pause_track", onPauseTrack);
+
+      return () => {
+        socket.off("play_track", onPlayTrack);
+        socket.off("pause_track", onPauseTrack);
+      };
+    }
+
+    // Desktop host: initialise the Web Playback SDK
     const player = initSDK(
       token,
       "Hitster Game Player",
@@ -97,7 +160,7 @@ export function useSpotifyPlayer(roomCode, isHost) {
         const isPlaying = !state.paused;
         setPlaying(isPlaying);
         currentUriRef.current = state.track_window?.current_track?.uri || null;
-        // Broadcast state to non-host players so their UI stays in sync
+        // Broadcast state to non-host players
         socket.emit("player_state", { code: roomCode, playing: isPlaying });
       }
     );
@@ -106,7 +169,7 @@ export function useSpotifyPlayer(roomCode, isHost) {
 
     // Host listens for play/pause requests from non-host players
     const onPlayTrack = ({ uri }) => {
-      hostPlayUri(uri);
+      hostPlayUriSDK(uri);
     };
     const onPauseTrack = () => {
       if (playerRef.current) {
@@ -127,8 +190,8 @@ export function useSpotifyPlayer(roomCode, isHost) {
     };
   }, [isHost, roomCode]);
 
-  // Internal helper for the host to start playing a URI
-  const hostPlayUri = async (uri) => {
+  // Desktop SDK play helper
+  const hostPlayUriSDK = async (uri) => {
     const token = localStorage.getItem("token");
     if (!playerRef.current || !deviceIdRef.current || !token) return;
     try {
@@ -144,27 +207,50 @@ export function useSpotifyPlayer(roomCode, isHost) {
         }
       );
     } catch (err) {
-      console.error("Host playback error:", err);
+      console.error("Host SDK playback error:", err);
     }
   };
 
-  const togglePlay = async (uri) => {
+  const togglePlay = useCallback(async (uri) => {
     if (!isHost) {
-      // Non-host: relay request to host via socket
+      // Non-host: relay to host via socket
       if (playing) {
         socket.emit("pause_track", { code: roomCode });
       } else {
         socket.emit("play_track", { code: roomCode, uri });
       }
-      // Optimistic UI update — will be corrected by player_state broadcast
       setPlaying((p) => !p);
       return;
     }
 
-    // Host: control SDK directly
     const token = localStorage.getItem("token");
-    if (!playerRef.current || !deviceIdRef.current || !token) {
-      console.warn("Cannot play — player not ready or no token");
+    if (!token) {
+      console.warn("Cannot play — no token");
+      return;
+    }
+
+    if (mobileRef.current) {
+      // Mobile host: use Spotify Connect
+      try {
+        if (playing) {
+          await connectPause(token);
+          setPlaying(false);
+          socket.emit("player_state", { code: roomCode, playing: false });
+        } else {
+          await connectPlay(token, uri);
+          setPlaying(true);
+          currentUriRef.current = uri;
+          socket.emit("player_state", { code: roomCode, playing: true });
+        }
+      } catch (err) {
+        console.error("Connect playback error:", err);
+      }
+      return;
+    }
+
+    // Desktop host: control SDK directly
+    if (!playerRef.current || !deviceIdRef.current) {
+      console.warn("Cannot play — player not ready");
       return;
     }
 
@@ -190,14 +276,27 @@ export function useSpotifyPlayer(roomCode, isHost) {
     } catch (err) {
       console.error("Playback error:", err);
     }
-  };
+  }, [isHost, playing, roomCode]);
 
-  const stop = async () => {
+  const stop = useCallback(async () => {
     if (!isHost) {
       socket.emit("pause_track", { code: roomCode });
       setPlaying(false);
       return;
     }
+
+    const token = localStorage.getItem("token");
+
+    if (mobileRef.current) {
+      if (token) {
+        connectPause(token).catch(() => {});
+      }
+      setPlaying(false);
+      currentUriRef.current = null;
+      socket.emit("player_state", { code: roomCode, playing: false });
+      return;
+    }
+
     if (!playerRef.current) return;
     try {
       await playerRef.current.pause();
@@ -206,13 +305,16 @@ export function useSpotifyPlayer(roomCode, isHost) {
     } catch (err) {
       console.error("Stop error:", err);
     }
-  };
+  }, [isHost, roomCode]);
 
-  return { ready, playing, togglePlay, stop };
+  return { ready, playing, togglePlay, stop, isMobile: mobileRef.current };
 }
 
 // ─────────────────────────────────────────────────────────────
 // Single-player hook — used in SinglePlayerGame.jsx
+//
+// Desktop → Web Playback SDK (plays in browser)
+// Mobile  → Spotify Connect (plays on Spotify app)
 // ─────────────────────────────────────────────────────────────
 export function useSpotifyDirect() {
   const [ready, setReady] = useState(false);
@@ -220,6 +322,7 @@ export function useSpotifyDirect() {
   const playerRef = useRef(null);
   const deviceIdRef = useRef(null);
   const currentUriRef = useRef(null);
+  const mobileRef = useRef(isMobileBrowser());
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -228,6 +331,14 @@ export function useSpotifyDirect() {
       return;
     }
 
+    if (mobileRef.current) {
+      // Mobile: skip SDK, use Spotify Connect
+      console.log("📱 Mobile detected — using Spotify Connect fallback (solo)");
+      setReady(true);
+      return;
+    }
+
+    // Desktop: initialise SDK
     const player = initSDK(
       token,
       "Hitster Solo Player",
@@ -253,10 +364,33 @@ export function useSpotifyDirect() {
     };
   }, []);
 
-  const togglePlay = async (uri) => {
+  const togglePlay = useCallback(async (uri) => {
     const token = localStorage.getItem("token");
-    if (!playerRef.current || !deviceIdRef.current || !token) {
-      console.warn("Cannot play — player not ready or no token");
+    if (!token) {
+      console.warn("Cannot play — no token");
+      return;
+    }
+
+    if (mobileRef.current) {
+      // Mobile: use Spotify Connect
+      try {
+        if (playing) {
+          await connectPause(token);
+          setPlaying(false);
+        } else {
+          await connectPlay(token, uri);
+          setPlaying(true);
+          currentUriRef.current = uri;
+        }
+      } catch (err) {
+        console.error("Connect playback error:", err);
+      }
+      return;
+    }
+
+    // Desktop: use SDK
+    if (!playerRef.current || !deviceIdRef.current) {
+      console.warn("Cannot play — player not ready");
       return;
     }
 
@@ -282,9 +416,20 @@ export function useSpotifyDirect() {
     } catch (err) {
       console.error("Playback error:", err);
     }
-  };
+  }, [playing]);
 
-  const stop = async () => {
+  const stop = useCallback(async () => {
+    const token = localStorage.getItem("token");
+
+    if (mobileRef.current) {
+      if (token) {
+        connectPause(token).catch(() => {});
+      }
+      setPlaying(false);
+      currentUriRef.current = null;
+      return;
+    }
+
     if (!playerRef.current) return;
     try {
       await playerRef.current.pause();
@@ -293,7 +438,7 @@ export function useSpotifyDirect() {
     } catch (err) {
       console.error("Stop error:", err);
     }
-  };
+  }, []);
 
-  return { ready, playing, togglePlay, stop };
+  return { ready, playing, togglePlay, stop, isMobile: mobileRef.current };
 }
