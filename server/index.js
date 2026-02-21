@@ -146,16 +146,15 @@ app.get("/api/track", async (req, res) => {
 
 app.get("/api/search-playlists", async (req, res) => {
   const { q } = req.query;
-  if (!q) return res.status(400).json({ error: "No query provided" });
+  if (!q) return res.status(400).json({ error: "No query provided", playlists: [] });
 
-  try {
+  const doSearch = async (token) => {
     const response = await axios.get("https://api.spotify.com/v1/search", {
-      headers: { Authorization: `Bearer ${accessToken}` },
+      headers: { Authorization: `Bearer ${token}` },
       params: { q, type: "playlist", limit: 20 }
     });
-
     const items = response.data.playlists?.items || [];
-    const playlists = items
+    return items
       .filter(p => p && p.id && p.tracks?.total > 0)
       .map(p => ({
         id: p.id,
@@ -165,11 +164,26 @@ app.get("/api/search-playlists", async (req, res) => {
         image: p.images?.[0]?.url || null,
         url: `https://open.spotify.com/playlist/${p.id}`
       }));
+  };
 
+  try {
+    if (!accessToken) await getSpotifyToken();
+    const playlists = await doSearch(accessToken);
     res.json({ playlists });
   } catch (err) {
-    console.error("Search playlists error:", err.message);
-    res.status(500).json({ error: "Search failed" });
+    // If 401, refresh token and retry once
+    if (err.response?.status === 401) {
+      try {
+        await getSpotifyToken();
+        const playlists = await doSearch(accessToken);
+        return res.json({ playlists });
+      } catch (retryErr) {
+        console.error("Search retry failed:", retryErr.response?.data || retryErr.message);
+        return res.status(500).json({ error: "Search failed", playlists: [] });
+      }
+    }
+    console.error("Search playlists error:", err.response?.data || err.message);
+    res.status(500).json({ error: "Search failed", playlists: [] });
   }
 });
 

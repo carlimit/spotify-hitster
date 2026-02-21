@@ -218,6 +218,7 @@ function App() {
         playlist={singlePlayerPlaylist} setPlaylist={setSinglePlayerPlaylist}
         timerSeconds={timerSeconds} setTimerSeconds={setTimerSeconds}
         loginUrl={singleLoginUrl} refreshLoginUrl={() => getLoginUrl("singleplayer-setup").then(u => setSingleLoginUrl(u))}
+        lang={lang}
       />
     );
   }

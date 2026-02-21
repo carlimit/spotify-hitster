@@ -11,7 +11,7 @@ import hitsterPlaylists from "../hitsterPlaylists.json";
 //   🔗 Paste Link      — manual URL input (existing behavior)
 // ─────────────────────────────────────────────────────────────
 
-function PlaylistPicker({ t, lang, playlist, setPlaylist, onLoad }) {
+function PlaylistPicker({ t, lang, playlist, setPlaylist }) {
   const [tab, setTab] = useState("hitster"); // "hitster" | "search" | "link"
   const [search, setSearch] = useState("");
   const [searchResults, setSearchResults] = useState([]);
@@ -30,13 +30,12 @@ function PlaylistPicker({ t, lang, playlist, setPlaylist, onLoad }) {
     try {
       const res = await axios.get(`/api/playlist?url=${encodeURIComponent(url)}`);
       setPlaylist(res.data);
-      if (onLoad) onLoad(res.data);
     } catch (err) {
       setError(err.response?.data?.detail || "Couldn't load playlist.");
     } finally {
       setLoading(false);
     }
-  }, [setPlaylist, onLoad]);
+  }, [setPlaylist]);
 
   // ── Spotify search with debounce ──
   const doSearch = useCallback(async (query) => {
@@ -45,11 +44,14 @@ function PlaylistPicker({ t, lang, playlist, setPlaylist, onLoad }) {
       return;
     }
     setSearching(true);
+    setError(null);
     try {
       const res = await axios.get(`/api/search-playlists?q=${encodeURIComponent(query)}`);
       setSearchResults(res.data.playlists || []);
-    } catch {
+    } catch (err) {
+      console.error("Search error:", err.response?.data || err.message);
       setSearchResults([]);
+      setError(err.response?.data?.error || "Search failed — try again.");
     } finally {
       setSearching(false);
     }

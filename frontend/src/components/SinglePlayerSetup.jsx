@@ -3,6 +3,8 @@ import Slider from "rc-slider";
 import "rc-slider/assets/index.css";
 import PlaylistPicker from "./PlaylistPicker";
 
+const currentYear = new Date().getFullYear();
+
 function SinglePlayerSetup({ t,
   setScreen,
   genres, setGenres,
@@ -10,10 +12,11 @@ function SinglePlayerSetup({ t,
   maxYear, setMaxYear,
   playlist, setPlaylist,
   timerSeconds, setTimerSeconds,
-  loginUrl, refreshLoginUrl
+  loginUrl, refreshLoginUrl,
+  lang = "en"
 }) {
-  // Check if already logged in — hides the login banner after OAuth redirect
   const [loggedIn, setLoggedIn] = useState(!!localStorage.getItem("token"));
+  const [musicMode, setMusicMode] = useState("random"); // "random" | "playlist"
 
   const toggleGenre = (g) => {
     setGenres(prev => prev.includes(g) ? prev.filter(x => x !== g) : [...prev, g]);
@@ -33,12 +36,11 @@ function SinglePlayerSetup({ t,
 
   return (
     <div className="container">
-      <h1>{ t?.soloTitle || "Solo Mode" }</h1>
+      <h1>{t?.soloTitle || "Solo Mode"}</h1>
       <p style={{ color: "#b3b3b3", textAlign: "center", marginBottom: 16 }}>
         {t?.soloDesc || "Place as many songs as you can correctly. See how long your streak goes!"}
       </p>
 
-      {/* Show "connected" state if already logged in, login prompt if not */}
       {loggedIn ? (
         <div className="spotify-login-banner">
           <p>✅ {t?.spotifyConnected || "Spotify connected!"}</p>
@@ -59,45 +61,104 @@ function SinglePlayerSetup({ t,
         </div>
       )}
 
+      {/* ── Mode Switch ── */}
       <div className="home-section">
-        <h2>{ t?.genres || "Genres" }</h2>
-        <div className="genre-buttons">
-          {["pop", "rock", "hiphop", "edm", "jazz", "metal", "house"].map(g => (
-            <button
-              key={g}
-              onClick={() => toggleGenre(g)}
-              style={{ background: genres.includes(g) ? "#1DB954" : "#444" }}
-            >
-              {g}
-            </button>
-          ))}
+        <div style={{
+          display: "flex",
+          background: "#1a1a1a",
+          borderRadius: 12,
+          padding: 3,
+          gap: 3,
+        }}>
+          <button
+            onClick={() => { setMusicMode("random"); setPlaylist(null); }}
+            style={{
+              flex: 1,
+              padding: "10px 8px",
+              fontSize: 14,
+              fontWeight: musicMode === "random" ? 700 : 500,
+              background: musicMode === "random" ? "#1DB954" : "transparent",
+              color: musicMode === "random" ? "#fff" : "#888",
+              border: "none",
+              borderRadius: 10,
+              cursor: "pointer",
+              boxShadow: "none",
+              minWidth: "unset",
+              margin: 0,
+              transition: "all 0.2s ease",
+            }}
+          >
+            🎲 {lang === "de" ? "Zufällig" : "Random"}
+          </button>
+          <button
+            onClick={() => setMusicMode("playlist")}
+            style={{
+              flex: 1,
+              padding: "10px 8px",
+              fontSize: 14,
+              fontWeight: musicMode === "playlist" ? 700 : 500,
+              background: musicMode === "playlist" ? "#1DB954" : "transparent",
+              color: musicMode === "playlist" ? "#fff" : "#888",
+              border: "none",
+              borderRadius: 10,
+              cursor: "pointer",
+              boxShadow: "none",
+              minWidth: "unset",
+              margin: 0,
+              transition: "all 0.2s ease",
+            }}
+          >
+            🎵 Playlist
+          </button>
         </div>
       </div>
 
-      <div className="home-section">
-        <h2>{ t?.orUsePlaylist || "Or use a Playlist" }</h2>
-        <PlaylistPicker
-          t={t}
-          lang="en"
-          playlist={playlist}
-          setPlaylist={setPlaylist}
-        />
-      </div>
+      {/* ── Random mode: genres + year ── */}
+      {musicMode === "random" && (
+        <>
+          <div className="home-section">
+            <h2>{t?.genres || "Genres"}</h2>
+            <div className="genre-buttons">
+              {["pop", "rock", "hiphop", "edm", "jazz", "metal", "house"].map(g => (
+                <button
+                  key={g}
+                  onClick={() => toggleGenre(g)}
+                  style={{ background: genres.includes(g) ? "#1DB954" : "#444" }}
+                >
+                  {g}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="home-section">
+            <h2>{t?.yearRange || "Year Range"}</h2>
+            <Slider
+              range
+              min={1920}
+              max={currentYear}
+              value={[minYear, maxYear]}
+              onChange={v => { setMinYear(v[0]); setMaxYear(v[1]); }}
+            />
+            <div style={{ marginTop: 10, fontWeight: "bold" }}>{minYear} – {maxYear}</div>
+          </div>
+        </>
+      )}
+
+      {/* ── Playlist mode ── */}
+      {musicMode === "playlist" && (
+        <div className="home-section">
+          <PlaylistPicker
+            t={t}
+            lang={lang}
+            playlist={playlist}
+            setPlaylist={setPlaylist}
+          />
+        </div>
+      )}
 
       <div className="home-section">
-        <h2>{ t?.yearRange || "Year Range" }</h2>
-        <Slider
-          range
-          min={1960}
-          max={2024}
-          value={[minYear, maxYear]}
-          onChange={v => { setMinYear(v[0]); setMaxYear(v[1]); }}
-        />
-        <div style={{ marginTop: 10, fontWeight: "bold" }}>{minYear} – {maxYear}</div>
-      </div>
-
-      <div className="home-section">
-        <h2>{ t?.timer || "Timer" }</h2>
+        <h2>{t?.timer || "Timer"}</h2>
         <div className="timer-options">
           {[0, 15, 30, 45, 60].map(s => (
             <button
