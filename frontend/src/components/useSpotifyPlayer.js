@@ -56,36 +56,107 @@ function initSDK(token, name, onReady, onStateChange) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Spotify Connect fallback — plays on the user's active Spotify
-// device (e.g. their phone app). Used on mobile where the Web
+// Spotify Connect helpers — used on mobile where the Web
 // Playback SDK doesn't work.
+//
+// The key challenge: if Spotify has been idle, there's no
+// "active device" and play calls fail with 404. We solve this
+// by checking /me/player/devices, finding a suitable device,
+// and transferring playback to it first (which wakes it up).
 // ─────────────────────────────────────────────────────────────
-async function connectPlay(token, uri) {
-  await fetch("https://api.spotify.com/v1/me/player/play", {
+
+// Find a usable device, preferring the active one, then phone, then any
+async function getTargetDevice(token) {
+  const res = await fetch("https://api.spotify.com/v1/me/player/devices", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  const devices = data.devices || [];
+  if (!devices.length) return null;
+
+  // Prefer already-active device
+  const active = devices.find(d => d.is_active);
+  if (active) return active;
+
+  // Prefer smartphone
+  const phone = devices.find(d => d.type === "Smartphone");
+  if (phone) return phone;
+
+  // Any device
+  return devices[0];
+}
+
+// Transfer playback to a device (wakes it up if idle)
+async function transferPlayback(token, deviceId) {
+  await fetch("https://api.spotify.com/v1/me/player", {
     method: "PUT",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     },
-    // No device_id — Spotify routes to the last active device
+    body: JSON.stringify({ device_ids: [deviceId], play: false }),
+  });
+  // Give Spotify a moment to activate the device
+  await new Promise(r => setTimeout(r, 300));
+}
+
+async function connectPlay(token, uri) {
+  // First try playing directly (works if there's an active device)
+  const res = await fetch("https://api.spotify.com/v1/me/player/play", {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
     body: JSON.stringify({ uris: [uri] }),
   });
+
+  if (res.ok) return true;
+
+  // If 404 (no active device) — find and wake a device, then retry
+  if (res.status === 404 || res.status === 502) {
+    console.log("📱 No active device — looking for available devices...");
+    const device = await getTargetDevice(token);
+    if (!device) {
+      console.warn("📱 No Spotify devices found. Is the Spotify app open?");
+      return false;
+    }
+
+    console.log(`📱 Waking device: ${device.name} (${device.type})`);
+    await transferPlayback(token, device.id);
+
+    // Retry play on the now-active device
+    const retry = await fetch(
+      `https://api.spotify.com/v1/me/player/play?device_id=${device.id}`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ uris: [uri] }),
+      }
+    );
+
+    if (!retry.ok) {
+      console.warn("📱 Retry failed:", retry.status);
+      return false;
+    }
+    return true;
+  }
+
+  console.warn("📱 Play failed:", res.status);
+  return false;
 }
 
 async function connectPause(token) {
-  await fetch("https://api.spotify.com/v1/me/player/pause", {
+  const res = await fetch("https://api.spotify.com/v1/me/player/pause", {
     method: "PUT",
     headers: { Authorization: `Bearer ${token}` },
   });
-}
-
-async function connectGetState(token) {
-  const res = await fetch("https://api.spotify.com/v1/me/player", {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (res.status === 204) return null; // no active device
-  if (!res.ok) return null;
-  return res.json();
+  // 404 just means nothing is playing — that's fine
+  return res.ok || res.status === 404;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -237,10 +308,12 @@ export function useSpotifyPlayer(roomCode, isHost) {
           setPlaying(false);
           socket.emit("player_state", { code: roomCode, playing: false });
         } else {
-          await connectPlay(token, uri);
-          setPlaying(true);
-          currentUriRef.current = uri;
-          socket.emit("player_state", { code: roomCode, playing: true });
+          const ok = await connectPlay(token, uri);
+          if (ok) {
+            setPlaying(true);
+            currentUriRef.current = uri;
+            socket.emit("player_state", { code: roomCode, playing: true });
+          }
         }
       } catch (err) {
         console.error("Connect playback error:", err);
@@ -332,7 +405,6 @@ export function useSpotifyDirect() {
     }
 
     if (mobileRef.current) {
-      // Mobile: skip SDK, use Spotify Connect
       console.log("📱 Mobile detected — using Spotify Connect fallback (solo)");
       setReady(true);
       return;
@@ -372,15 +444,16 @@ export function useSpotifyDirect() {
     }
 
     if (mobileRef.current) {
-      // Mobile: use Spotify Connect
       try {
         if (playing) {
           await connectPause(token);
           setPlaying(false);
         } else {
-          await connectPlay(token, uri);
-          setPlaying(true);
-          currentUriRef.current = uri;
+          const ok = await connectPlay(token, uri);
+          if (ok) {
+            setPlaying(true);
+            currentUriRef.current = uri;
+          }
         }
       } catch (err) {
         console.error("Connect playback error:", err);
