@@ -15,7 +15,14 @@ function SinglePlayerSetup({ t,
   loginUrl, refreshLoginUrl,
   lang = "en"
 }) {
-  const [loggedIn, setLoggedIn] = useState(!!localStorage.getItem("token"));
+  // Check token in memory only — localStorage token may be stale/expired
+  // We always clear it on mount so the user is forced to re-login each session
+  const [loggedIn, setLoggedIn] = useState(() => {
+    // Clear any leftover token from a previous session on first render
+    localStorage.removeItem("token");
+    return false;
+  });
+
   const [musicMode, setMusicMode] = useState("random"); // "random" | "playlist"
 
   const toggleGenre = (g) => {
