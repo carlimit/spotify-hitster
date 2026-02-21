@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useCallback } from "react";
 import axios from "axios";
 import hitsterPlaylists from "../hitsterPlaylists.json";
 
@@ -21,6 +21,8 @@ function PlaylistPicker({ t, lang, playlist, setPlaylist }) {
   const [error, setError] = useState(null);
   const [hitsterSearch, setHitsterSearch] = useState("");
   const searchTimeoutRef = useRef(null);
+  const [preview, setPreview] = useState(null); // { name, image, url }
+  const [loadingPreview, setLoadingPreview] = useState(false);
 
   // ── Load a playlist by URL ──
   const loadPlaylist = useCallback(async (url) => {
@@ -37,6 +39,34 @@ function PlaylistPicker({ t, lang, playlist, setPlaylist }) {
     }
   }, [setPlaylist]);
 
+  // ── Hitster edition click — fetch cover then show preview ──
+  const handleHitsterClick = async (p) => {
+    setLoadingPreview(true);
+    setPreview(null);
+    setError(null);
+    try {
+      const match = p.url.match(/playlist\/([a-zA-Z0-9]+)/);
+      if (!match) { loadPlaylist(p.url); return; }
+      const id = match[1];
+      const token = localStorage.getItem("token");
+      if (!token) { loadPlaylist(p.url); return; }
+      const res = await axios.get(
+        `https://api.spotify.com/v1/playlists/${id}?fields=name,images`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setPreview({
+        name: p.name,
+        image: res.data.images?.[0]?.url || null,
+        url: p.url,
+      });
+    } catch {
+      // No token or request failed — just load directly
+      loadPlaylist(p.url);
+    } finally {
+      setLoadingPreview(false);
+    }
+  };
+
   // ── Spotify search with debounce ──
   const doSearch = useCallback(async (query) => {
     if (!query.trim()) {
@@ -51,7 +81,9 @@ function PlaylistPicker({ t, lang, playlist, setPlaylist }) {
     } catch (err) {
       console.error("Search error:", err.response?.data || err.message);
       setSearchResults([]);
-      setError(err.response?.data?.error || "Search failed — try again.");
+      // Fix: never set an object as error — React will crash
+      const errMsg = err.response?.data?.error;
+      setError(typeof errMsg === "string" ? errMsg : "Search failed — try again.");
     } finally {
       setSearching(false);
     }
@@ -77,6 +109,13 @@ function PlaylistPicker({ t, lang, playlist, setPlaylist }) {
   if (playlist) {
     return (
       <div className="playlist-info">
+        {playlist.image && (
+          <img
+            src={playlist.image}
+            alt=""
+            style={{ width: 80, height: 80, borderRadius: 10, objectFit: "cover", marginBottom: 8 }}
+          />
+        )}
         <div className="playlist-name">🎵 {playlist.name}</div>
         <div className="playlist-count">{playlist.trackCount} tracks</div>
         <button
@@ -114,13 +153,13 @@ function PlaylistPicker({ t, lang, playlist, setPlaylist }) {
         borderBottom: "1px solid #333",
         marginBottom: 12,
       }}>
-        <button style={tabStyle(tab === "hitster")} onClick={() => setTab("hitster")}>
+        <button style={tabStyle(tab === "hitster")} onClick={() => { setTab("hitster"); setPreview(null); }}>
           🎯 {lang === "de" ? "Editionen" : "Editions"}
         </button>
-        <button style={tabStyle(tab === "search")} onClick={() => setTab("search")}>
+        <button style={tabStyle(tab === "search")} onClick={() => { setTab("search"); setPreview(null); }}>
           🔍 Spotify
         </button>
-        <button style={tabStyle(tab === "link")} onClick={() => setTab("link")}>
+        <button style={tabStyle(tab === "link")} onClick={() => { setTab("link"); setPreview(null); }}>
           🔗 Link
         </button>
       </div>
@@ -132,12 +171,7 @@ function PlaylistPicker({ t, lang, playlist, setPlaylist }) {
       )}
 
       {loading && (
-        <div style={{
-          textAlign: "center",
-          padding: "20px 0",
-          color: "#888",
-          fontSize: 14,
-        }}>
+        <div style={{ textAlign: "center", padding: "20px 0", color: "#888", fontSize: 14 }}>
           <div style={{ animation: "shimmer 1.4s ease-in-out infinite" }}>
             {lang === "de" ? "Playlist wird geladen..." : "Loading playlist..."}
           </div>
@@ -165,6 +199,61 @@ function PlaylistPicker({ t, lang, playlist, setPlaylist }) {
               boxSizing: "border-box",
             }}
           />
+
+          {/* ── Cover preview card ── */}
+          {loadingPreview && (
+            <div style={{ textAlign: "center", color: "#888", padding: "12px 0", fontSize: 13 }}>
+              {lang === "de" ? "Cover wird geladen..." : "Loading cover..."}
+            </div>
+          )}
+
+          {preview && !loadingPreview && (
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+              padding: "12px 14px",
+              background: "rgba(29,185,84,0.1)",
+              border: "1px solid #1DB954",
+              borderRadius: 12,
+              marginBottom: 12,
+            }}>
+              {preview.image ? (
+                <img
+                  src={preview.image}
+                  alt=""
+                  style={{ width: 60, height: 60, borderRadius: 8, objectFit: "cover", flexShrink: 0 }}
+                />
+              ) : (
+                <div style={{
+                  width: 60, height: 60, borderRadius: 8, background: "#2a2a2a",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 24, flexShrink: 0,
+                }}>🎵</div>
+              )}
+              <div style={{ flex: 1, overflow: "hidden" }}>
+                <div style={{ fontWeight: 600, color: "#fff", fontSize: 14 }}>{preview.name}</div>
+                <div style={{ fontSize: 12, color: "#aaa", marginTop: 2 }}>
+                  {lang === "de" ? "Playlist laden?" : "Load this playlist?"}
+                </div>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, flexShrink: 0 }}>
+                <button
+                  onClick={() => { loadPlaylist(preview.url); setPreview(null); }}
+                  style={{ background: "#1DB954", padding: "6px 14px", fontSize: 13, borderRadius: 8 }}
+                >
+                  ✓
+                </button>
+                <button
+                  onClick={() => setPreview(null)}
+                  style={{ background: "#444", padding: "6px 14px", fontSize: 13, borderRadius: 8 }}
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          )}
+
           <div style={{
             maxHeight: 320,
             overflowY: "auto",
@@ -194,15 +283,15 @@ function PlaylistPicker({ t, lang, playlist, setPlaylist }) {
                   {cat.playlists.map((p) => (
                     <button
                       key={p.url}
-                      onClick={() => loadPlaylist(p.url)}
-                      disabled={loading}
+                      onClick={() => handleHitsterClick(p)}
+                      disabled={loading || loadingPreview}
                       style={{
                         display: "flex",
                         alignItems: "center",
                         gap: 10,
                         padding: "10px 14px",
-                        background: "rgba(255,255,255,0.04)",
-                        border: "1px solid #2a2a2a",
+                        background: preview?.url === p.url ? "rgba(29,185,84,0.1)" : "rgba(255,255,255,0.04)",
+                        border: preview?.url === p.url ? "1px solid #1DB954" : "1px solid #2a2a2a",
                         borderRadius: 10,
                         color: "#ddd",
                         fontSize: 14,
@@ -215,8 +304,8 @@ function PlaylistPicker({ t, lang, playlist, setPlaylist }) {
                         margin: 0,
                         transition: "background 0.15s ease",
                       }}
-                      onMouseOver={(e) => e.currentTarget.style.background = "rgba(29, 185, 84, 0.1)"}
-                      onMouseOut={(e) => e.currentTarget.style.background = "rgba(255,255,255,0.04)"}
+                      onMouseOver={(e) => { if (preview?.url !== p.url) e.currentTarget.style.background = "rgba(29, 185, 84, 0.1)"; }}
+                      onMouseOut={(e) => { if (preview?.url !== p.url) e.currentTarget.style.background = "rgba(255,255,255,0.04)"; }}
                     >
                       <span style={{ fontSize: 18 }}>🎵</span>
                       <span>{p.name}</span>
@@ -298,25 +387,13 @@ function PlaylistPicker({ t, lang, playlist, setPlaylist }) {
                   <img
                     src={pl.image}
                     alt=""
-                    style={{
-                      width: 44,
-                      height: 44,
-                      borderRadius: 6,
-                      objectFit: "cover",
-                      flexShrink: 0,
-                    }}
+                    style={{ width: 44, height: 44, borderRadius: 6, objectFit: "cover", flexShrink: 0 }}
                   />
                 ) : (
                   <div style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: 6,
-                    background: "#2a2a2a",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: 20,
-                    flexShrink: 0,
+                    width: 44, height: 44, borderRadius: 6, background: "#2a2a2a",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 20, flexShrink: 0,
                   }}>🎵</div>
                 )}
                 <div style={{ overflow: "hidden", flex: 1 }}>
