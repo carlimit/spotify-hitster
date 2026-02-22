@@ -39,10 +39,12 @@ function Game({
   const [revealed, setRevealed] = useState(false);
   const [isMyTurn, setIsMyTurn] = useState(false);
 
+  // FIX: Track whether play has been pressed before allowing reveal
+  const [hasPlayed, setHasPlayed] = useState(false);
+
   // Coins
   const [coins, setCoins] = useState({});
   const [myCoinIndex, setMyCoinIndex] = useState(null);
-
 
   // Recognition — buzz in BEFORE reveal while song is playing
   const [recognitionBuzzed, setRecognitionBuzzed] = useState(false);
@@ -96,7 +98,6 @@ function Game({
   const lastDragUpdateRef = useRef(0);
   const startScrollXRef = useRef(0);
   const startScrollYRef = useRef(0);
-  // Cache card dimensions to avoid getBoundingClientRect on every drag-move render
   const cardDimsRef = useRef({ w: 212, h: 196 });
 
   const [horizontal, setHorizontal] = useState(
@@ -169,10 +170,10 @@ function Game({
       setOverviewMode(false);
       setRecognitionBuzzed(false); setRecognitionWinner(null);
       clearInterval(timerRef.current); setTimeLeft(null);
+      // FIX: reset hasPlayed for next turn
+      setHasPlayed(false);
 
-      // ✅ Only reset the visual play state — do NOT stop Spotify.
-      // The song keeps playing until the new active player starts theirs,
-      // preventing the silence gap that makes Spotify drop the connection.
+      // FIX: Only reset the visual play state — do NOT stop Spotify.
       resetPlaying();
 
       const myTurn = newPlayers[newIndex]?.id === socket.id;
@@ -191,6 +192,7 @@ function Game({
       setResult(revealResult);
       setRevealed(true); revealedRef.current = true;
       setRemoteDragIndex(null);
+      // FIX: coins cleared on reveal - myCoinIndex goes null, coins cleared
       setMyCoinIndex(null); setCoins({});
       setTimeout(() => newCardRef.current?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" }), 300);
     });
@@ -201,7 +203,6 @@ function Game({
 
     socket.on("drag_move", ({ insertIndex: remoteIdx }) => {
       if (!isMyTurnRef.current) {
-        // Measure card dims once on first drag_move event
         if (cardDimsRef.current.w === 212) {
           const allCardEls = timelineRef.current?.querySelectorAll(".card");
           const fixedEl = allCardEls ? Array.from(allCardEls).find((el, i) => cardsRef.current[i]?.type !== "new") : null;
@@ -214,7 +215,7 @@ function Game({
     socket.on("drag_end", ({ cards: finalCards }) => {
       if (!isMyTurnRef.current) {
         setRemoteDragIndex(null);
-        cardDimsRef.current = { w: 212, h: 196 }; // reset for next drag
+        cardDimsRef.current = { w: 212, h: 196 };
         if (finalCards) { setCards(finalCards); cardsRef.current = finalCards; }
       }
     });
@@ -289,6 +290,8 @@ function Game({
 
   const loadNewCard = async (player) => {
     setLoading(true); clearInterval(timerRef.current); setTimeLeft(null);
+    // FIX: reset hasPlayed when loading a new card
+    setHasPlayed(false);
     try {
       const newCard = await generateCard();
       const timeline = player.timeline;
@@ -309,7 +312,7 @@ function Game({
   };
 
   // ============================================================
-  // DRAG (unchanged from original)
+  // DRAG
   // ============================================================
 
   const isHorizontal = () => window.innerWidth > window.innerHeight && window.innerWidth >= 768;
@@ -323,7 +326,6 @@ function Game({
     const tl = timelineRef.current;
     startScrollXRef.current = tl ? tl.scrollLeft : 0;
     startScrollYRef.current = window.scrollY;
-    // Measure card size once at drag start
     const allCardEls = timelineRef.current?.querySelectorAll(".card");
     const fixedEl = allCardEls ? Array.from(allCardEls).find((el, i) => cardsRef.current[i]?.type !== "new") : null;
     if (fixedEl) {
@@ -454,8 +456,6 @@ function Game({
     updatedPlayers[currentPlayerIndex] = { ...currentPlayer, timeline: updatedTimeline, score: currentPlayer.score + 1 };
     updatePlayers(updatedPlayers);
     socket.emit("update_timeline", { code: roomCode, timeline: updatedTimeline, score: currentPlayer.score + 1 });
-    // Win detection is handled server-side in update_timeline handler.
-    // Server will emit game_over to all clients if someone won.
     setTimeout(() => setShowNextButton(true), 800);
   };
 
@@ -499,6 +499,8 @@ function Game({
     const coinsHere = coinsBySlot[slotIndex] || 0;
     const myHere = myCoinIndex === slotIndex;
     const othersCount = coinsHere - (myHere ? 1 : 0);
+    // FIX: compute effective coin count for display (deduct placed coin from total)
+    const myEffectiveCoins = myCoins - (hasCoinPlaced ? 1 : 0);
     return (
       <div key={`coin-slot-${slotIndex}`} className="coin-slot-wrapper" style={{
         display: "flex",
@@ -507,8 +509,6 @@ function Game({
         justifyContent: "center",
         width: horizontal ? 44 : "100%",
         minWidth: horizontal ? 44 : undefined,
-        // ✅ Fixed 120px in landscape (matches card height) so the leading
-        // slot-0 — which has no sibling card to give it height — stays centred.
         height: horizontal ? 120 : 44,
         minHeight: horizontal ? undefined : 44,
         flexShrink: 0,
@@ -517,7 +517,7 @@ function Game({
         {othersCount > 0 && <div style={{ fontSize: 16, lineHeight: 1 }}>{"🪙".repeat(Math.min(othersCount, 5))}</div>}
         {myHere ? (
           <button className="coin-btn coin-placed" onClick={removeCoin} style={{ margin: 0 }}>🪙</button>
-        ) : !hasCoinPlaced && myCoins > 0 ? (
+        ) : !hasCoinPlaced && myEffectiveCoins > 0 ? (
           <button className="coin-btn coin-plus" onClick={() => placeCoin(slotIndex)} style={{ margin: 0 }}>+</button>
         ) : null}
       </div>
@@ -532,8 +532,10 @@ function Game({
 
   const newCardOriginalIndex = cards.findIndex(c => c.type === "new");
   const myPlayer = players.find(p => p.id === socket.id);
-  const myCoins = myPlayer?.coins ?? 0;
+  // FIX: Show effective coin count (subtract 1 if coin is currently placed)
+  const myCoinsRaw = myPlayer?.coins ?? 0;
   const hasCoinPlaced = myCoinIndex !== null;
+  const myCoins = hasCoinPlaced ? myCoinsRaw - 1 : myCoinsRaw;
   const coinsBySlot = {};
   Object.values(coins).forEach(({ insertIndex: idx }) => { coinsBySlot[idx] = (coinsBySlot[idx] || 0) + 1; });
 
@@ -566,16 +568,18 @@ function Game({
           <h3>{isMyTurn ? t?.yourTurn || "Your turn!" : t?.waitingFor?.(currentPlayer.name) || `Waiting for ${currentPlayer.name}...`}</h3>
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+          {/* FIX: show effective coin count (excluding placed coin) */}
           {!isMyTurn && <div className="coin-display">🪙 <span>{myCoins}</span></div>}
           <button onClick={() => setOverviewMode(true)} style={{ minWidth: "unset", padding: "6px 12px", fontSize: 12, background: "#333", boxShadow: "none", margin: 0 }}>{t?.myCards || "📋 My Cards"}</button>
         </div>
       </div>
 
       {loading && <div className="loading-card">{t?.loadingSong || "Loading song..."}</div>}
+      {/* FIX: Show SpotifyAppPrompt for host (isMyTurn check sufficient, needsSpotifyApp handles the rest) */}
       {needsSpotifyApp && isMyTurn && <SpotifyAppPrompt onRetry={retryPlayback} lang={lang} />}
       {timeLeft !== null && isMyTurn && <div className={`timer-display ${timeLeft <= 5 ? "timer-urgent" : ""}`}>{timeLeft}s</div>}
 
-      {/* Recognition buzz strip — visible to non-active players while song plays, before reveal */}
+      {/* Recognition buzz strip */}
       {!isMyTurn && !revealed && playing && (
         <div style={{ width: "100%", maxWidth: 480, margin: "8px auto 0", display: "flex", alignItems: "center", justifyContent: "center" }}>
           {recognitionWinner ? (
@@ -597,7 +601,7 @@ function Game({
         </div>
       )}
 
-      {/* After reveal: show who had buzzed in (if anyone) */}
+      {/* After reveal: show who had buzzed in */}
       {!isMyTurn && revealed && recognitionWinner && (
         <div style={{ width: "100%", maxWidth: 480, margin: "8px auto 0", textAlign: "center", fontSize: 14, color: "#f0c040", fontWeight: 700, padding: "10px 16px", background: "rgba(240,192,64,0.1)", border: "1px solid rgba(240,192,64,0.3)", borderRadius: 14 }}>
           🎤 {recognitionWinner.name} {t?.knewSong || "knew the song — +1 🪙"}
@@ -627,7 +631,6 @@ function Game({
               let shiftX = 0, shiftY = 0;
               if (isDragActive && newCardOriginalIndex >= 0) {
                 const origIdx = newCardOriginalIndex;
-                // Use cached dimensions — no getBoundingClientRect on every render
                 const cardW = cardDimsRef.current.w;
                 const cardH = cardDimsRef.current.h;
                 if (isNewCard && !isMyTurn) { const diff = activeDragIdx <= origIdx ? -(origIdx - activeDragIdx) : activeDragIdx - origIdx - 1; if (horizontal) shiftX = diff * cardW; else shiftY = diff * cardH; }
@@ -636,6 +639,7 @@ function Game({
                   else { if (activeDragIdx <= origIdx && index >= activeDragIdx && index < origIdx) shiftY = cardH; else if (activeDragIdx > origIdx + 1 && index > origIdx && index < activeDragIdx) shiftY = -cardH; }
                 }
               }
+              // FIX: Only apply bottom margin for card below revealed new card in VERTICAL mode
               const isFirstCardBelowNew = !horizontal && revealed && index === newCardOriginalIndex + 1;
               const spectatorDragging = isNewCard && !isMyTurn && isDragActive;
               const slotAfterIsAdjacent = isNewCard || (newCardOriginalIndex >= 0 && index + 1 === newCardOriginalIndex);
@@ -649,7 +653,14 @@ function Game({
                           <div className="card-front new">
                             <button
                               className="play-button"
-                              onClick={(e) => { e.stopPropagation(); if (!connecting) togglePlay(card.uri); }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (!connecting) {
+                                  togglePlay(card.uri);
+                                  // FIX: mark that play has been pressed
+                                  if (!hasPlayed) setHasPlayed(true);
+                                }
+                              }}
                               onMouseDown={e => e.stopPropagation()}
                               onTouchStart={e => e.stopPropagation()}
                               disabled={!spotifyReady || connecting}
@@ -701,7 +712,16 @@ function Game({
       )}
 
       <div className="action-container">
-        {isMyTurn && !revealed && !loading && <button onClick={handleReveal}>{t?.reveal || "Reveal"}</button>}
+        {/* FIX: Only show Reveal button after play has been pressed */}
+        {isMyTurn && !revealed && !loading && hasPlayed && (
+          <button onClick={handleReveal}>{t?.reveal || "Reveal"}</button>
+        )}
+        {/* FIX: Show a hint if play hasn't been pressed yet */}
+        {isMyTurn && !revealed && !loading && !hasPlayed && !connecting && spotifyReady && (
+          <div style={{ color: "#b3b3b3", fontSize: 14, fontWeight: 500, textAlign: "center", padding: "12px 0" }}>
+            {lang === "de" ? "▶ Song abspielen, dann aufdecken" : "▶ Press play to hear the song first"}
+          </div>
+        )}
         {isMyTurn && showNextButton && <button onClick={nextTurn}>{t?.nextPlayer || "Next Player"}</button>}
       </div>
     </div>

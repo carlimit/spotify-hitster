@@ -212,9 +212,6 @@ app.get("/api/playlist", async (req, res) => {
 const games = {};
 function generateCode() { return Math.random().toString(36).substring(2, 6).toUpperCase(); }
 
-// winGoal = total cards on timeline including starting card.
-// Players start with score=0 (1 card). Each correct placement adds 1.
-// Win when score >= winGoal - 1.
 function hasWinner(game) {
   return game.players.some(p => p.score >= game.winGoal - 1);
 }
@@ -261,20 +258,27 @@ io.on("connection", (socket) => {
     if (!player) return socket.emit("error", { message: "Player not found" });
     const oldId = player.id;
     player.id = socket.id;
+    // FIX: update host id if the host is rejoining
     if (game.host === oldId) game.host = socket.id;
     socket.join(code);
     socket.emit("rejoin_success", {
-      code, players: game.players,
+      code,
+      players: game.players,
       currentPlayerIndex: game.currentPlayerIndex,
       selectedGenres: game.selectedGenres || [],
-      minYear: game.minYear, maxYear: game.maxYear,
+      minYear: game.minYear,
+      maxYear: game.maxYear,
       playlistTracks: game.playlistTracks || null,
       usedUris: Array.from(game.usedUris || []),
       winGoal: game.winGoal || 10,
       timerSeconds: game.timerSeconds || 0,
       coins: game.coins || {},
       started: game.started,
+      // FIX: include host id so client can determine if rejoining player is host
+      host: game.host,
     });
+    // Notify other players that this player has reconnected
+    socket.to(code).emit("player_reconnected", { name, id: socket.id });
     console.log(`Player "${name}" rejoined ${code} (${oldId} -> ${socket.id})`);
   });
 
@@ -315,8 +319,6 @@ io.on("connection", (socket) => {
     });
   });
 
-  // Called by active player after CORRECT placement.
-  // Win is checked here so it fires immediately without waiting for "Next Player".
   socket.on("update_timeline", ({ code, timeline, score }) => {
     const game = games[code];
     if (!game) return;
@@ -324,15 +326,11 @@ io.on("connection", (socket) => {
     if (idx === -1) return;
     game.players[idx].timeline = timeline;
     game.players[idx].score = score;
-
-    // Check win immediately after score update
     if (hasWinner(game)) {
       triggerGameOver(code, game);
     }
   });
 
-  // !! DO NOT clear game.coins here !!
-  // Coins must survive until resolve_coins processes them.
   socket.on("reveal_card", ({ code, result, cards }) => {
     const game = games[code];
     if (!game) return;
@@ -427,12 +425,10 @@ io.on("connection", (socket) => {
     const coins = game.coins || {};
     const activePlayer = game.players[game.currentPlayerIndex];
 
-    // Fixed cards on active player's timeline (no new card yet since wrong)
     const fixedCards = activePlayer.timeline
       .filter(c => c.type === "fixed")
       .sort((a, b) => a.year - b.year);
 
-    // Convert full-array slot index to fixed-cards-only slot index
     const toFixedSlot = (slotIndex) =>
       slotIndex > activeInsertIndex ? slotIndex - 1 : slotIndex;
 
@@ -453,12 +449,10 @@ io.on("connection", (socket) => {
       const coinCorrect = isSlotCorrect(insertIndex);
 
       if (activeCorrect && coinCorrect) {
-        // Both right — coin returned, no change
-
+        // Both right — coin returned (no change)
       } else if (activeCorrect && !coinCorrect) {
         // Active right, coin wrong — lose a coin
         game.players[coinIdx].coins = Math.max(0, (game.players[coinIdx].coins || 0) - 1);
-
       } else if (!activeCorrect && coinCorrect) {
         // Active WRONG, coin RIGHT — steal the card!
         const stolenCard = { ...newCard, type: "fixed" };
@@ -467,7 +461,6 @@ io.on("connection", (socket) => {
         game.players[coinIdx].score = (game.players[coinIdx].score || 0) + 1;
         console.log(`"${game.players[coinIdx].name}" stole card (year ${newCard.year}) in ${code}`);
         if (hasWinner(game)) stealTriggeredWin = true;
-
       } else {
         // Both wrong — lose a coin
         game.players[coinIdx].coins = Math.max(0, (game.players[coinIdx].coins || 0) - 1);
@@ -497,7 +490,6 @@ io.on("connection", (socket) => {
       coins: {},
     });
 
-    // Reset playing state for all non-host clients
     io.to(code).emit("player_state", { playing: false });
   });
 

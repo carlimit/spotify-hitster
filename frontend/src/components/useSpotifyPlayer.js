@@ -1,8 +1,14 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { socket } from "../socket";
 
+// FIX: iPad detection — iPad Safari on iOS 13+ reports as desktop but needs Spotify Connect
 function isMobileBrowser() {
-  return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  // Classic mobile UA
+  if (/iPhone|iPod|Android/i.test(navigator.userAgent)) return true;
+  // iPad iOS 13+ reports as "Macintosh" with touch support
+  if (/iPad/i.test(navigator.userAgent)) return true;
+  if (/Macintosh/i.test(navigator.userAgent) && navigator.maxTouchPoints > 1) return true;
+  return false;
 }
 
 function initSDK(token, name, onReady, onStateChange) {
@@ -50,6 +56,7 @@ async function findDevice(token) {
     return (
       devices.find(d => d.is_active) ||
       devices.find(d => d.type === "Smartphone") ||
+      devices.find(d => d.type === "Tablet") ||
       devices[0]
     );
   } catch {
@@ -123,15 +130,14 @@ export function useSpotifyPlayer(roomCode, isHost) {
   const playerRef = useRef(null);
   const deviceIdRef = useRef(null);
   const currentUriRef = useRef(null);
+  // FIX: Evaluate mobile once, memoised — avoids stale closure issues
   const mobileRef = useRef(isMobileBrowser());
   const pendingUriRef = useRef(null);
-  // Used to detect natural track end (desktop SDK only)
   const lastPositionRef = useRef(0);
-  // Set true when user explicitly pauses — suppresses auto-restart
   const userPausedRef = useRef(false);
-  // Guards against a double-restart if state_changed fires twice at end
   const restartingRef = useRef(false);
 
+  // FIX: resetPlaying only clears visual state — does NOT call stop()
   const resetPlaying = useCallback(() => {
     setPlaying(false);
     setConnecting(false);
@@ -139,9 +145,11 @@ export function useSpotifyPlayer(roomCode, isHost) {
     currentUriRef.current = null;
     userPausedRef.current = false;
     restartingRef.current = false;
+    // Intentionally NOT calling stop() here so Spotify keeps playing
+    // across turn transitions, avoiding the connection drop gap.
   }, []);
 
-  // Auto-retry after returning from Spotify app (mobile)
+  // Auto-retry after returning from Spotify app (mobile / iPad)
   useEffect(() => {
     if (!isHost || !mobileRef.current) return;
     const handleVisibility = async () => {
@@ -180,7 +188,7 @@ export function useSpotifyPlayer(roomCode, isHost) {
     if (!token) return;
 
     if (mobileRef.current) {
-      console.log("📱 Mobile host — using Spotify Connect");
+      console.log("📱 Mobile/iPad host — using Spotify Connect");
       setReady(true);
 
       const onPlayTrack = async ({ uri }) => {
@@ -195,6 +203,7 @@ export function useSpotifyPlayer(roomCode, isHost) {
           currentUriRef.current = uri;
           socket.emit("player_state", { code: roomCode, playing: true });
         } else if (result.needsApp) {
+          // FIX: Always set needsApp + pendingUri so the prompt shows
           pendingUriRef.current = uri;
           setNeedsSpotifyApp(true);
           socket.emit("player_state", { code: roomCode, playing: false });
@@ -222,7 +231,6 @@ export function useSpotifyPlayer(roomCode, isHost) {
       (state) => {
         const isPlaying = !state.paused;
 
-        // Detect natural track end: paused at position 0, was well into track, user didn't pause
         const trackEndedNaturally =
           state.paused &&
           state.position === 0 &&
@@ -235,7 +243,6 @@ export function useSpotifyPlayer(roomCode, isHost) {
           console.log("🔁 Track ended naturally — restarting");
           lastPositionRef.current = 0;
           restartingRef.current = true;
-          // Kick off restart; state_changed will fire again once playing resumes
           setTimeout(async () => {
             if (!playerRef.current || !deviceIdRef.current) { restartingRef.current = false; return; }
             const t = localStorage.getItem("token");
@@ -249,12 +256,9 @@ export function useSpotifyPlayer(roomCode, isHost) {
               }
             ).catch(() => { restartingRef.current = false; });
           }, 400);
-          // Skip emitting a "paused" event — we're about to restart, so spectators
-          // don't need to see a momentary "stopped" state.
           return;
         }
 
-        // Normal path
         lastPositionRef.current = state.position;
         if (isPlaying) restartingRef.current = false;
 
@@ -350,7 +354,6 @@ export function useSpotifyPlayer(roomCode, isHost) {
         body: JSON.stringify({ uris: [uri] }),
       });
       currentUriRef.current = uri;
-      // player_state_changed will call setConnecting(false) + setPlaying(true)
     }
   }, [isHost, playing, roomCode]);
 

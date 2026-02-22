@@ -4,6 +4,7 @@ import Game from "./components/Game";
 import Winner from "./components/Winner";
 import SinglePlayerSetup from "./components/SinglePlayerSetup";
 import SinglePlayerGame from "./components/SinglePlayerGame";
+import RejoinScreen from "./components/RejoinScreen";
 import "./App.css";
 import { getLoginUrl } from "./spotify";
 import { socket } from "./socket";
@@ -48,14 +49,28 @@ function App() {
   const [singlePlayerMaxYear, setSinglePlayerMaxYear] = useState(2024);
   const [singlePlayerPlaylist, setSinglePlayerPlaylist] = useState(null);
 
+  // Rejoin state
+  const [savedSession, setSavedSession] = useState(null);
+
   // ============================================================
   // 🔐 Spotify Redirect
   // ============================================================
 
   useEffect(() => {
-    // Load multiplayer token from localStorage on startup
     const storedToken = localStorage.getItem("token");
     if (storedToken) setToken(storedToken);
+
+    // Check for a saved game session on startup — offer rejoin
+    try {
+      const raw = sessionStorage.getItem("hitster_session");
+      if (raw) {
+        const session = JSON.parse(raw);
+        if (session?.roomCode) {
+          setSavedSession(session);
+          // Don't set screen to "rejoin" yet — wait until after Spotify redirect check
+        }
+      }
+    } catch {}
 
     const params = new URLSearchParams(window.location.search);
     const spotifyCode = params.get("code");
@@ -91,12 +106,9 @@ function App() {
           }
 
           if (loginOrigin === "singleplayer-setup") {
-            // Solo: store in sessionStorage only — clears on tab close/reload
-            // Also store in localStorage so useSpotifyDirect can find it
             sessionStorage.setItem("sp_token", data.access_token);
             localStorage.setItem("token", data.access_token);
           } else {
-            // Multiplayer: persist in localStorage
             localStorage.setItem("token", data.access_token);
           }
 
@@ -109,12 +121,69 @@ function App() {
           setLoginError(err.message);
           window.history.replaceState({}, document.title, "/");
         });
+      // There's a Spotify code — skip rejoin prompt so we don't interrupt the auth flow
+      setSavedSession(null);
+      return;
     }
+
+    // No Spotify code — if we have a saved session, show rejoin screen
+    try {
+      const raw = sessionStorage.getItem("hitster_session");
+      if (raw) {
+        const session = JSON.parse(raw);
+        if (session?.roomCode) {
+          setScreen("rejoin");
+        }
+      }
+    } catch {}
   }, []);
+
+  // ============================================================
+  // REJOIN HANDLER
+  // ============================================================
+
+  const handleRejoinSuccess = (data, code, name) => {
+    const { players: newPlayers, currentPlayerIndex: newIndex, selectedGenres: genres,
+      minYear: min, maxYear: max, playlistTracks: pt, coins, winGoal: wg, timerSeconds: ts } = data;
+
+    setPlayers(newPlayers);
+    setRoomCode(code);
+    if (genres?.length) setSelectedGenres(genres);
+    if (min) setMinYear(Number(min));
+    if (max) setMaxYear(Number(max));
+    if (pt !== undefined) setPlaylistTracks(pt);
+    if (wg) setWinGoal(wg);
+    if (ts !== undefined) setTimerSeconds(ts);
+
+    // Determine if this player is the host
+    const myPlayer = newPlayers.find(p => p.name === name);
+    const hostId = data.host; // server sends host id in rejoin_success if we add it
+    setIsHost(myPlayer?.id === socket.id && newPlayers[0]?.id === socket.id);
+
+    setSavedSession(null);
+    setScreen("playing");
+  };
+
+  const handleRejoinDiscard = () => {
+    try { sessionStorage.removeItem("hitster_session"); } catch {}
+    setSavedSession(null);
+    setScreen("start");
+  };
 
   // ============================================================
   // START SCREEN
   // ============================================================
+
+  if (screen === "rejoin" && savedSession) {
+    return (
+      <RejoinScreen
+        savedSession={savedSession}
+        onRejoin={handleRejoinSuccess}
+        onDiscard={handleRejoinDiscard}
+        lang={lang}
+      />
+    );
+  }
 
   if (screen === "start") {
     return (

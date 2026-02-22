@@ -38,7 +38,6 @@ function Home({ t, lang,
   // ============================================================
 
   useEffect(() => {
-    // Ensure socket is connected on mount (may have dropped after OAuth redirect)
     if (!socket.connected) socket.connect();
 
     socket.on("player_list", players => {
@@ -80,6 +79,9 @@ function Home({ t, lang,
 
   const createGame = () => {
     if (!playerName.trim()) return;
+    // FIX: save player name for rejoin
+    localStorage.setItem("hitster_my_name", playerName.trim());
+    sessionStorage.setItem("hitster_my_name", playerName.trim());
     if (!socket.connected) {
       socket.connect();
       socket.once("connect", () => socket.emit("create_game", { name: playerName }));
@@ -90,6 +92,9 @@ function Home({ t, lang,
 
   const joinGame = () => {
     if (!playerName.trim() || !inputCode.trim()) return;
+    // FIX: save player name for rejoin
+    localStorage.setItem("hitster_my_name", playerName.trim());
+    sessionStorage.setItem("hitster_my_name", playerName.trim());
     if (!socket.connected) {
       socket.connect();
       socket.once("connect", () => socket.emit("join_game", { code: inputCode.toUpperCase(), name: playerName }));
@@ -238,7 +243,7 @@ function Home({ t, lang,
                 </>
               )}
 
-              {/* ── Playlist mode: editions / search / link ── */}
+              {/* ── Playlist mode ── */}
               {musicMode === "playlist" && (
                 <div className="home-section">
                   <PlaylistPicker
