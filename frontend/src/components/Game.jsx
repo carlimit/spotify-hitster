@@ -42,13 +42,13 @@ function Game({
   // Coins
   const [coins, setCoins] = useState({});
   const [myCoinIndex, setMyCoinIndex] = useState(null);
-  const [coinGiven, setCoinGiven] = useState(false);
 
-  // Recognition (name the song for a coin)
-  const [recognitionOpen, setRecognitionOpen] = useState(false);
-  const [recognitionClaimed, setRecognitionClaimed] = useState(false);
+
+  // Recognition — buzz in BEFORE reveal while song is playing
+  // recognitionBuzzed: this player already buzzed this turn
+  // recognitionWinner: { name } of whoever buzzed first (shown after reveal)
+  const [recognitionBuzzed, setRecognitionBuzzed] = useState(false);
   const [recognitionWinner, setRecognitionWinner] = useState(null);
-  const recognitionTimerRef = useRef(null);
 
   // Timer
   const [timeLeft, setTimeLeft] = useState(null);
@@ -60,6 +60,7 @@ function Game({
   const {
     ready: spotifyReady,
     playing,
+    connecting,
     resetPlaying,
     togglePlay,
     stop,
@@ -101,10 +102,8 @@ function Game({
   const [horizontal, setHorizontal] = useState(
     window.innerWidth > window.innerHeight && window.innerWidth >= 768
   );
-
   useEffect(() => {
-    const onResize = () =>
-      setHorizontal(window.innerWidth > window.innerHeight && window.innerWidth >= 768);
+    const onResize = () => setHorizontal(window.innerWidth > window.innerHeight && window.innerWidth >= 768);
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
@@ -132,28 +131,15 @@ function Game({
     } else {
       if (initialPlaylistTracks) playlistTracksRef.current = initialPlaylistTracks;
     }
-
     const myTurn = players[0]?.id === socket.id;
     isMyTurnRef.current = myTurn;
     setIsMyTurn(myTurn);
-
-    if (myTurn) {
-      loadNewCard(players[0]);
-    } else {
-      const c = players[0]?.timeline || [];
-      setCards(c);
-      cardsRef.current = c;
-    }
+    if (myTurn) loadNewCard(players[0]);
+    else { const c = players[0]?.timeline || []; setCards(c); cardsRef.current = c; }
   }, []);
 
   useEffect(() => {
-    saveSession({
-      roomCode,
-      players,
-      currentPlayerIndex,
-      usedUris: Array.from(usedUrisRef.current),
-      playlistTracks: playlistTracksRef.current,
-    });
+    saveSession({ roomCode, players, currentPlayerIndex, usedUris: Array.from(usedUrisRef.current), playlistTracks: playlistTracksRef.current });
   }, [players, currentPlayerIndex]);
 
   // ============================================================
@@ -162,17 +148,11 @@ function Game({
 
   useEffect(() => {
     socket.on("turn_changed", ({
-      players: newPlayers,
-      currentPlayerIndex: newIndex,
-      selectedGenres: genres,
-      minYear: min,
-      maxYear: max,
-      playlistTracks: pt,
-      usedUris,
-      coins: newCoins
+      players: newPlayers, currentPlayerIndex: newIndex,
+      selectedGenres: genres, minYear: min, maxYear: max,
+      playlistTracks: pt, usedUris, coins: newCoins
     }) => {
       if (!newPlayers || newIndex === undefined) return;
-
       if (genres?.length) selectedGenresRef.current = genres;
       if (min) minYearRef.current = Number(min);
       if (max) maxYearRef.current = Number(max);
@@ -181,76 +161,39 @@ function Game({
 
       updatePlayers(newPlayers);
       setCurrentPlayerIndex(newIndex);
-      setRevealed(false);
-      revealedRef.current = false;
-      setShowNextButton(false);
-      setResult(null);
-      setDragging(false);
-      draggingRef.current = false;
-      setInsertIndex(null);
-      setRemoteDragIndex(null);
-      setCoins(newCoins || {});
-      setMyCoinIndex(null);
-      setCoinGiven(false);
+      setRevealed(false); revealedRef.current = false;
+      setShowNextButton(false); setResult(null);
+      setDragging(false); draggingRef.current = false;
+      setInsertIndex(null); setRemoteDragIndex(null);
+      setCoins(newCoins || {}); setMyCoinIndex(null);
       setOverviewMode(false);
-      setRecognitionOpen(false);
-      setRecognitionClaimed(false);
-      setRecognitionWinner(null);
-      clearTimeout(recognitionTimerRef.current);
-      clearInterval(timerRef.current);
-      setTimeLeft(null);
+      setRecognitionBuzzed(false); setRecognitionWinner(null);
+      clearInterval(timerRef.current); setTimeLeft(null);
 
-      // Stop music AND reset the playing indicator so the new player's
-      // button starts as ▶ and not ⏸
-      stop();
-      resetPlaying();
+      stop(); resetPlaying();
 
       const myTurn = newPlayers[newIndex]?.id === socket.id;
       isMyTurnRef.current = myTurn;
       setIsMyTurn(myTurn);
 
-      if (myTurn) {
-        loadNewCard(newPlayers[newIndex]);
-      } else {
-        const c = newPlayers[newIndex]?.timeline || [];
-        setCards(c);
-        cardsRef.current = c;
-      }
+      if (myTurn) loadNewCard(newPlayers[newIndex]);
+      else { const c = newPlayers[newIndex]?.timeline || []; setCards(c); cardsRef.current = c; }
     });
 
-    socket.on("coins_updated", ({ coins: newCoins }) => {
-      setCoins(newCoins || {});
-    });
-
-    socket.on("coins_updated_players", ({ players: newPlayers }) => {
-      updatePlayers(newPlayers);
-    });
+    socket.on("coins_updated", ({ coins: newCoins }) => setCoins(newCoins || {}));
+    socket.on("coins_updated_players", ({ players: newPlayers }) => updatePlayers(newPlayers));
 
     socket.on("card_revealed", ({ result: revealResult, cards: revealedCards }) => {
-      setCards(revealedCards);
-      cardsRef.current = revealedCards;
+      setCards(revealedCards); cardsRef.current = revealedCards;
       setResult(revealResult);
-      setRevealed(true);
-      revealedRef.current = true;
+      setRevealed(true); revealedRef.current = true;
       setRemoteDragIndex(null);
-      // Wipe all coin UI the instant the card is revealed
-      setMyCoinIndex(null);
-      setCoins({});
-      // Open recognition window for 30 s
-      setRecognitionOpen(true);
-      clearTimeout(recognitionTimerRef.current);
-      recognitionTimerRef.current = setTimeout(() => setRecognitionOpen(false), 30000);
-      setTimeout(() => {
-        newCardRef.current?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
-      }, 300);
+      setMyCoinIndex(null); setCoins({});
+      setTimeout(() => newCardRef.current?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" }), 300);
     });
 
     socket.on("new_card_loaded", ({ cards: newCards }) => {
-      if (!isMyTurnRef.current) {
-        setCards(newCards);
-        cardsRef.current = newCards;
-        setRemoteDragIndex(null);
-      }
+      if (!isMyTurnRef.current) { setCards(newCards); cardsRef.current = newCards; setRemoteDragIndex(null); }
     });
 
     socket.on("drag_move", ({ insertIndex: remoteIdx }) => {
@@ -266,22 +209,16 @@ function Game({
 
     socket.on("coin_refunded", () => setMyCoinIndex(null));
 
+    // Someone buzzed in for recognition before the reveal
     socket.on("recognition_claimed", ({ playerName }) => {
       setRecognitionWinner({ name: playerName });
-      setRecognitionOpen(false);
-      clearTimeout(recognitionTimerRef.current);
     });
 
     return () => {
-      socket.off("turn_changed");
-      socket.off("coins_updated");
-      socket.off("coins_updated_players");
-      socket.off("card_revealed");
-      socket.off("new_card_loaded");
-      socket.off("drag_move");
-      socket.off("drag_end");
-      socket.off("coin_refunded");
-      socket.off("recognition_claimed");
+      socket.off("turn_changed"); socket.off("coins_updated"); socket.off("coins_updated_players");
+      socket.off("card_revealed"); socket.off("new_card_loaded");
+      socket.off("drag_move"); socket.off("drag_end");
+      socket.off("coin_refunded"); socket.off("recognition_claimed");
     };
   }, []);
 
@@ -292,45 +229,22 @@ function Game({
   useEffect(() => {
     const myPlayer = players.find(p => p.id === socket.id);
     const myName = myPlayer?.name;
-
-    const handleReconnect = () => {
-      if (!roomCode || !myName) return;
-      socket.emit("rejoin_game", { code: roomCode, name: myName });
-    };
-
-    const handleRejoinSuccess = ({
-      players: newPlayers, currentPlayerIndex: newIndex,
-      selectedGenres: genres, minYear: min, maxYear: max,
-      playlistTracks: pt, usedUris, coins: newCoins,
-    }) => {
+    const handleReconnect = () => { if (!roomCode || !myName) return; socket.emit("rejoin_game", { code: roomCode, name: myName }); };
+    const handleRejoinSuccess = ({ players: newPlayers, currentPlayerIndex: newIndex, selectedGenres: genres, minYear: min, maxYear: max, playlistTracks: pt, usedUris, coins: newCoins }) => {
       if (genres?.length) selectedGenresRef.current = genres;
       if (min) minYearRef.current = Number(min);
       if (max) maxYearRef.current = Number(max);
       if (pt !== undefined) playlistTracksRef.current = pt;
       if (usedUris) usedUrisRef.current = new Set(usedUris);
-
-      updatePlayers(newPlayers);
-      setCurrentPlayerIndex(newIndex);
-      setCoins(newCoins || {});
-
+      updatePlayers(newPlayers); setCurrentPlayerIndex(newIndex); setCoins(newCoins || {});
       const myTurn = newPlayers[newIndex]?.id === socket.id;
-      isMyTurnRef.current = myTurn;
-      setIsMyTurn(myTurn);
-
-      if (myTurn && !cardsRef.current.find(c => c.type === "new")) {
-        loadNewCard(newPlayers[newIndex]);
-      } else if (!myTurn) {
-        const c = newPlayers[newIndex]?.timeline || [];
-        setCards(c); cardsRef.current = c;
-      }
+      isMyTurnRef.current = myTurn; setIsMyTurn(myTurn);
+      if (myTurn && !cardsRef.current.find(c => c.type === "new")) loadNewCard(newPlayers[newIndex]);
+      else if (!myTurn) { const c = newPlayers[newIndex]?.timeline || []; setCards(c); cardsRef.current = c; }
     };
-
     socket.on("connect", handleReconnect);
     socket.on("rejoin_success", handleRejoinSuccess);
-    return () => {
-      socket.off("connect", handleReconnect);
-      socket.off("rejoin_success", handleRejoinSuccess);
-    };
+    return () => { socket.off("connect", handleReconnect); socket.off("rejoin_success", handleRejoinSuccess); };
   }, [roomCode, players]);
 
   // ============================================================
@@ -347,56 +261,37 @@ function Game({
       socket.emit("mark_used", { code: roomCode, uri: track.uri });
       return { id: Date.now(), year: parseInt(track.year), name: track.name, artist: track.artist, uri: track.uri, cover: track.cover, type: "new" };
     }
-
     const genres = selectedGenresRef.current;
-    const min = minYearRef.current;
-    const max = maxYearRef.current;
     const genre = genres.length > 0 ? genres[Math.floor(Math.random() * genres.length)] : "";
-    const res = await axios.get(
-      `/api/track?genre=${genre}&minYear=${min}&maxYear=${max}&usedUris=${encodeURIComponent(JSON.stringify(Array.from(usedUrisRef.current)))}`
-    );
+    const res = await axios.get(`/api/track?genre=${genre}&minYear=${minYearRef.current}&maxYear=${maxYearRef.current}&usedUris=${encodeURIComponent(JSON.stringify(Array.from(usedUrisRef.current)))}`);
     usedUrisRef.current.add(res.data.uri);
     socket.emit("mark_used", { code: roomCode, uri: res.data.uri });
     return { id: Date.now(), year: parseInt(res.data.year), name: res.data.name, artist: res.data.artist, uri: res.data.uri, cover: res.data.cover, type: "new" };
   };
 
   const loadNewCard = async (player) => {
-    setLoading(true);
-    clearInterval(timerRef.current);
-    setTimeLeft(null);
+    setLoading(true); clearInterval(timerRef.current); setTimeLeft(null);
     try {
       const newCard = await generateCard();
       const timeline = player.timeline;
       const midIdx = Math.floor(timeline.length / 2);
-      const newCards = [
-        ...timeline.slice(0, midIdx),
-        newCard,
-        ...timeline.slice(midIdx)
-      ];
-      setCards(newCards);
-      cardsRef.current = newCards;
+      const newCards = [...timeline.slice(0, midIdx), newCard, ...timeline.slice(midIdx)];
+      setCards(newCards); cardsRef.current = newCards;
       socket.emit("new_card_loaded", { code: roomCode, cards: newCards });
       setTimeout(() => newCardRef.current?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" }), 120);
       keepAlive?.();
-
       if (timerSeconds > 0 && isMyTurnRef.current) {
         setTimeLeft(timerSeconds);
         timerRef.current = setInterval(() => {
-          setTimeLeft(t => {
-            if (t <= 1) { clearInterval(timerRef.current); if (!revealedRef.current) handleReveal(); return 0; }
-            return t - 1;
-          });
+          setTimeLeft(t => { if (t <= 1) { clearInterval(timerRef.current); if (!revealedRef.current) handleReveal(); return 0; } return t - 1; });
         }, 1000);
       }
-    } catch (err) {
-      console.error("Failed to load card:", err);
-    } finally {
-      setLoading(false);
-    }
+    } catch (err) { console.error("Failed to load card:", err); }
+    finally { setLoading(false); }
   };
 
   // ============================================================
-  // DRAG
+  // DRAG (unchanged logic)
   // ============================================================
 
   const isHorizontal = () => window.innerWidth > window.innerHeight && window.innerWidth >= 768;
@@ -404,9 +299,8 @@ function Game({
   const handleDragStart = (e) => {
     if (revealedRef.current || !isMyTurnRef.current) return;
     e.stopPropagation();
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    startYRef.current = clientY; startXRef.current = clientX;
+    startYRef.current = e.touches ? e.touches[0].clientY : e.clientY;
+    startXRef.current = e.touches ? e.touches[0].clientX : e.clientX;
     draggingRef.current = false; dragActiveRef.current = true;
     const tl = timelineRef.current;
     startScrollXRef.current = tl ? tl.scrollLeft : 0;
@@ -421,78 +315,53 @@ function Game({
     const now = Date.now();
     if (now - lastDragUpdateRef.current < 16) return;
     lastDragUpdateRef.current = now;
-
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const deltaY = clientY - startYRef.current;
     const deltaX = clientX - startXRef.current;
     const horiz = isHorizontal();
-
     if (!draggingRef.current) {
       const primary = horiz ? Math.abs(deltaX) : Math.abs(deltaY);
       const secondary = horiz ? Math.abs(deltaY) : Math.abs(deltaX);
       if (primary < 4) return;
       if (secondary > primary * 1.5) { dragActiveRef.current = false; return; }
-      draggingRef.current = true;
-      setDragging(true);
+      draggingRef.current = true; setDragging(true);
     }
-
     if (e.cancelable) e.preventDefault();
-
     if (dragCardRef.current) {
       const z = zoomRef.current;
       const tl = timelineRef.current;
-      const scrollDeltaX = tl ? tl.scrollLeft - startScrollXRef.current : 0;
-      const scrollDeltaY = window.scrollY - startScrollYRef.current;
-      if (horiz) dragCardRef.current.style.transform = `translateX(${(deltaX + scrollDeltaX) / z}px)`;
-      else dragCardRef.current.style.transform = `translateY(${(deltaY + scrollDeltaY) / z}px)`;
+      const sdx = tl ? tl.scrollLeft - startScrollXRef.current : 0;
+      const sdy = window.scrollY - startScrollYRef.current;
+      dragCardRef.current.style.transform = horiz ? `translateX(${(deltaX + sdx) / z}px)` : `translateY(${(deltaY + sdy) / z}px)`;
       dragCardRef.current.style.scale = "1.04";
       dragCardRef.current.style.boxShadow = "0 28px 70px rgba(29,185,84,0.55)";
       dragCardRef.current.style.zIndex = "1000";
     }
-
-    const SCROLL_ZONE = 120;
-    const MAX_SPEED = 22;
+    const SCROLL_ZONE = 120, MAX_SPEED = 22;
     cancelAnimationFrame(scrollIntervalRef.current);
-
     const timeline = timelineRef.current;
     if (timeline) {
       const tlRect = timeline.getBoundingClientRect();
-      let direction = 0; let proximity = 0;
+      let dir = 0, prox = 0;
       if (horiz) {
-        if (clientX < tlRect.left + SCROLL_ZONE) { direction = -1; proximity = 1 - ((clientX - tlRect.left) / SCROLL_ZONE); }
-        else if (clientX > tlRect.right - SCROLL_ZONE) { direction = 1; proximity = 1 - ((tlRect.right - clientX) / SCROLL_ZONE); }
-        if (direction !== 0) {
-          const speed = Math.max(1, Math.pow(proximity, 2) * MAX_SPEED);
-          const tick = () => { const tl2 = timelineRef.current; if (!tl2 || !draggingRef.current) return; tl2.scrollLeft += direction * speed; scrollIntervalRef.current = requestAnimationFrame(tick); };
-          scrollIntervalRef.current = requestAnimationFrame(tick);
-        }
+        if (clientX < tlRect.left + SCROLL_ZONE) { dir = -1; prox = 1 - ((clientX - tlRect.left) / SCROLL_ZONE); }
+        else if (clientX > tlRect.right - SCROLL_ZONE) { dir = 1; prox = 1 - ((tlRect.right - clientX) / SCROLL_ZONE); }
+        if (dir !== 0) { const spd = Math.max(1, Math.pow(prox, 2) * MAX_SPEED); const tick = () => { const t2 = timelineRef.current; if (!t2 || !draggingRef.current) return; t2.scrollLeft += dir * spd; scrollIntervalRef.current = requestAnimationFrame(tick); }; scrollIntervalRef.current = requestAnimationFrame(tick); }
       } else {
-        if (clientY < SCROLL_ZONE && tlRect.top < 0) { direction = -1; proximity = 1 - (clientY / SCROLL_ZONE); }
-        else if (clientY > window.innerHeight - SCROLL_ZONE && tlRect.bottom > window.innerHeight) { direction = 1; proximity = 1 - ((window.innerHeight - clientY) / SCROLL_ZONE); }
-        if (direction !== 0) {
-          const speed = Math.max(1, Math.pow(proximity, 2) * MAX_SPEED);
-          const tick = () => { const tl2 = timelineRef.current; if (!tl2 || !draggingRef.current) return; const r = tl2.getBoundingClientRect(); if (direction === -1 && r.top >= 0) return; if (direction === 1 && r.bottom <= window.innerHeight) return; window.scrollBy(0, direction * speed); scrollIntervalRef.current = requestAnimationFrame(tick); };
-          scrollIntervalRef.current = requestAnimationFrame(tick);
-        }
+        if (clientY < SCROLL_ZONE && tlRect.top < 0) { dir = -1; prox = 1 - (clientY / SCROLL_ZONE); }
+        else if (clientY > window.innerHeight - SCROLL_ZONE && tlRect.bottom > window.innerHeight) { dir = 1; prox = 1 - ((window.innerHeight - clientY) / SCROLL_ZONE); }
+        if (dir !== 0) { const spd = Math.max(1, Math.pow(prox, 2) * MAX_SPEED); const tick = () => { const t2 = timelineRef.current; if (!t2 || !draggingRef.current) return; const r = t2.getBoundingClientRect(); if (dir === -1 && r.top >= 0) return; if (dir === 1 && r.bottom <= window.innerHeight) return; window.scrollBy(0, dir * spd); scrollIntervalRef.current = requestAnimationFrame(tick); }; scrollIntervalRef.current = requestAnimationFrame(tick); }
       }
     }
-
     const currentCards = cardsRef.current;
     const newIdx = currentCards.findIndex(c => c.type === "new");
     if (!dragCardRef.current || !timelineRef.current) return;
-
     const draggedRect = dragCardRef.current.getBoundingClientRect();
     const allCardEls = timelineRef.current.querySelectorAll(".card");
     const fixedCardEl = Array.from(allCardEls).find((el, i) => currentCards[i]?.type !== "new");
     const fixedMidpoints = [];
-    currentCards.forEach((c, i) => {
-      if (c.type !== "new" && allCardEls[i]) {
-        const r = allCardEls[i].getBoundingClientRect();
-        fixedMidpoints.push({ mid: horiz ? r.left + r.width / 2 : r.top + r.height / 2, originalIndex: i });
-      }
-    });
-
+    currentCards.forEach((c, i) => { if (c.type !== "new" && allCardEls[i]) { const r = allCardEls[i].getBoundingClientRect(); fixedMidpoints.push({ mid: horiz ? r.left + r.width / 2 : r.top + r.height / 2, originalIndex: i }); } });
     const draggedCenter = horiz ? draggedRect.left + draggedRect.width / 2 : draggedRect.top + draggedRect.height / 2;
     let fixedSlot = fixedMidpoints.length;
     for (let i = 0; i < fixedMidpoints.length; i++) { if (draggedCenter < fixedMidpoints[i].mid) { fixedSlot = i; break; } }
@@ -509,14 +378,7 @@ function Game({
     if (!draggingRef.current) return;
     draggingRef.current = false;
     cancelAnimationFrame(scrollIntervalRef.current);
-
-    if (dragCardRef.current) {
-      dragCardRef.current.style.transform = "";
-      dragCardRef.current.style.scale = "";
-      dragCardRef.current.style.boxShadow = "";
-      dragCardRef.current.style.zIndex = "";
-    }
-
+    if (dragCardRef.current) { dragCardRef.current.style.transform = ""; dragCardRef.current.style.scale = ""; dragCardRef.current.style.boxShadow = ""; dragCardRef.current.style.zIndex = ""; }
     const currentCards = cardsRef.current;
     const newIdx = currentCards.findIndex(c => c.type === "new");
     const arraySlot = insertIndexRef.current !== null ? insertIndexRef.current : newIdx;
@@ -524,16 +386,11 @@ function Game({
     const [moved] = reordered.splice(newIdx, 1);
     const insertAt = arraySlot > newIdx ? arraySlot - 1 : arraySlot;
     reordered.splice(Math.max(0, Math.min(reordered.length, insertAt)), 0, moved);
-    cardsRef.current = reordered;
-    setCards(reordered);
-    setDragging(false);
-    setInsertIndex(null);
-    insertIndexRef.current = null;
+    cardsRef.current = reordered; setCards(reordered);
+    setDragging(false); setInsertIndex(null); insertIndexRef.current = null;
     startYRef.current = 0; startXRef.current = 0;
-
     socket.emit("drag_end", { code: roomCode, cards: reordered });
-    const finalNewIdx = reordered.findIndex(c => c.type === "new");
-    socket.emit("card_moved", { code: roomCode, finalInsertIndex: finalNewIdx });
+    socket.emit("card_moved", { code: roomCode, finalInsertIndex: reordered.findIndex(c => c.type === "new") });
   };
 
   useEffect(() => {
@@ -544,13 +401,7 @@ function Game({
     window.addEventListener("mouseup", onEnd);
     window.addEventListener("touchend", onEnd);
     window.addEventListener("touchcancel", onEnd);
-    return () => {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("touchmove", onMove);
-      window.removeEventListener("mouseup", onEnd);
-      window.removeEventListener("touchend", onEnd);
-      window.removeEventListener("touchcancel", onEnd);
-    };
+    return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("touchmove", onMove); window.removeEventListener("mouseup", onEnd); window.removeEventListener("touchend", onEnd); window.removeEventListener("touchcancel", onEnd); };
   }, []);
 
   // ============================================================
@@ -561,37 +412,25 @@ function Game({
     const currentCards = cardsRef.current;
     const newCardIndex = currentCards.findIndex(c => c.type === "new");
     if (newCardIndex === -1) return;
-
     const left = currentCards[newCardIndex - 1];
     const right = currentCards[newCardIndex + 1];
     const newCard = currentCards[newCardIndex];
-
-    setRevealed(true);
-    revealedRef.current = true;
-    setCoins({}); // wipe coin UI immediately for active player too
-
+    setRevealed(true); revealedRef.current = true;
+    setCoins({});
     let correct = true;
     if (left && left.year > newCard.year) correct = false;
     if (right && right.year < newCard.year) correct = false;
-
     const revealResult = correct ? "correct" : "wrong";
     setResult(revealResult);
-
     socket.emit("reveal_card", { code: roomCode, result: revealResult, cards: currentCards });
-
     setTimeout(() => newCardRef.current?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" }), 300);
-
     if (!correct) { setTimeout(() => setShowNextButton(true), 800); return; }
-
     const updatedTimeline = currentCards.map(c => c.id === newCard.id ? { ...c, type: "fixed" } : c);
     const updatedPlayers = [...players];
     updatedPlayers[currentPlayerIndex] = { ...currentPlayer, timeline: updatedTimeline, score: currentPlayer.score + 1 };
     updatePlayers(updatedPlayers);
     socket.emit("update_timeline", { code: roomCode, timeline: updatedTimeline, score: currentPlayer.score + 1 });
-
-    if (updatedPlayers[currentPlayerIndex].score >= winGoal) {
-      clearSession(); setWinner(updatedPlayers[currentPlayerIndex]); setScreen("winner"); return;
-    }
+    if (updatedPlayers[currentPlayerIndex].score >= winGoal) { clearSession(); setWinner(updatedPlayers[currentPlayerIndex]); setScreen("winner"); return; }
     setTimeout(() => setShowNextButton(true), 800);
   };
 
@@ -599,19 +438,16 @@ function Game({
   // COINS
   // ============================================================
 
-  const giveCoin = () => { setCoinGiven(true); socket.emit("give_coin", { code: roomCode }); };
   const placeCoin = (idx) => { setMyCoinIndex(idx); socket.emit("place_coin", { code: roomCode, insertIndex: idx }); };
   const removeCoin = () => { setMyCoinIndex(null); socket.emit("remove_coin", { code: roomCode }); };
 
   // ============================================================
-  // RECOGNITION
+  // RECOGNITION — buzz in BEFORE reveal
   // ============================================================
 
-  const claimRecognition = () => {
-    if (recognitionClaimed) return;
-    setRecognitionClaimed(true);
-    setRecognitionOpen(false);
-    clearTimeout(recognitionTimerRef.current);
+  const buzzRecognition = () => {
+    if (recognitionBuzzed || revealed) return;
+    setRecognitionBuzzed(true);
     socket.emit("claim_recognition", { code: roomCode });
   };
 
@@ -631,35 +467,16 @@ function Game({
   // ============================================================
 
   const renderCoinSlot = (slotIndex, isAdjacentToNewCard) => {
-    if (isMyTurn) return null;            // active player never sees slots
-    if (revealed) return null;            // disappear the instant card is revealed
-    if (remoteDragIndex !== null) return null; // hide while card is being dragged
-    if (isAdjacentToNewCard) return null; // no betting where the card already sits
-
+    if (isMyTurn) return null;
+    if (revealed) return null;
+    if (remoteDragIndex !== null) return null;
+    if (isAdjacentToNewCard) return null;
     const coinsHere = coinsBySlot[slotIndex] || 0;
     const myHere = myCoinIndex === slotIndex;
     const othersCount = coinsHere - (myHere ? 1 : 0);
-
     return (
-      <div
-        key={`coin-slot-${slotIndex}`}
-        className="coin-slot-wrapper"
-        style={{
-          display: "flex",
-          flexDirection: horizontal ? "column" : "row",
-          alignItems: "center",
-          justifyContent: "center",
-          width: horizontal ? 44 : "100%",
-          minWidth: horizontal ? 44 : undefined,
-          height: horizontal ? "100%" : 44,
-          minHeight: horizontal ? undefined : 44,
-          flexShrink: 0,
-          gap: 4,
-        }}
-      >
-        {othersCount > 0 && (
-          <div style={{ fontSize: 16, lineHeight: 1 }}>{"🪙".repeat(Math.min(othersCount, 5))}</div>
-        )}
+      <div key={`coin-slot-${slotIndex}`} className="coin-slot-wrapper" style={{ display: "flex", flexDirection: horizontal ? "column" : "row", alignItems: "center", justifyContent: "center", width: horizontal ? 44 : "100%", minWidth: horizontal ? 44 : undefined, height: horizontal ? "100%" : 44, minHeight: horizontal ? undefined : 44, flexShrink: 0, gap: 4 }}>
+        {othersCount > 0 && <div style={{ fontSize: 16, lineHeight: 1 }}>{"🪙".repeat(Math.min(othersCount, 5))}</div>}
         {myHere ? (
           <button className="coin-btn coin-placed" onClick={removeCoin} style={{ margin: 0 }}>🪙</button>
         ) : !hasCoinPlaced && myCoins > 0 ? (
@@ -679,13 +496,8 @@ function Game({
   const myPlayer = players.find(p => p.id === socket.id);
   const myCoins = myPlayer?.coins ?? 0;
   const hasCoinPlaced = myCoinIndex !== null;
-  const nextPlayerIndex = (currentPlayerIndex + 1) % players.length;
-  const isNextPlayer = players[nextPlayerIndex]?.id === socket.id && !isMyTurn;
-
   const coinsBySlot = {};
-  Object.values(coins).forEach(({ insertIndex: idx }) => {
-    coinsBySlot[idx] = (coinsBySlot[idx] || 0) + 1;
-  });
+  Object.values(coins).forEach(({ insertIndex: idx }) => { coinsBySlot[idx] = (coinsBySlot[idx] || 0) + 1; });
 
   const activeDragIdx = isMyTurn ? (dragging ? insertIndex : null) : remoteDragIndex;
   const isDragActive = activeDragIdx !== null && !revealed;
@@ -700,9 +512,7 @@ function Game({
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, width: "100%", maxWidth: 480, paddingBottom: 40 }}>
           {myTimeline.sort((a, b) => a.year - b.year).map(card => (
-            <div key={card.id} style={{ background: "#2a2a2a", borderRadius: 12, padding: "12px 8px", textAlign: "center", border: "2px solid #333", fontSize: 22, fontWeight: 800, color: "#1DB954" }}>
-              {card.year}
-            </div>
+            <div key={card.id} style={{ background: "#2a2a2a", borderRadius: 12, padding: "12px 8px", textAlign: "center", border: "2px solid #333", fontSize: 22, fontWeight: 800, color: "#1DB954" }}>{card.year}</div>
           ))}
         </div>
       </div>
@@ -713,142 +523,104 @@ function Game({
     <div className="container">
       <div className="game-header">
         <div>
-          <button
-            onClick={() => { if (window.confirm(lang === "de" ? "Spiel wirklich verlassen?" : "Leave the game?")) { clearSession(); stop(); setScreen("start"); } }}
-            style={{ minWidth: "unset", padding: "6px 12px", fontSize: 13, background: "#333", boxShadow: "none", margin: "0 0 6px 0" }}
-          >🏠</button>
+          <button onClick={() => { if (window.confirm(lang === "de" ? "Spiel wirklich verlassen?" : "Leave the game?")) { clearSession(); stop(); setScreen("start"); } }} style={{ minWidth: "unset", padding: "6px 12px", fontSize: 13, background: "#333", boxShadow: "none", margin: "0 0 6px 0" }}>🏠</button>
           <h2 style={{ margin: 0 }}>{currentPlayer.name}'s Turn</h2>
           <h3>{isMyTurn ? t?.yourTurn || "Your turn!" : t?.waitingFor?.(currentPlayer.name) || `Waiting for ${currentPlayer.name}...`}</h3>
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
           {!isMyTurn && <div className="coin-display">🪙 <span>{myCoins}</span></div>}
-          <button onClick={() => setOverviewMode(true)} style={{ minWidth: "unset", padding: "6px 12px", fontSize: 12, background: "#333", boxShadow: "none", margin: 0 }}>
-            📋 My Cards
-          </button>
+          <button onClick={() => setOverviewMode(true)} style={{ minWidth: "unset", padding: "6px 12px", fontSize: 12, background: "#333", boxShadow: "none", margin: 0 }}>📋 My Cards</button>
         </div>
       </div>
 
       {loading && <div className="loading-card">{t?.loadingSong || "Loading song..."}</div>}
-
-      {/* SpotifyAppPrompt only shown to the active player */}
       {needsSpotifyApp && isMyTurn && <SpotifyAppPrompt onRetry={retryPlayback} lang={lang} />}
+      {timeLeft !== null && isMyTurn && <div className={`timer-display ${timeLeft <= 5 ? "timer-urgent" : ""}`}>{timeLeft}s</div>}
 
-      {timeLeft !== null && isMyTurn && (
-        <div className={`timer-display ${timeLeft <= 5 ? "timer-urgent" : ""}`}>{timeLeft}s</div>
+      {/* Recognition buzz strip — visible to non-active players while song plays, before reveal */}
+      {!isMyTurn && !revealed && playing && (
+        <div style={{ width: "100%", maxWidth: 480, margin: "8px auto 0", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          {recognitionWinner ? (
+            <div style={{ fontSize: 13, color: "#f0c040", fontWeight: 700, padding: "8px 16px", background: "rgba(240,192,64,0.1)", border: "1px solid rgba(240,192,64,0.3)", borderRadius: 20 }}>
+              🎤 {recognitionWinner.name} {lang === "de" ? "hat den Song erkannt!" : "recognized the song!"}
+            </div>
+          ) : recognitionBuzzed ? (
+            <div style={{ fontSize: 13, color: "#1DB954", fontWeight: 700, padding: "8px 16px", background: "rgba(29,185,84,0.1)", border: "1px solid rgba(29,185,84,0.3)", borderRadius: 20 }}>
+              🎤 {lang === "de" ? "Eingeloggt! Warte auf Aufdeckung…" : "Buzzed in! Wait for the reveal…"}
+            </div>
+          ) : (
+            <button
+              onClick={buzzRecognition}
+              style={{ padding: "9px 22px", fontSize: 13, minWidth: "unset", background: "rgba(240,192,64,0.15)", border: "2px solid rgba(240,192,64,0.5)", color: "#f0c040", fontWeight: 700, borderRadius: 30, boxShadow: "none" }}
+            >
+              🎤 {lang === "de" ? "Ich kenn den Song! +1 🪙" : "I know this song! +1 🪙"}
+            </button>
+          )}
+        </div>
       )}
 
-      <button
-        className="zoom-btn"
-        onClick={() => {
-          const next = !zoomed;
-          setZoomed(next);
-          zoomRef.current = next ? ZOOM_OUT : 1;
-          requestAnimationFrame(() => {
-            if (zoomWrapperRef.current && timelineRef.current) {
-              const isLandscape = window.innerWidth > window.innerHeight && window.innerWidth >= 768;
-              if (isLandscape) {
-                zoomWrapperRef.current.style.width = next ? "180%" : "";
-                zoomWrapperRef.current.style.minWidth = next ? "180%" : "";
-                zoomWrapperRef.current.style.height = "";
-              } else {
-                const natural = timelineRef.current.scrollHeight;
-                zoomWrapperRef.current.style.height = next ? `${natural * ZOOM_OUT}px` : "";
-                zoomWrapperRef.current.style.width = "";
-                zoomWrapperRef.current.style.minWidth = "";
-              }
-            }
-          });
-        }}
-        title={zoomed ? "Zoom in" : "Zoom out"}
-      >{zoomed ? "🔍" : "🔎"}</button>
+      {/* After reveal: show who had buzzed in (if anyone) */}
+      {!isMyTurn && revealed && recognitionWinner && (
+        <div style={{ width: "100%", maxWidth: 480, margin: "8px auto 0", textAlign: "center", fontSize: 14, color: "#f0c040", fontWeight: 700, padding: "10px 16px", background: "rgba(240,192,64,0.1)", border: "1px solid rgba(240,192,64,0.3)", borderRadius: 14 }}>
+          🎤 {recognitionWinner.name} {lang === "de" ? "kannte den Song — +1 🪙" : "knew the song — +1 🪙"}
+        </div>
+      )}
+
+      <button className="zoom-btn" onClick={() => {
+        const next = !zoomed; setZoomed(next); zoomRef.current = next ? ZOOM_OUT : 1;
+        requestAnimationFrame(() => {
+          if (zoomWrapperRef.current && timelineRef.current) {
+            const isLandscape = window.innerWidth > window.innerHeight && window.innerWidth >= 768;
+            if (isLandscape) { zoomWrapperRef.current.style.width = next ? "180%" : ""; zoomWrapperRef.current.style.minWidth = next ? "180%" : ""; zoomWrapperRef.current.style.height = ""; }
+            else { const natural = timelineRef.current.scrollHeight; zoomWrapperRef.current.style.height = next ? `${natural * ZOOM_OUT}px` : ""; zoomWrapperRef.current.style.width = ""; zoomWrapperRef.current.style.minWidth = ""; }
+          }
+        });
+      }} title={zoomed ? "Zoom in" : "Zoom out"}>{zoomed ? "🔍" : "🔎"}</button>
 
       {!loading && (
         <div className="timeline-zoom-wrapper" ref={zoomWrapperRef}>
-          <div
-            className="timeline"
-            ref={timelineRef}
-            style={{
-              paddingBottom: horizontal ? 0 : "100px",
-              paddingRight: horizontal ? "100px" : 0,
-              flexDirection: horizontal ? "row" : "column",
-              alignItems: horizontal ? "center" : undefined,
-              ...(zoomed ? { transform: `scale(${ZOOM_OUT})` } : {})
-            }}
-          >
-            {/* Slot 0: before all cards. Adjacent to new card if new card is at index 0. */}
+          <div className="timeline" ref={timelineRef} style={{ paddingBottom: horizontal ? 0 : "100px", paddingRight: horizontal ? "100px" : 0, flexDirection: horizontal ? "row" : "column", alignItems: horizontal ? "center" : undefined, ...(zoomed ? { transform: `scale(${ZOOM_OUT})` } : {}) }}>
+
             {renderCoinSlot(0, newCardOriginalIndex === 0)}
 
             {cards.map((card, index) => {
               const isNewCard = card.type === "new";
               const isDragged = isNewCard && dragging && isMyTurn;
-
-              let shiftX = 0; let shiftY = 0;
+              let shiftX = 0, shiftY = 0;
               if (isDragActive && newCardOriginalIndex >= 0) {
                 const origIdx = newCardOriginalIndex;
                 const allCardEls = timelineRef.current?.querySelectorAll(".card");
                 const fixedCardEl = allCardEls ? Array.from(allCardEls).find((el, i) => cards[i]?.type !== "new") : null;
                 const cardW = (fixedCardEl?.getBoundingClientRect().width || 200) + 12;
                 const cardH = (fixedCardEl?.getBoundingClientRect().height || 180) + 16;
-
-                if (isNewCard && !isMyTurn) {
-                  const diff = activeDragIdx <= origIdx ? -(origIdx - activeDragIdx) : activeDragIdx - origIdx - 1;
-                  if (horizontal) shiftX = diff * cardW; else shiftY = diff * cardH;
-                } else if (!isNewCard) {
-                  if (horizontal) {
-                    if (activeDragIdx <= origIdx && index >= activeDragIdx && index < origIdx) shiftX = cardW;
-                    else if (activeDragIdx > origIdx + 1 && index > origIdx && index < activeDragIdx) shiftX = -cardW;
-                  } else {
-                    if (activeDragIdx <= origIdx && index >= activeDragIdx && index < origIdx) shiftY = cardH;
-                    else if (activeDragIdx > origIdx + 1 && index > origIdx && index < activeDragIdx) shiftY = -cardH;
-                  }
+                if (isNewCard && !isMyTurn) { const diff = activeDragIdx <= origIdx ? -(origIdx - activeDragIdx) : activeDragIdx - origIdx - 1; if (horizontal) shiftX = diff * cardW; else shiftY = diff * cardH; }
+                else if (!isNewCard) {
+                  if (horizontal) { if (activeDragIdx <= origIdx && index >= activeDragIdx && index < origIdx) shiftX = cardW; else if (activeDragIdx > origIdx + 1 && index > origIdx && index < activeDragIdx) shiftX = -cardW; }
+                  else { if (activeDragIdx <= origIdx && index >= activeDragIdx && index < origIdx) shiftY = cardH; else if (activeDragIdx > origIdx + 1 && index > origIdx && index < activeDragIdx) shiftY = -cardH; }
                 }
               }
-
               const isFirstCardBelowNew = !horizontal && revealed && index === newCardOriginalIndex + 1;
               const spectatorDragging = isNewCard && !isMyTurn && isDragActive;
-
-              // Slot after this card is adjacent to the new card if:
-              // - this IS the new card (slot immediately after it), OR
-              // - the card right after this is the new card (slot immediately before it)
-              const slotAfterIsAdjacent =
-                isNewCard ||
-                (newCardOriginalIndex >= 0 && index + 1 === newCardOriginalIndex);
+              const slotAfterIsAdjacent = isNewCard || (newCardOriginalIndex >= 0 && index + 1 === newCardOriginalIndex);
 
               return (
-                <div
-                  key={card.id}
-                  style={{
-                    display: "flex",
-                    flexDirection: horizontal ? "row" : "column",
-                    alignItems: "center",
-                    marginTop: isFirstCardBelowNew ? "220px" : undefined,
-                    transition: "margin-top 0.3s ease",
-                    flexShrink: 0,
-                  }}
-                >
+                <div key={card.id} style={{ display: "flex", flexDirection: horizontal ? "row" : "column", alignItems: "center", marginTop: isFirstCardBelowNew ? "220px" : undefined, transition: "margin-top 0.3s ease", flexShrink: 0 }}>
                   {isNewCard && !revealed && isMyTurn ? (
-                    /* ── Active player draggable card ── */
-                    <div
-                      className="drag-wrapper"
-                      style={{ touchAction: "none", userSelect: "none" }}
-                      onMouseDown={handleDragStart}
-                      onTouchStart={(e) => { e.preventDefault(); handleDragStart(e); }}
-                      onTouchMove={(e) => e.preventDefault()}
-                    >
-                      <div
-                        ref={(el) => { dragCardRef.current = el; newCardRef.current = el; }}
-                        className="card new-card-unrevealed"
-                        style={{ position: "relative", zIndex: isDragged ? 1000 : 1, transition: "none", cursor: dragging ? "grabbing" : "grab", userSelect: "none", touchAction: "none" }}
-                      >
+                    <div className="drag-wrapper" style={{ touchAction: "none", userSelect: "none" }} onMouseDown={handleDragStart} onTouchStart={(e) => { e.preventDefault(); handleDragStart(e); }} onTouchMove={(e) => e.preventDefault()}>
+                      <div ref={(el) => { dragCardRef.current = el; newCardRef.current = el; }} className="card new-card-unrevealed" style={{ position: "relative", zIndex: isDragged ? 1000 : 1, transition: "none", cursor: dragging ? "grabbing" : "grab", userSelect: "none", touchAction: "none" }}>
                         <div className={`card-inner ${result === "correct" ? "result-correct" : ""} ${result === "wrong" ? "result-wrong" : ""}`}>
                           <div className="card-front new">
+                            {/* Play button — shows ⏳ while connecting, re-pressable on failure */}
                             <button
                               className="play-button"
-                              onClick={(e) => { e.stopPropagation(); togglePlay(card.uri); }}
+                              onClick={(e) => { e.stopPropagation(); if (!connecting) togglePlay(card.uri); }}
                               onMouseDown={e => e.stopPropagation()}
                               onTouchStart={e => e.stopPropagation()}
-                              disabled={!spotifyReady}
-                            >{playing ? "⏸" : "▶"}</button>
+                              disabled={!spotifyReady || connecting}
+                              title={connecting ? (lang === "de" ? "Verbinde…" : "Connecting…") : undefined}
+                            >
+                              {connecting ? "⏳" : playing ? "⏸" : "▶"}
+                            </button>
                             <div className="drag-hint">{t?.dragToPlace || "Drag to place"}</div>
                           </div>
                           <div className="card-back">
@@ -861,35 +633,15 @@ function Game({
                       </div>
                     </div>
                   ) : (
-                    /* ── Spectator / fixed / revealed card ── */
-                    <div
-                      ref={isNewCard ? (el) => { newCardRef.current = el; } : null}
+                    <div ref={isNewCard ? (el) => { newCardRef.current = el; } : null}
                       className={`card ${isNewCard ? "new-card-unrevealed" : "small-fixed"} ${isNewCard && revealed ? (horizontal ? "card-expanded-horizontal" : "card-expanded") : ""}`}
-                      style={{
-                        position: "relative",
-                        zIndex: spectatorDragging ? 100 : (isNewCard && revealed ? 100 : 1),
-                        transform: `translate(${shiftX}px, ${shiftY}px)`,
-                        transition: "transform 0.15s ease, box-shadow 0.15s ease, scale 0.15s ease",
-                        cursor: "default",
-                        userSelect: "none",
-                        ...(spectatorDragging ? { boxShadow: "0 20px 50px rgba(29,185,84,0.5)", scale: "1.03" } : {}),
-                      }}
-                    >
+                      style={{ position: "relative", zIndex: spectatorDragging ? 100 : (isNewCard && revealed ? 100 : 1), transform: `translate(${shiftX}px, ${shiftY}px)`, transition: "transform 0.15s ease, box-shadow 0.15s ease, scale 0.15s ease", cursor: "default", userSelect: "none", ...(spectatorDragging ? { boxShadow: "0 20px 50px rgba(29,185,84,0.5)", scale: "1.03" } : {}) }}>
                       {isNewCard ? (
                         <div className={`card-inner ${revealed ? "flipped" : ""} ${result === "correct" ? "result-correct" : ""} ${result === "wrong" ? "result-wrong" : ""}`}>
-                          {/* Spectator front: no play button, just player name */}
+                          {/* Spectator view: no play button, just label */}
                           <div className="card-front new" style={{ gap: 10 }}>
                             <div style={{ fontSize: 32, opacity: 0.7 }}>🎵</div>
-                            <div style={{
-                              fontSize: 14,
-                              fontWeight: 700,
-                              color: "rgba(255,255,255,0.92)",
-                              textAlign: "center",
-                              padding: "0 14px",
-                              lineHeight: 1.35,
-                              textTransform: "none",
-                              letterSpacing: 0,
-                            }}>
+                            <div style={{ fontSize: 14, fontWeight: 700, color: "rgba(255,255,255,0.92)", textAlign: "center", padding: "0 14px", lineHeight: 1.35, textTransform: "none", letterSpacing: 0 }}>
                               {currentPlayer.name}'s Card
                             </div>
                           </div>
@@ -905,8 +657,6 @@ function Game({
                       )}
                     </div>
                   )}
-
-                  {/* Coin slot after each card */}
                   {renderCoinSlot(index + 1, slotAfterIsAdjacent)}
                 </div>
               );
@@ -915,60 +665,9 @@ function Game({
         </div>
       )}
 
-      {/* ── Recognition banner (non-active players only, after reveal) ── */}
-      {revealed && !isMyTurn && (
-        <div style={{
-          width: "100%", maxWidth: 480, margin: "12px auto 0",
-          background: "rgba(255,255,255,0.05)",
-          border: "1px solid rgba(255,255,255,0.1)",
-          borderRadius: 16, padding: "14px 18px", textAlign: "center",
-        }}>
-          {recognitionWinner ? (
-            <div style={{ fontSize: 14, color: "#1DB954", fontWeight: 700 }}>
-              🎤 {recognitionWinner.name} {lang === "de" ? "kannte den Song!" : "knew the song!"} +1 🪙
-            </div>
-          ) : recognitionOpen && !recognitionClaimed ? (
-            <>
-              <div style={{ fontSize: 13, color: "#b3b3b3", marginBottom: 10 }}>
-                {lang === "de"
-                  ? "Hast du den Song erkannt, bevor er aufgedeckt wurde?"
-                  : "Did you recognize the song before it was revealed?"}
-              </div>
-              <button
-                onClick={claimRecognition}
-                style={{
-                  padding: "10px 24px", fontSize: 14, minWidth: "unset",
-                  background: "linear-gradient(135deg, #f0c040, #e0a020)",
-                  color: "#1a1a1a", fontWeight: 700,
-                }}
-              >
-                🎤 {lang === "de" ? "Ich hab's gewusst! +1 🪙" : "I knew it! +1 🪙"}
-              </button>
-            </>
-          ) : recognitionClaimed ? (
-            <div style={{ fontSize: 14, color: "#f0c040", fontWeight: 700 }}>
-              🎤 {lang === "de" ? "Anerkannt! Du bekommst eine Münze." : "Claimed! You get a coin."}
-            </div>
-          ) : (
-            <div style={{ fontSize: 13, color: "#555" }}>
-              {lang === "de" ? "Erkennungs-Fenster abgelaufen" : "Recognition window closed"}
-            </div>
-          )}
-        </div>
-      )}
-
       <div className="action-container">
-        {isMyTurn && !revealed && !loading && (
-          <button onClick={handleReveal}>{t?.reveal || "Reveal"}</button>
-        )}
-        {isMyTurn && showNextButton && (
-          <button onClick={nextTurn}>{t?.nextPlayer || "Next Player"}</button>
-        )}
-        {isNextPlayer && revealed && !coinGiven && (
-          <button className="give-coin-btn" onClick={giveCoin}>
-            {t?.giveCoin?.(currentPlayer.name) || `🎤 Give coin to ${currentPlayer.name}`}
-          </button>
-        )}
+        {isMyTurn && !revealed && !loading && <button onClick={handleReveal}>{t?.reveal || "Reveal"}</button>}
+        {isMyTurn && showNextButton && <button onClick={nextTurn}>{t?.nextPlayer || "Next Player"}</button>}
       </div>
     </div>
   );
