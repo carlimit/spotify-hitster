@@ -144,6 +144,16 @@ app.get("/api/playlist", async (req, res) => {
 const games = {};
 function generateCode() { return Math.random().toString(36).substring(2, 6).toUpperCase(); }
 
+// ─── Helper: check if any player has won and emit game_over ───
+function checkWinCondition(game, code) {
+  const winner = game.players.find(p => p.score >= game.winGoal - 1);
+  if (!winner) return false;
+  const sortedPlayers = [...game.players].sort((a, b) => b.score - a.score);
+  io.to(code).emit("game_over", { players: sortedPlayers });
+  console.log(`🏆 Game over in room ${code} — winner: ${winner.name}`);
+  return true;
+}
+
 io.on("connection", (socket) => {
   console.log("User connected:", socket.id);
 
@@ -216,9 +226,7 @@ io.on("connection", (socket) => {
   socket.on("reveal_card", ({ code, result, cards }) => {
     const game = games[code];
     if (!game) return;
-    // Lock recognition: no new claims after this point
     game.cardRevealed = true;
-    // Clear all pending coins
     game.coins = {};
     socket.to(code).emit("card_revealed", { result, cards });
   });
@@ -289,73 +297,125 @@ io.on("connection", (socket) => {
     io.to(code).emit("coins_updated", { coins: game.coins });
   });
 
-  /**
-   * claim_recognition
-   * Only valid BEFORE the card is revealed (game.cardRevealed === false).
-   * First claimer wins; subsequent claims are silently ignored.
-   * Coin is awarded immediately so the active player can see it reflected
-   * in the turn_changed players array.
-   */
   socket.on("claim_recognition", ({ code }) => {
     const game = games[code];
     if (!game) return;
-    // Reject if card is already revealed or someone already claimed this turn
     if (game.cardRevealed || game.recognitionClaimed) return;
     game.recognitionClaimed = true;
-
     const playerIndex = game.players.findIndex(p => p.id === socket.id);
     if (playerIndex === -1) return;
-
     const player = game.players[playerIndex];
     game.players[playerIndex].coins = (player.coins || 0) + 1;
-
-    // Broadcast who claimed it (everyone sees the name)
     io.to(code).emit("recognition_claimed", { playerName: player.name });
-    // Push updated coin totals
     io.to(code).emit("coins_updated_players", { players: game.players });
     console.log(`🎤 "${player.name}" recognised the song in room ${code}`);
   });
 
+  // ─────────────────────────────────────────────────────────────
+  // resolve_coins — called by the active player when clicking
+  // "Next Player". Handles coin payouts and advances the turn.
+  // ─────────────────────────────────────────────────────────────
   socket.on("resolve_coins", ({ code, activeCorrect, activeInsertIndex, newCard }) => {
     const game = games[code];
     if (!game) return;
+
     const coins = game.coins || {};
     const activePlayer = game.players[game.currentPlayerIndex];
-    const fixedCards = activePlayer.timeline.filter(c => c.type === "fixed").sort((a, b) => a.year - b.year);
+
+    // fixedCards: only the already-placed cards, sorted by year.
+    // activeInsertIndex is the position of the NEW card in the full
+    // cards array (which includes the new card itself). So a coin's
+    // insertIndex also refers to positions in that same full array.
+    // We need to convert to a fixedCards slot by subtracting 1 for
+    // any slot that comes AFTER the new card's position.
+    const fixedCards = activePlayer.timeline
+      .filter(c => c.type === "fixed")
+      .sort((a, b) => a.year - b.year);
+
     const isSlotCorrect = (slotIndex) => {
       const cardYear = parseInt(newCard.year);
-      const leftYear = slotIndex > 0 ? parseInt(fixedCards[slotIndex - 1]?.year ?? 0) : -Infinity;
-      const rightYear = slotIndex < fixedCards.length ? parseInt(fixedCards[slotIndex]?.year ?? Infinity) : Infinity;
+      // Convert full-array slot index → fixed-cards slot index
+      const fixedSlot = slotIndex > activeInsertIndex ? slotIndex - 1 : slotIndex;
+      const leftYear  = fixedSlot > 0               ? parseInt(fixedCards[fixedSlot - 1]?.year) || -Infinity : -Infinity;
+      const rightYear = fixedSlot < fixedCards.length ? parseInt(fixedCards[fixedSlot]?.year)   || Infinity  : Infinity;
       return cardYear >= leftYear && cardYear <= rightYear;
     };
+
+    let anyWon = false;
+
     Object.values(coins).forEach(({ playerId, insertIndex }) => {
       const coinPlayerIndex = game.players.findIndex(p => p.id === playerId);
       if (coinPlayerIndex === -1) return;
       const coinPlayer = game.players[coinPlayerIndex];
-      if (insertIndex === activeInsertIndex) return; // exact same slot — refund, no change
+
+      // Coin was placed at the exact same slot as active player → refund, no penalty
+      if (insertIndex === activeInsertIndex) return;
+
       const coinCorrect = isSlotCorrect(insertIndex);
+
       if (activeCorrect && coinCorrect) {
-        // both right — coin returned (no change)
+        // Both right → coin returned (no change)
       } else if (activeCorrect && !coinCorrect) {
+        // Active right, coin wrong → coin player loses a coin
         game.players[coinPlayerIndex].coins = Math.max(0, (coinPlayer.coins || 0) - 1);
       } else if (!activeCorrect && coinCorrect) {
-        const cardWithFixed = { ...newCard, type: "fixed" };
-        const newTimeline = [...coinPlayer.timeline, cardWithFixed].sort((a, b) => a.year - b.year);
+        // Active wrong, coin RIGHT → coin player steals the card!
+        const stolenCard = { ...newCard, type: "fixed" };
+        const newTimeline = [...coinPlayer.timeline, stolenCard]
+          .sort((a, b) => a.year - b.year);
         game.players[coinPlayerIndex].timeline = newTimeline;
         game.players[coinPlayerIndex].score = (coinPlayer.score || 0) + 1;
+        console.log(`🪙 "${coinPlayer.name}" stole the card in room ${code}`);
+        // Check if this steal wins the game for the coin player
+        if (game.players[coinPlayerIndex].score >= game.winGoal - 1) {
+          anyWon = true;
+        }
       } else {
+        // Both wrong → coin player loses a coin
         game.players[coinPlayerIndex].coins = Math.max(0, (coinPlayer.coins || 0) - 1);
       }
     });
+
     game.coins = {};
     game.currentCardFinalIndex = undefined;
     game.recognitionClaimed = false;
     game.cardRevealed = false;
+
+    // Check if a steal triggered a win BEFORE advancing the turn
+    if (anyWon) {
+      const sortedPlayers = [...game.players].sort((a, b) => b.score - a.score);
+      io.to(code).emit("game_over", { players: sortedPlayers });
+      return;
+    }
+
     game.currentPlayerIndex = (game.currentPlayerIndex + 1) % game.players.length;
-    io.to(code).emit("turn_changed", { players: game.players, currentPlayerIndex: game.currentPlayerIndex, selectedGenres: game.selectedGenres, minYear: game.minYear, maxYear: game.maxYear, playlistTracks: game.playlistTracks, usedUris: Array.from(game.usedUris), coins: {} });
+
+    io.to(code).emit("turn_changed", {
+      players: game.players,
+      currentPlayerIndex: game.currentPlayerIndex,
+      selectedGenres: game.selectedGenres,
+      minYear: game.minYear,
+      maxYear: game.maxYear,
+      playlistTracks: game.playlistTracks,
+      usedUris: Array.from(game.usedUris),
+      coins: {}
+    });
+
+    // ✅ FIX: Tell all non-host clients that playback has stopped.
+    // Without this, non-hosts keep playing=true from the previous turn
+    // and their next "play" tap sends pause_track instead of play_track.
+    io.to(code).emit("player_state", { playing: false });
   });
 
   socket.on("mark_used", ({ code, uri }) => { const game = games[code]; if (game) game.usedUris.add(uri); });
+
+  // ─────────────────────────────────────────────────────────────
+  // game_over — client (host) emits this after win detection;
+  // server broadcasts to all players in the room.
+  // ─────────────────────────────────────────────────────────────
+  socket.on("game_over", ({ code, players }) => {
+    io.to(code).emit("game_over", { players });
+  });
 
   socket.on("next_turn", ({ code }) => {
     const game = games[code];
@@ -363,7 +423,18 @@ io.on("connection", (socket) => {
     game.coins = {}; game.currentCardFinalIndex = undefined;
     game.recognitionClaimed = false; game.cardRevealed = false;
     game.currentPlayerIndex = (game.currentPlayerIndex + 1) % game.players.length;
-    io.to(code).emit("turn_changed", { players: game.players, currentPlayerIndex: game.currentPlayerIndex, selectedGenres: game.selectedGenres, minYear: game.minYear, maxYear: game.maxYear, playlistTracks: game.playlistTracks, usedUris: Array.from(game.usedUris), coins: {} });
+    io.to(code).emit("turn_changed", {
+      players: game.players,
+      currentPlayerIndex: game.currentPlayerIndex,
+      selectedGenres: game.selectedGenres,
+      minYear: game.minYear,
+      maxYear: game.maxYear,
+      playlistTracks: game.playlistTracks,
+      usedUris: Array.from(game.usedUris),
+      coins: {}
+    });
+    // ✅ FIX: Reset playing state for all non-host clients
+    io.to(code).emit("player_state", { playing: false });
   });
 
   socket.on("disconnect", () => { console.log("User disconnected:", socket.id); });
