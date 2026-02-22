@@ -141,7 +141,6 @@ app.get("/api/track", async (req, res) => {
 
 /* =========================================
    🔍 SEARCH PLAYLISTS ENDPOINT
-   Searches Spotify for playlists by name.
 ========================================= */
 
 app.get("/api/search-playlists", async (req, res) => {
@@ -171,7 +170,6 @@ app.get("/api/search-playlists", async (req, res) => {
     const playlists = await doSearch(accessToken);
     res.json({ playlists });
   } catch (err) {
-    // If 401, refresh token and retry once
     if (err.response?.status === 401) {
       try {
         await getSpotifyToken();
@@ -277,7 +275,7 @@ app.get("/api/playlist", async (req, res) => {
 });
 
 /* =========================================
-   🎮 MULTIPLAYER ROOMS (Local pass-and-play)
+   🎮 MULTIPLAYER ROOMS
 ========================================= */
 
 const games = {};
@@ -316,9 +314,6 @@ io.on("connection", (socket) => {
     io.to(code).emit("player_list", game.players);
   });
 
-  // Rejoin after disconnect (phone screen off, network drop, etc.)
-  // Finds the player by name, remaps their old socket ID to the new one,
-  // and sends them the full current game state so they can recover.
   socket.on("rejoin_game", ({ code, name }) => {
     const game = games[code];
     if (!game) return socket.emit("error", { message: "Game not found" });
@@ -329,14 +324,12 @@ io.on("connection", (socket) => {
     const oldId = player.id;
     player.id = socket.id;
 
-    // Update host reference if this was the host
     if (game.host === oldId) {
       game.host = socket.id;
     }
 
     socket.join(code);
 
-    // Send full game state so client can recover
     socket.emit("rejoin_success", {
       code,
       players: game.players,
@@ -431,7 +424,6 @@ io.on("connection", (socket) => {
     socket.to(code).emit("player_state", { playing });
   });
 
-  // Live drag sync — relay active player's drag position to all others
   socket.on("new_card_loaded", ({ code, cards }) => {
     const game = games[code];
     if (!game) return;
@@ -450,6 +442,45 @@ io.on("connection", (socket) => {
     socket.to(code).emit("drag_end", { cards });
   });
 
+  /**
+   * card_moved — emitted by the active player after drag_end with the final
+   * array index of the new card. We use this to refund coins placed at that
+   * exact slot (they can't bet *with* the active player) and to refund coins
+   * that were placed at a slot the card was dragged away from.
+   *
+   * Rule: a coin at `finalInsertIndex` gets silently refunded (no penalty,
+   * no reward) because the card landed on top of it — the spectator essentially
+   * guessed the same position as the active player, so we call it a wash.
+   * Coins at any other slot are still evaluated normally at resolve_coins time.
+   */
+  socket.on("card_moved", ({ code, finalInsertIndex }) => {
+    const game = games[code];
+    if (!game || !game.coins) return;
+
+    // Store final index so resolve_coins can reference it
+    game.currentCardFinalIndex = finalInsertIndex;
+
+    // Find any spectators whose coin is now at the same slot as the card
+    // and refund them immediately (so they can re-place elsewhere before reveal)
+    const refundedPlayerIds = [];
+    Object.entries(game.coins).forEach(([playerId, { insertIndex }]) => {
+      if (insertIndex === finalInsertIndex) {
+        delete game.coins[playerId];
+        refundedPlayerIds.push(playerId);
+      }
+    });
+
+    // Notify refunded players so their UI clears the coin
+    refundedPlayerIds.forEach(playerId => {
+      io.to(playerId).emit("coin_refunded");
+    });
+
+    // Broadcast updated coins to all (so other spectators see changes)
+    if (refundedPlayerIds.length > 0) {
+      io.to(code).emit("coins_updated", { coins: game.coins });
+    }
+  });
+
   socket.on("give_coin", ({ code }) => {
     const game = games[code];
     if (!game) return;
@@ -465,6 +496,13 @@ io.on("connection", (socket) => {
     const player = game.players.find(p => p.id === socket.id);
     if (!player || player.coins <= 0) return;
     if (!game.coins) game.coins = {};
+
+    // Don't allow placing a coin at the same slot the card currently sits on
+    if (game.currentCardFinalIndex !== undefined && insertIndex === game.currentCardFinalIndex) {
+      io.to(socket.id).emit("coin_refunded"); // bounce it back immediately
+      return;
+    }
+
     game.coins[socket.id] = { playerId: socket.id, insertIndex };
     io.to(code).emit("coins_updated", { coins: game.coins });
   });
@@ -506,23 +544,34 @@ io.on("connection", (socket) => {
       const coinPlayerIndex = game.players.findIndex(p => p.id === playerId);
       if (coinPlayerIndex === -1) return;
       const coinPlayer = game.players[coinPlayerIndex];
+
+      // If coin is at the same slot as where the card landed, refund (already
+      // handled by card_moved but guard here too in case of race conditions)
+      if (insertIndex === activeInsertIndex) {
+        return; // coin returned, no change
+      }
+
       const coinCorrect = isSlotCorrect(insertIndex);
 
       if (activeCorrect && coinCorrect) {
-        // both right — coin returned (no change)
+        // Both right — coin returned (no change)
       } else if (activeCorrect && !coinCorrect) {
+        // Active correct, coin on wrong slot — spectator loses a coin
         game.players[coinPlayerIndex].coins = Math.max(0, (coinPlayer.coins || 0) - 1);
       } else if (!activeCorrect && coinCorrect) {
+        // Active wrong, coin on correct slot — spectator scores a card
         const cardWithFixed = { ...newCard, type: "fixed" };
         const newTimeline = [...coinPlayer.timeline, cardWithFixed].sort((a, b) => a.year - b.year);
         game.players[coinPlayerIndex].timeline = newTimeline;
         game.players[coinPlayerIndex].score = (coinPlayer.score || 0) + 1;
       } else {
+        // Both wrong — spectator loses a coin
         game.players[coinPlayerIndex].coins = Math.max(0, (coinPlayer.coins || 0) - 1);
       }
     });
 
     game.coins = {};
+    game.currentCardFinalIndex = undefined;
     game.currentPlayerIndex = (game.currentPlayerIndex + 1) % game.players.length;
 
     io.to(code).emit("turn_changed", {
@@ -547,6 +596,7 @@ io.on("connection", (socket) => {
     const game = games[code];
     if (!game) return;
     game.coins = {};
+    game.currentCardFinalIndex = undefined;
     game.currentPlayerIndex = (game.currentPlayerIndex + 1) % game.players.length;
     io.to(code).emit("turn_changed", {
       players: game.players,

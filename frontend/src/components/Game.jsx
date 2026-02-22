@@ -52,8 +52,10 @@ function Game({
 
   // Remote drag: spectators store the insertIndex from active player
   const [remoteDragIndex, setRemoteDragIndex] = useState(null);
+  // The final resting index of the new card after active player drops it (sent via drag_end)
+  const [remoteCardOrder, setRemoteCardOrder] = useState(null);
 
-  const { ready: spotifyReady, playing, togglePlay, stop, needsSpotifyApp, retryPlayback, isMobile } = useSpotifyPlayer(roomCode, isHost);
+  const { ready: spotifyReady, playing, togglePlay, stop, keepAlive, needsSpotifyApp, retryPlayback, isMobile } = useSpotifyPlayer(roomCode, isHost);
 
   // Drag
   const [dragging, setDragging] = useState(false);
@@ -178,6 +180,7 @@ function Game({
       draggingRef.current = false;
       setInsertIndex(null);
       setRemoteDragIndex(null);
+      setRemoteCardOrder(null);
       setCoins(newCoins || {});
       setMyCoinIndex(null);
       setCoinGiven(false);
@@ -214,6 +217,7 @@ function Game({
       setRevealed(true);
       revealedRef.current = true;
       setRemoteDragIndex(null);
+      setRemoteCardOrder(null);
       setTimeout(() => {
         newCardRef.current?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
       }, 300);
@@ -225,6 +229,7 @@ function Game({
         setCards(newCards);
         cardsRef.current = newCards;
         setRemoteDragIndex(null);
+        setRemoteCardOrder(null);
       }
     });
 
@@ -242,8 +247,14 @@ function Game({
         if (finalCards) {
           setCards(finalCards);
           cardsRef.current = finalCards;
+          setRemoteCardOrder(finalCards);
         }
       }
+    });
+
+    // Coin refunded because active player moved card away
+    socket.on("coin_refunded", () => {
+      setMyCoinIndex(null);
     });
 
     return () => {
@@ -254,6 +265,7 @@ function Game({
       socket.off("new_card_loaded");
       socket.off("drag_move");
       socket.off("drag_end");
+      socket.off("coin_refunded");
     };
   }, []);
 
@@ -378,6 +390,9 @@ function Game({
       setTimeout(() => {
         newCardRef.current?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
       }, 120);
+
+      // Keep Spotify session alive so playback starts instantly
+      keepAlive?.();
 
       if (timerSeconds > 0 && isMyTurnRef.current) {
         setTimeLeft(timerSeconds);
@@ -525,6 +540,9 @@ function Game({
 
     const draggedRect = dragCardRef.current.getBoundingClientRect();
     const allCardEls = timelineRef.current.querySelectorAll(".card");
+
+    // Use a fixed card's size for accurate measurements, not the new card
+    const fixedCardEl = Array.from(allCardEls).find((el, i) => currentCards[i]?.type !== "new");
     const fixedMidpoints = [];
 
     currentCards.forEach((c, i) => {
@@ -586,6 +604,9 @@ function Game({
 
     // Tell others drag ended with final card positions
     socket.emit("drag_end", { code: roomCode, cards: reordered });
+    // Tell server the final position so it can refund any displaced coins
+    const finalNewIdx = reordered.findIndex(c => c.type === "new");
+    socket.emit("card_moved", { code: roomCode, finalInsertIndex: finalNewIdx });
   };
 
   useEffect(() => {
@@ -706,7 +727,14 @@ function Game({
   // ============================================================
 
   const renderCoinSlot = (slotIndex) => {
-    if (isMyTurn || revealed) return null;
+    // During drag (before card dropped), coin slots not yet shown to spectators
+    // because card position is still in flux — wait for drag_end
+    if (isMyTurn) return null;
+    // Before drag ends (card still being moved), don't render coin slots
+    // so spectators can't place on a slot the card hasn't settled on yet
+    const isDragging = remoteDragIndex !== null && !revealed;
+    if (isDragging) return null;
+
     const coinsHere = coinsBySlot[slotIndex] || 0;
     const myHere = myCoinIndex === slotIndex;
     const othersCount = coinsHere - (myHere ? 1 : 0);
@@ -905,13 +933,17 @@ function Game({
 
               if (isDragActive && newCardOriginalIndex >= 0) {
                 const origIdx = newCardOriginalIndex;
-                const cardEls = timelineRef.current?.querySelectorAll(".card");
-                const cardW = (cardEls?.[0]?.getBoundingClientRect().width || 200) + 12;
-                const cardH = (cardEls?.[0]?.getBoundingClientRect().height || 180) + 16;
+                const allCardEls = timelineRef.current?.querySelectorAll(".card");
+
+                // Use a fixed card's dimensions for accurate shift calculation
+                const fixedCardEl = allCardEls
+                  ? Array.from(allCardEls).find((el, i) => cards[i]?.type !== "new")
+                  : null;
+                const cardW = (fixedCardEl?.getBoundingClientRect().width || 200) + 12;
+                const cardH = (fixedCardEl?.getBoundingClientRect().height || 180) + 16;
 
                 if (isNewCard && !isMyTurn) {
                   // SPECTATOR: slide the new card to the target gap
-                  // Always uses the SPECTATOR's own orientation
                   const diff = activeDragIdx <= origIdx
                     ? -(origIdx - activeDragIdx)
                     : activeDragIdx - origIdx - 1;

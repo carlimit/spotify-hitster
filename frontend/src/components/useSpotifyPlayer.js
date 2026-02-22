@@ -321,6 +321,28 @@ export function useSpotifyPlayer(roomCode, isHost) {
     currentUriRef.current = null;
   }, [isHost, roomCode]);
 
+  /**
+   * keepAlive — silently wakes the Spotify device between turns without
+   * starting playback. Prevents the long "no active device" delay when the
+   * next player presses play after a gap between songs.
+   * Only does anything on mobile (Connect API) because the Web Playback SDK
+   * keeps its own device alive automatically.
+   */
+  const keepAlive = useCallback(async () => {
+    if (!isHost || !mobileRef.current) return;
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    try {
+      const device = await findDevice(token);
+      if (device) {
+        await transferPlayback(token, device.id);
+        console.log("🔄 Spotify keep-alive ping sent");
+      }
+    } catch {
+      // Non-critical — ignore silently
+    }
+  }, [isHost]);
+
   const retryPlayback = useCallback(async () => {
     const token = localStorage.getItem("token");
     const uri = pendingUriRef.current;
@@ -335,7 +357,7 @@ export function useSpotifyPlayer(roomCode, isHost) {
     }
   }, [roomCode]);
 
-  return { ready, playing, togglePlay, stop, isMobile: mobileRef.current, needsSpotifyApp, retryPlayback };
+  return { ready, playing, togglePlay, stop, keepAlive, isMobile: mobileRef.current, needsSpotifyApp, retryPlayback };
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -426,6 +448,22 @@ export function useSpotifyDirect() {
     currentUriRef.current = null;
   }, []);
 
+  /**
+   * keepAlive — same as multiplayer version, wakes device between cards
+   * so the next play press responds immediately.
+   */
+  const keepAlive = useCallback(async () => {
+    if (!mobileRef.current) return;
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    try {
+      const device = await findDevice(token);
+      if (device) await transferPlayback(token, device.id);
+    } catch {
+      // Non-critical
+    }
+  }, []);
+
   const retryPlayback = useCallback(async () => {
     const token = localStorage.getItem("token");
     const uri = pendingUriRef.current;
@@ -434,5 +472,5 @@ export function useSpotifyDirect() {
     if (result.ok) { pendingUriRef.current = null; setNeedsSpotifyApp(false); setPlaying(true); currentUriRef.current = uri; }
   }, []);
 
-  return { ready, playing, togglePlay, stop, isMobile: mobileRef.current, needsSpotifyApp, retryPlayback };
+  return { ready, playing, togglePlay, stop, keepAlive, isMobile: mobileRef.current, needsSpotifyApp, retryPlayback };
 }
