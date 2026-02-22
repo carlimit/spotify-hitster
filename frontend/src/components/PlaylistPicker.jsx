@@ -1,462 +1,250 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef } from "react";
 import axios from "axios";
-import hitsterPlaylists from "../hitsterPlaylists.json";
 
-// ─────────────────────────────────────────────────────────────
-// PlaylistPicker — unified component for choosing a playlist
-//
-// Three modes via tabs:
-//   🎯 Hitster Editions — preset playlists from hitsterPlaylists.json
-//   🔍 Search Spotify  — search any playlist on Spotify
-//   🔗 Paste Link      — manual URL input (existing behavior)
-// ─────────────────────────────────────────────────────────────
+// Official Hitster playlist IDs — load directly without a cover preview step
+const HITSTER_PLAYLISTS = [
+  { name: "Hitster — Original", id: "6xhADfJKJMoJI5tFBwmqZB" },
+  { name: "Hitster — 90s", id: "2qOzOiU4KNqt0FyrGbUHkN" },
+  { name: "Hitster — 80s", id: "3JQJM3bAHEFYBTWpvFNbQE" },
+  { name: "Hitster — 2000s", id: "4vAyjKXVKnFdFKGYkGF1xm" },
+  { name: "Hitster — 70s", id: "1e8B62XLDHqjcWIGAnHJbK" },
+];
 
 function PlaylistPicker({ t, lang, playlist, setPlaylist }) {
-  const [tab, setTab] = useState("hitster"); // "hitster" | "search" | "link"
-  const [search, setSearch] = useState("");
-  const [searchResults, setSearchResults] = useState([]);
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
-  const [linkUrl, setLinkUrl] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [hitsterSearch, setHitsterSearch] = useState("");
-  const searchTimeoutRef = useRef(null);
-  const [preview, setPreview] = useState(null); // { name, image, url }
-  const [loadingPreview, setLoadingPreview] = useState(false);
+  const [loadingId, setLoadingId] = useState(null);
+  const [error, setError] = useState("");
+  const debounceRef = useRef(null);
 
-  // ── Load a playlist by URL ──
-  const loadPlaylist = useCallback(async (url) => {
-    if (!url) return;
+  const isUrl = (str) => str.includes("spotify.com/playlist") || str.includes("spotify:playlist:");
+
+  const loadPlaylistFromUrl = async (url, label) => {
     setLoading(true);
-    setError(null);
+    setLoadingId(label || url);
+    setError("");
     try {
       const res = await axios.get(`/api/playlist?url=${encodeURIComponent(url)}`);
       setPlaylist(res.data);
-    } catch (err) {
-      setError(err.response?.data?.detail || "Couldn't load playlist.");
+      setResults([]);
+      setQuery("");
+    } catch {
+      setError(t?.playlistError || "Couldn't load playlist. Make sure it's a public Spotify playlist URL.");
     } finally {
       setLoading(false);
-    }
-  }, [setPlaylist]);
-
-  // ── Hitster edition click — fetch cover then show preview ──
-  const handleHitsterClick = async (p) => {
-    setLoadingPreview(true);
-    setPreview(null);
-    setError(null);
-    try {
-      const match = p.url.match(/playlist\/([a-zA-Z0-9]+)/);
-      if (!match) { loadPlaylist(p.url); return; }
-      const id = match[1];
-      const token = localStorage.getItem("token");
-      if (!token) { loadPlaylist(p.url); return; }
-      const res = await axios.get(
-        `https://api.spotify.com/v1/playlists/${id}?fields=name,images`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      setPreview({
-        name: p.name,
-        image: res.data.images?.[0]?.url || null,
-        url: p.url,
-      });
-    } catch {
-      // No token or request failed — just load directly
-      loadPlaylist(p.url);
-    } finally {
-      setLoadingPreview(false);
+      setLoadingId(null);
     }
   };
 
-  // ── Spotify search with debounce ──
-  const doSearch = useCallback(async (query) => {
-    if (!query.trim()) {
-      setSearchResults([]);
+  const handleInput = (value) => {
+    setQuery(value);
+    setError("");
+    clearTimeout(debounceRef.current);
+
+    if (!value.trim()) { setResults([]); return; }
+
+    if (isUrl(value)) {
+      // URL mode — no search, just show a load button (handled via Enter / button)
+      setResults([]);
       return;
     }
-    setSearching(true);
-    setError(null);
-    try {
-      const res = await axios.get(`/api/search-playlists?q=${encodeURIComponent(query)}`);
-      setSearchResults(res.data.playlists || []);
-    } catch (err) {
-      console.error("Search error:", err.response?.data || err.message);
-      setSearchResults([]);
-      // Fix: never set an object as error — React will crash
-      const errMsg = err.response?.data?.error;
-      setError(typeof errMsg === "string" ? errMsg : "Search failed — try again.");
-    } finally {
-      setSearching(false);
-    }
-  }, []);
 
-  const handleSearchInput = (val) => {
-    setSearch(val);
-    clearTimeout(searchTimeoutRef.current);
-    searchTimeoutRef.current = setTimeout(() => doSearch(val), 400);
+    // Search mode — debounce 400ms
+    debounceRef.current = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const res = await axios.get(`/api/search-playlists?q=${encodeURIComponent(value)}`);
+        setResults(res.data.playlists || []);
+      } catch {
+        setResults([]);
+      } finally {
+        setSearching(false);
+      }
+    }, 400);
   };
 
-  // ── Filter hitster presets ──
-  const filteredHitster = hitsterSearch.trim()
-    ? hitsterPlaylists.map(cat => ({
-        ...cat,
-        playlists: cat.playlists.filter(p =>
-          p.name.toLowerCase().includes(hitsterSearch.toLowerCase())
-        ),
-      })).filter(cat => cat.playlists.length > 0)
-    : hitsterPlaylists;
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter" && isUrl(query)) {
+      loadPlaylistFromUrl(query);
+    }
+  };
 
-  // ── If playlist is already loaded, show it ──
+  const inputIsUrl = isUrl(query);
+
   if (playlist) {
     return (
-      <div className="playlist-info">
-        {playlist.image && (
-          <img
-            src={playlist.image}
-            alt=""
-            style={{ width: 80, height: 80, borderRadius: 10, objectFit: "cover", marginBottom: 8 }}
-          />
-        )}
-        <div className="playlist-name">🎵 {playlist.name}</div>
-        <div className="playlist-count">{playlist.trackCount} tracks</div>
-        <button
-          onClick={() => { setPlaylist(null); setError(null); }}
-          style={{ background: "#444", marginTop: 8 }}
-        >
-          {t?.remove || "Remove"}
-        </button>
+      <div style={{
+        background: "rgba(29,185,84,0.08)",
+        border: "2px solid rgba(29,185,84,0.3)",
+        borderRadius: 14,
+        padding: "14px 16px",
+        width: "100%",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 700, fontSize: 15, color: "#1DB954", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              ✅ {playlist.name}
+            </div>
+            <div style={{ fontSize: 12, color: "#888", marginTop: 2 }}>
+              {playlist.trackCount} {lang === "de" ? "Songs" : "tracks"}
+            </div>
+          </div>
+          <button
+            onClick={() => { setPlaylist(null); setQuery(""); setResults([]); }}
+            style={{ minWidth: "unset", padding: "6px 12px", fontSize: 13, background: "#333", boxShadow: "none", margin: 0, flexShrink: 0 }}
+          >
+            {t?.remove || "Remove"}
+          </button>
+        </div>
       </div>
     );
   }
 
-  const tabStyle = (active) => ({
-    flex: 1,
-    padding: "10px 4px",
-    fontSize: 13,
-    fontWeight: active ? 700 : 500,
-    background: active ? "rgba(29, 185, 84, 0.15)" : "transparent",
-    color: active ? "#1DB954" : "#888",
-    border: "none",
-    borderBottom: active ? "2px solid #1DB954" : "2px solid transparent",
-    cursor: "pointer",
-    borderRadius: "0",
-    boxShadow: "none",
-    minWidth: "unset",
-    margin: 0,
-    transition: "all 0.2s ease",
-  });
-
   return (
-    <div style={{ width: "100%", maxWidth: 480 }}>
-      {/* Tab bar */}
-      <div style={{
-        display: "flex",
-        borderBottom: "1px solid #333",
-        marginBottom: 12,
-      }}>
-        <button style={tabStyle(tab === "hitster")} onClick={() => { setTab("hitster"); setPreview(null); }}>
-          🎯 {lang === "de" ? "Editionen" : "Editions"}
-        </button>
-        <button style={tabStyle(tab === "search")} onClick={() => { setTab("search"); setPreview(null); }}>
-          🔍 Spotify
-        </button>
-        <button style={tabStyle(tab === "link")} onClick={() => { setTab("link"); setPreview(null); }}>
-          🔗 Link
-        </button>
+    <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 10 }}>
+
+      {/* ── Hitster preset buttons ── */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: 0.5 }}>
+          Hitster
+        </div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {HITSTER_PLAYLISTS.map(p => {
+            const isThisLoading = loadingId === p.id;
+            return (
+              <button
+                key={p.id}
+                onClick={() => loadPlaylistFromUrl(`https://open.spotify.com/playlist/${p.id}`, p.id)}
+                disabled={loading}
+                style={{
+                  padding: "7px 12px",
+                  fontSize: 13,
+                  minWidth: "unset",
+                  margin: 0,
+                  background: isThisLoading ? "#1DB954" : "#2a2a2a",
+                  border: "1px solid #444",
+                  color: isThisLoading ? "#fff" : "#ccc",
+                  borderRadius: 20,
+                  boxShadow: "none",
+                  opacity: loading && !isThisLoading ? 0.5 : 1,
+                  transition: "all 0.15s ease",
+                }}
+              >
+                {isThisLoading
+                  ? (lang === "de" ? "Lädt…" : "Loading…")
+                  : p.name.replace("Hitster — ", "")}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── Divider ── */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ flex: 1, height: 1, background: "#333" }} />
+        <span style={{ fontSize: 12, color: "#555" }}>{lang === "de" ? "oder" : "or"}</span>
+        <div style={{ flex: 1, height: 1, background: "#333" }} />
+      </div>
+
+      {/* ── Combined search / URL input ── */}
+      <div style={{ position: "relative" }}>
+        <div style={{ position: "relative", display: "flex", gap: 8 }}>
+          <input
+            type="text"
+            value={query}
+            onChange={e => handleInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={lang === "de"
+              ? "Playlist suchen oder Link einfügen…"
+              : "Search playlists or paste a link…"}
+            style={{
+              flex: 1,
+              margin: 0,
+              borderColor: inputIsUrl ? "rgba(29,185,84,0.5)" : undefined,
+            }}
+          />
+          {inputIsUrl && (
+            <button
+              onClick={() => loadPlaylistFromUrl(query)}
+              disabled={loading}
+              style={{ minWidth: "unset", padding: "0 16px", margin: 0, boxShadow: "none", flexShrink: 0 }}
+            >
+              {loading ? (lang === "de" ? "Lädt…" : "Loading…") : (lang === "de" ? "Laden" : "Load")}
+            </button>
+          )}
+          {!inputIsUrl && searching && (
+            <div style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", fontSize: 13, color: "#888" }}>
+              {lang === "de" ? "Suche…" : "Searching…"}
+            </div>
+          )}
+        </div>
+
+        {/* ── Search results dropdown ── */}
+        {results.length > 0 && (
+          <div style={{
+            position: "absolute",
+            top: "calc(100% + 4px)",
+            left: 0, right: 0,
+            background: "#1e1e1e",
+            border: "1px solid #333",
+            borderRadius: 12,
+            overflow: "hidden",
+            zIndex: 100,
+            boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
+            maxHeight: 260,
+            overflowY: "auto",
+          }}>
+            {results.map((p, i) => {
+              const isThisLoading = loadingId === p.id;
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => loadPlaylistFromUrl(p.url, p.id)}
+                  disabled={loading}
+                  style={{
+                    width: "100%",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    padding: "10px 14px",
+                    background: isThisLoading ? "rgba(29,185,84,0.1)" : i % 2 === 0 ? "#1e1e1e" : "#222",
+                    border: "none",
+                    borderRadius: 0,
+                    textAlign: "left",
+                    cursor: loading ? "wait" : "pointer",
+                    minWidth: "unset",
+                    margin: 0,
+                    boxShadow: "none",
+                    transition: "background 0.1s ease",
+                  }}
+                >
+                  {p.image && (
+                    <img
+                      src={p.image}
+                      alt=""
+                      style={{ width: 36, height: 36, borderRadius: 4, objectFit: "cover", flexShrink: 0 }}
+                    />
+                  )}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: 14, color: "#e0e0e0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {isThisLoading ? (lang === "de" ? "Lädt…" : "Loading…") : p.name}
+                    </div>
+                    <div style={{ fontSize: 12, color: "#888" }}>
+                      {p.owner} · {p.tracks} {lang === "de" ? "Songs" : "tracks"}
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {error && (
-        <p style={{ color: "#ff5555", fontSize: 13, margin: "0 0 10px 0", background: "none", border: "none", padding: 0 }}>
+        <div style={{ color: "#ff6b6b", fontSize: 13, padding: "8px 12px", background: "rgba(255,107,107,0.1)", border: "1px solid rgba(255,107,107,0.3)", borderRadius: 8 }}>
           {error}
-        </p>
-      )}
-
-      {loading && (
-        <div style={{ textAlign: "center", padding: "20px 0", color: "#888", fontSize: 14 }}>
-          <div style={{ animation: "shimmer 1.4s ease-in-out infinite" }}>
-            {lang === "de" ? "Playlist wird geladen..." : "Loading playlist..."}
-          </div>
-        </div>
-      )}
-
-      {/* ─── Hitster Editions Tab ─── */}
-      {tab === "hitster" && !loading && (
-        <div>
-          <input
-            type="text"
-            placeholder={lang === "de" ? "Editionen durchsuchen..." : "Search editions..."}
-            value={hitsterSearch}
-            onChange={(e) => setHitsterSearch(e.target.value)}
-            style={{
-              width: "100%",
-              padding: "10px 14px",
-              fontSize: 14,
-              borderRadius: 10,
-              border: "1px solid #333",
-              background: "#1a1a1a",
-              color: "#fff",
-              marginBottom: 12,
-              outline: "none",
-              boxSizing: "border-box",
-            }}
-          />
-
-          {/* ── Cover preview card ── */}
-          {loadingPreview && (
-            <div style={{ textAlign: "center", color: "#888", padding: "12px 0", fontSize: 13 }}>
-              {lang === "de" ? "Cover wird geladen..." : "Loading cover..."}
-            </div>
-          )}
-
-          {preview && !loadingPreview && (
-            <div style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 12,
-              padding: "12px 14px",
-              background: "rgba(29,185,84,0.1)",
-              border: "1px solid #1DB954",
-              borderRadius: 12,
-              marginBottom: 12,
-            }}>
-              {preview.image ? (
-                <img
-                  src={preview.image}
-                  alt=""
-                  style={{ width: 60, height: 60, borderRadius: 8, objectFit: "cover", flexShrink: 0 }}
-                />
-              ) : (
-                <div style={{
-                  width: 60, height: 60, borderRadius: 8, background: "#2a2a2a",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 24, flexShrink: 0,
-                }}>🎵</div>
-              )}
-              <div style={{ flex: 1, overflow: "hidden" }}>
-                <div style={{ fontWeight: 600, color: "#fff", fontSize: 14 }}>{preview.name}</div>
-                <div style={{ fontSize: 12, color: "#aaa", marginTop: 2 }}>
-                  {lang === "de" ? "Playlist laden?" : "Load this playlist?"}
-                </div>
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 6, flexShrink: 0 }}>
-                <button
-                  onClick={() => { loadPlaylist(preview.url); setPreview(null); }}
-                  style={{ background: "#1DB954", padding: "6px 14px", fontSize: 13, borderRadius: 8 }}
-                >
-                  ✓
-                </button>
-                <button
-                  onClick={() => setPreview(null)}
-                  style={{ background: "#444", padding: "6px 14px", fontSize: 13, borderRadius: 8 }}
-                >
-                  ✕
-                </button>
-              </div>
-            </div>
-          )}
-
-          <div style={{
-            maxHeight: 320,
-            overflowY: "auto",
-            display: "flex",
-            flexDirection: "column",
-            gap: 16,
-            paddingRight: 4,
-          }}>
-            {filteredHitster.length === 0 && (
-              <p style={{ color: "#666", textAlign: "center", fontSize: 14, background: "none", border: "none", padding: 0 }}>
-                {lang === "de" ? "Keine Ergebnisse" : "No results"}
-              </p>
-            )}
-            {filteredHitster.map((cat) => (
-              <div key={cat.category}>
-                <div style={{
-                  fontSize: 11,
-                  fontWeight: 700,
-                  textTransform: "uppercase",
-                  letterSpacing: 1,
-                  color: "#666",
-                  marginBottom: 6,
-                }}>
-                  {cat.category}
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                  {cat.playlists.map((p) => (
-                    <button
-                      key={p.url}
-                      onClick={() => handleHitsterClick(p)}
-                      disabled={loading || loadingPreview}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 10,
-                        padding: "10px 14px",
-                        background: preview?.url === p.url ? "rgba(29,185,84,0.1)" : "rgba(255,255,255,0.04)",
-                        border: preview?.url === p.url ? "1px solid #1DB954" : "1px solid #2a2a2a",
-                        borderRadius: 10,
-                        color: "#ddd",
-                        fontSize: 14,
-                        fontWeight: 500,
-                        cursor: "pointer",
-                        textAlign: "left",
-                        width: "100%",
-                        minWidth: "unset",
-                        boxShadow: "none",
-                        margin: 0,
-                        transition: "background 0.15s ease",
-                      }}
-                      onMouseOver={(e) => { if (preview?.url !== p.url) e.currentTarget.style.background = "rgba(29, 185, 84, 0.1)"; }}
-                      onMouseOut={(e) => { if (preview?.url !== p.url) e.currentTarget.style.background = "rgba(255,255,255,0.04)"; }}
-                    >
-                      <span style={{ fontSize: 18 }}>🎵</span>
-                      <span>{p.name}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* ─── Spotify Search Tab ─── */}
-      {tab === "search" && !loading && (
-        <div>
-          <input
-            type="text"
-            placeholder={lang === "de" ? "Playlist auf Spotify suchen..." : "Search playlists on Spotify..."}
-            value={search}
-            onChange={(e) => handleSearchInput(e.target.value)}
-            style={{
-              width: "100%",
-              padding: "10px 14px",
-              fontSize: 14,
-              borderRadius: 10,
-              border: "1px solid #333",
-              background: "#1a1a1a",
-              color: "#fff",
-              marginBottom: 12,
-              outline: "none",
-              boxSizing: "border-box",
-            }}
-          />
-          {searching && (
-            <div style={{ textAlign: "center", color: "#888", fontSize: 13, padding: "8px 0" }}>
-              {lang === "de" ? "Suche..." : "Searching..."}
-            </div>
-          )}
-          <div style={{
-            maxHeight: 320,
-            overflowY: "auto",
-            display: "flex",
-            flexDirection: "column",
-            gap: 4,
-          }}>
-            {!searching && searchResults.length === 0 && search.trim() && (
-              <p style={{ color: "#666", textAlign: "center", fontSize: 14, background: "none", border: "none", padding: 0 }}>
-                {lang === "de" ? "Keine Playlists gefunden" : "No playlists found"}
-              </p>
-            )}
-            {searchResults.map((pl) => (
-              <button
-                key={pl.id}
-                onClick={() => loadPlaylist(pl.url)}
-                disabled={loading}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  padding: "8px 12px",
-                  background: "rgba(255,255,255,0.04)",
-                  border: "1px solid #2a2a2a",
-                  borderRadius: 10,
-                  color: "#ddd",
-                  fontSize: 14,
-                  fontWeight: 500,
-                  cursor: "pointer",
-                  textAlign: "left",
-                  width: "100%",
-                  minWidth: "unset",
-                  boxShadow: "none",
-                  margin: 0,
-                  transition: "background 0.15s ease",
-                }}
-                onMouseOver={(e) => e.currentTarget.style.background = "rgba(29, 185, 84, 0.1)"}
-                onMouseOut={(e) => e.currentTarget.style.background = "rgba(255,255,255,0.04)"}
-              >
-                {pl.image ? (
-                  <img
-                    src={pl.image}
-                    alt=""
-                    style={{ width: 44, height: 44, borderRadius: 6, objectFit: "cover", flexShrink: 0 }}
-                  />
-                ) : (
-                  <div style={{
-                    width: 44, height: 44, borderRadius: 6, background: "#2a2a2a",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: 20, flexShrink: 0,
-                  }}>🎵</div>
-                )}
-                <div style={{ overflow: "hidden", flex: 1 }}>
-                  <div style={{
-                    fontWeight: 600,
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                  }}>{pl.name}</div>
-                  <div style={{ fontSize: 12, color: "#888" }}>
-                    {pl.owner} · {pl.tracks} tracks
-                  </div>
-                </div>
-              </button>
-            ))}
-          </div>
-          {!search.trim() && (
-            <p style={{
-              color: "#555",
-              textAlign: "center",
-              fontSize: 13,
-              marginTop: 16,
-              background: "none",
-              border: "none",
-              padding: 0,
-            }}>
-              {lang === "de"
-                ? "Suche nach jeder Playlist auf Spotify"
-                : "Search for any playlist on Spotify"}
-            </p>
-          )}
-        </div>
-      )}
-
-      {/* ─── Paste Link Tab ─── */}
-      {tab === "link" && !loading && (
-        <div>
-          <input
-            type="text"
-            placeholder={t?.pastePlaceholder || "Paste Spotify playlist link..."}
-            value={linkUrl}
-            onChange={(e) => setLinkUrl(e.target.value)}
-            onKeyPress={(e) => e.key === "Enter" && loadPlaylist(linkUrl)}
-            style={{
-              width: "100%",
-              padding: "10px 14px",
-              fontSize: 14,
-              borderRadius: 10,
-              border: "1px solid #333",
-              background: "#1a1a1a",
-              color: "#fff",
-              marginBottom: 10,
-              outline: "none",
-              boxSizing: "border-box",
-            }}
-          />
-          <button
-            onClick={() => loadPlaylist(linkUrl)}
-            disabled={!linkUrl.trim()}
-            style={{ background: "#444", width: "100%" }}
-          >
-            {t?.loadPlaylist || "Load Playlist"}
-          </button>
         </div>
       )}
     </div>

@@ -436,12 +436,8 @@ function Game({
     updatedPlayers[currentPlayerIndex] = { ...currentPlayer, timeline: updatedTimeline, score: currentPlayer.score + 1 };
     updatePlayers(updatedPlayers);
     socket.emit("update_timeline", { code: roomCode, timeline: updatedTimeline, score: currentPlayer.score + 1 });
-    if (updatedPlayers[currentPlayerIndex].score >= winGoal - 1) {
-      clearSession();
-      const sortedPlayers = [...updatedPlayers].sort((a, b) => b.score - a.score);
-      socket.emit("game_over", { code: roomCode, players: sortedPlayers });
-      return;
-    }
+    // Win detection is handled server-side in update_timeline handler.
+    // Server will emit game_over to all clients if someone won.
     setTimeout(() => setShowNextButton(true), 800);
   };
 
