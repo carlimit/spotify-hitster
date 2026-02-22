@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import axios from "axios";
-import hitsterPlaylists from "../hitsterplaylists.json";
+import hitsterPlaylists from "src/hitsterplaylists.json";
 
 function PlaylistPicker({ t, lang, playlist, setPlaylist }) {
   const [query, setQuery] = useState("");
