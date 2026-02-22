@@ -550,7 +550,7 @@ function Game({
       {timeLeft !== null && isMyTurn && <div className={`timer-display ${timeLeft <= 5 ? "timer-urgent" : ""}`}>{timeLeft}s</div>}
 
       {/* Recognition buzz strip — visible to non-active players while song plays, before reveal */}
-      {!isMyTurn && !revealed && playing && (
+      {!isMyTurn && !revealed && (
         <div style={{ width: "100%", maxWidth: 480, margin: "8px auto 0", display: "flex", alignItems: "center", justifyContent: "center" }}>
           {recognitionWinner ? (
             <div style={{ fontSize: 13, color: "#f0c040", fontWeight: 700, padding: "8px 16px", background: "rgba(240,192,64,0.1)", border: "1px solid rgba(240,192,64,0.3)", borderRadius: 20 }}>
