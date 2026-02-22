@@ -96,6 +96,8 @@ function Game({
   const lastDragUpdateRef = useRef(0);
   const startScrollXRef = useRef(0);
   const startScrollYRef = useRef(0);
+  // Cache card dimensions to avoid getBoundingClientRect on every drag-move render
+  const cardDimsRef = useRef({ w: 212, h: 196 });
 
   const [horizontal, setHorizontal] = useState(
     window.innerWidth > window.innerHeight && window.innerWidth >= 768
@@ -198,12 +200,21 @@ function Game({
     });
 
     socket.on("drag_move", ({ insertIndex: remoteIdx }) => {
-      if (!isMyTurnRef.current) setRemoteDragIndex(remoteIdx);
+      if (!isMyTurnRef.current) {
+        // Measure card dims once on first drag_move event
+        if (cardDimsRef.current.w === 212) {
+          const allCardEls = timelineRef.current?.querySelectorAll(".card");
+          const fixedEl = allCardEls ? Array.from(allCardEls).find((el, i) => cardsRef.current[i]?.type !== "new") : null;
+          if (fixedEl) { const r = fixedEl.getBoundingClientRect(); cardDimsRef.current = { w: r.width + 12, h: r.height + 16 }; }
+        }
+        setRemoteDragIndex(remoteIdx);
+      }
     });
 
     socket.on("drag_end", ({ cards: finalCards }) => {
       if (!isMyTurnRef.current) {
         setRemoteDragIndex(null);
+        cardDimsRef.current = { w: 212, h: 196 }; // reset for next drag
         if (finalCards) { setCards(finalCards); cardsRef.current = finalCards; }
       }
     });
@@ -312,6 +323,13 @@ function Game({
     const tl = timelineRef.current;
     startScrollXRef.current = tl ? tl.scrollLeft : 0;
     startScrollYRef.current = window.scrollY;
+    // Measure card size once at drag start
+    const allCardEls = timelineRef.current?.querySelectorAll(".card");
+    const fixedEl = allCardEls ? Array.from(allCardEls).find((el, i) => cardsRef.current[i]?.type !== "new") : null;
+    if (fixedEl) {
+      const r = fixedEl.getBoundingClientRect();
+      cardDimsRef.current = { w: r.width + 12, h: r.height + 16 };
+    }
   };
 
   const handleDragMoveRef = useRef(null);
@@ -609,10 +627,9 @@ function Game({
               let shiftX = 0, shiftY = 0;
               if (isDragActive && newCardOriginalIndex >= 0) {
                 const origIdx = newCardOriginalIndex;
-                const allCardEls = timelineRef.current?.querySelectorAll(".card");
-                const fixedCardEl = allCardEls ? Array.from(allCardEls).find((el, i) => cards[i]?.type !== "new") : null;
-                const cardW = (fixedCardEl?.getBoundingClientRect().width || 200) + 12;
-                const cardH = (fixedCardEl?.getBoundingClientRect().height || 180) + 16;
+                // Use cached dimensions — no getBoundingClientRect on every render
+                const cardW = cardDimsRef.current.w;
+                const cardH = cardDimsRef.current.h;
                 if (isNewCard && !isMyTurn) { const diff = activeDragIdx <= origIdx ? -(origIdx - activeDragIdx) : activeDragIdx - origIdx - 1; if (horizontal) shiftX = diff * cardW; else shiftY = diff * cardH; }
                 else if (!isNewCard) {
                   if (horizontal) { if (activeDragIdx <= origIdx && index >= activeDragIdx && index < origIdx) shiftX = cardW; else if (activeDragIdx > origIdx + 1 && index > origIdx && index < activeDragIdx) shiftX = -cardW; }
@@ -654,7 +671,7 @@ function Game({
                   ) : (
                     <div ref={isNewCard ? (el) => { newCardRef.current = el; } : null}
                       className={`card ${isNewCard ? "new-card-unrevealed" : "small-fixed"} ${isNewCard && revealed ? (horizontal ? "card-expanded-horizontal" : "card-expanded") : ""}`}
-                      style={{ position: "relative", zIndex: spectatorDragging ? 100 : (isNewCard && revealed ? 100 : 1), transform: `translate(${shiftX}px, ${shiftY}px)`, transition: "transform 0.15s ease, box-shadow 0.15s ease, scale 0.15s ease", cursor: "default", userSelect: "none", ...(spectatorDragging ? { boxShadow: "0 20px 50px rgba(29,185,84,0.5)", scale: "1.03" } : {}) }}>
+                      style={{ position: "relative", zIndex: spectatorDragging ? 100 : (isNewCard && revealed ? 100 : 1), transform: `translate3d(${shiftX}px, ${shiftY}px, 0)`, transition: "transform 0.15s ease, box-shadow 0.15s ease, scale 0.15s ease", cursor: "default", userSelect: "none", ...(spectatorDragging ? { boxShadow: "0 20px 50px rgba(29,185,84,0.5)", scale: "1.03" } : {}) }}>
                       {isNewCard ? (
                         <div className={`card-inner ${revealed ? "flipped" : ""} ${result === "correct" ? "result-correct" : ""} ${result === "wrong" ? "result-wrong" : ""}`}>
                           <div className="card-front new" style={{ gap: 10 }}>
