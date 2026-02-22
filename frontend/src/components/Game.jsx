@@ -214,11 +214,18 @@ function Game({
       setRecognitionWinner({ name: playerName });
     });
 
+    socket.on("game_over", ({ players: finalPlayers }) => {
+      clearSession();
+      setWinner(finalPlayers);
+      setScreen("winner");
+    });
+
     return () => {
       socket.off("turn_changed"); socket.off("coins_updated"); socket.off("coins_updated_players");
       socket.off("card_revealed"); socket.off("new_card_loaded");
       socket.off("drag_move"); socket.off("drag_end");
       socket.off("coin_refunded"); socket.off("recognition_claimed");
+      socket.off("game_over");
     };
   }, []);
 
@@ -429,7 +436,12 @@ function Game({
     updatedPlayers[currentPlayerIndex] = { ...currentPlayer, timeline: updatedTimeline, score: currentPlayer.score + 1 };
     updatePlayers(updatedPlayers);
     socket.emit("update_timeline", { code: roomCode, timeline: updatedTimeline, score: currentPlayer.score + 1 });
-    if (updatedPlayers[currentPlayerIndex].score >= winGoal) { clearSession(); setWinner(updatedPlayers[currentPlayerIndex]); setScreen("winner"); return; }
+    if (updatedPlayers[currentPlayerIndex].score >= winGoal - 1) {
+      clearSession();
+      const sortedPlayers = [...updatedPlayers].sort((a, b) => b.score - a.score);
+      socket.emit("game_over", { code: roomCode, players: sortedPlayers });
+      return;
+    }
     setTimeout(() => setShowNextButton(true), 800);
   };
 
@@ -502,7 +514,7 @@ function Game({
   // UI
   // ============================================================
 
-  if (!currentPlayer) return <div className="container">Waiting for players...</div>;
+  if (!currentPlayer) return <div className="container">{t?.waitingForPlayers || "Waiting for players..."}</div>;
 
   const newCardOriginalIndex = cards.findIndex(c => c.type === "new");
   const myPlayer = players.find(p => p.id === socket.id);
@@ -519,8 +531,8 @@ function Game({
     return (
       <div className="container">
         <div style={{ width: "100%", maxWidth: 480, display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <h2 style={{ margin: 0 }}>My Timeline</h2>
-          <button onClick={() => setOverviewMode(false)} style={{ minWidth: "unset", padding: "8px 16px", fontSize: 14 }}>✕ Close</button>
+          <h2 style={{ margin: 0 }}>{t?.myTimeline || "My Timeline"}</h2>
+          <button onClick={() => setOverviewMode(false)} style={{ minWidth: "unset", padding: "8px 16px", fontSize: 14 }}>{t?.closeOverview || "✕ Close"}</button>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, width: "100%", maxWidth: 480, paddingBottom: 40 }}>
           {myTimeline.sort((a, b) => a.year - b.year).map(card => (
@@ -535,13 +547,13 @@ function Game({
     <div className="container">
       <div className="game-header">
         <div>
-          <button onClick={() => { if (window.confirm(lang === "de" ? "Spiel wirklich verlassen?" : "Leave the game?")) { clearSession(); stop(); setScreen("start"); } }} style={{ minWidth: "unset", padding: "6px 12px", fontSize: 13, background: "#333", boxShadow: "none", margin: "0 0 6px 0" }}>🏠</button>
-          <h2 style={{ margin: 0 }}>{currentPlayer.name}'s Turn</h2>
+          <button onClick={() => { if (window.confirm(t?.leaveGame || "Leave the game?")) { clearSession(); stop(); setScreen("start"); } }} style={{ minWidth: "unset", padding: "6px 12px", fontSize: 13, background: "#333", boxShadow: "none", margin: "0 0 6px 0" }}>🏠</button>
+          <h2 style={{ margin: 0 }}>{t?.sTurn ? t.sTurn(currentPlayer.name) : `${currentPlayer.name}'s Turn`}</h2>
           <h3>{isMyTurn ? t?.yourTurn || "Your turn!" : t?.waitingFor?.(currentPlayer.name) || `Waiting for ${currentPlayer.name}...`}</h3>
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
           {!isMyTurn && <div className="coin-display">🪙 <span>{myCoins}</span></div>}
-          <button onClick={() => setOverviewMode(true)} style={{ minWidth: "unset", padding: "6px 12px", fontSize: 12, background: "#333", boxShadow: "none", margin: 0 }}>📋 My Cards</button>
+          <button onClick={() => setOverviewMode(true)} style={{ minWidth: "unset", padding: "6px 12px", fontSize: 12, background: "#333", boxShadow: "none", margin: 0 }}>{t?.myCards || "📋 My Cards"}</button>
         </div>
       </div>
 
@@ -550,22 +562,22 @@ function Game({
       {timeLeft !== null && isMyTurn && <div className={`timer-display ${timeLeft <= 5 ? "timer-urgent" : ""}`}>{timeLeft}s</div>}
 
       {/* Recognition buzz strip — visible to non-active players while song plays, before reveal */}
-      {!isMyTurn && !revealed && (
+      {!isMyTurn && !revealed && playing && (
         <div style={{ width: "100%", maxWidth: 480, margin: "8px auto 0", display: "flex", alignItems: "center", justifyContent: "center" }}>
           {recognitionWinner ? (
             <div style={{ fontSize: 13, color: "#f0c040", fontWeight: 700, padding: "8px 16px", background: "rgba(240,192,64,0.1)", border: "1px solid rgba(240,192,64,0.3)", borderRadius: 20 }}>
-              🎤 {recognitionWinner.name} {lang === "de" ? "hat den Song erkannt!" : "recognized the song!"}
+              🎤 {recognitionWinner.name} {t?.recognizedSong || "recognized the song!"}
             </div>
           ) : recognitionBuzzed ? (
             <div style={{ fontSize: 13, color: "#1DB954", fontWeight: 700, padding: "8px 16px", background: "rgba(29,185,84,0.1)", border: "1px solid rgba(29,185,84,0.3)", borderRadius: 20 }}>
-              🎤 {lang === "de" ? "Eingeloggt! Warte auf Aufdeckung…" : "Buzzed in! Wait for the reveal…"}
+              🎤 {t?.buzzedIn || "Buzzed in! Wait for the reveal…"}
             </div>
           ) : (
             <button
               onClick={buzzRecognition}
               style={{ padding: "9px 22px", fontSize: 13, minWidth: "unset", background: "rgba(240,192,64,0.15)", border: "2px solid rgba(240,192,64,0.5)", color: "#f0c040", fontWeight: 700, borderRadius: 30, boxShadow: "none" }}
             >
-              🎤 {lang === "de" ? "Ich kenn den Song! +1 🪙" : "I know this song! +1 🪙"}
+              {t?.iKnowThisSongBuzz || "🎤 I know this song! +1 🪙"}
             </button>
           )}
         </div>
@@ -574,7 +586,7 @@ function Game({
       {/* After reveal: show who had buzzed in (if anyone) */}
       {!isMyTurn && revealed && recognitionWinner && (
         <div style={{ width: "100%", maxWidth: 480, margin: "8px auto 0", textAlign: "center", fontSize: 14, color: "#f0c040", fontWeight: 700, padding: "10px 16px", background: "rgba(240,192,64,0.1)", border: "1px solid rgba(240,192,64,0.3)", borderRadius: 14 }}>
-          🎤 {recognitionWinner.name} {lang === "de" ? "kannte den Song — +1 🪙" : "knew the song — +1 🪙"}
+          🎤 {recognitionWinner.name} {t?.knewSong || "knew the song — +1 🪙"}
         </div>
       )}
 
@@ -628,7 +640,7 @@ function Game({
                               onMouseDown={e => e.stopPropagation()}
                               onTouchStart={e => e.stopPropagation()}
                               disabled={!spotifyReady || connecting}
-                              title={connecting ? (lang === "de" ? "Verbinde…" : "Connecting…") : undefined}
+                              title={connecting ? t?.connecting || "Connecting…" : undefined}
                             >
                               {connecting ? "⏳" : playing ? "⏸" : "▶"}
                             </button>
@@ -652,7 +664,7 @@ function Game({
                           <div className="card-front new" style={{ gap: 10 }}>
                             <div style={{ fontSize: 32, opacity: 0.7 }}>🎵</div>
                             <div style={{ fontSize: 14, fontWeight: 700, color: "rgba(255,255,255,0.92)", textAlign: "center", padding: "0 14px", lineHeight: 1.35, textTransform: "none", letterSpacing: 0 }}>
-                              {currentPlayer.name}'s Card
+                              {t?.sCard ? t.sCard(currentPlayer.name) : `${currentPlayer.name}'s Card`}
                             </div>
                           </div>
                           <div className="card-back">

@@ -31,6 +31,7 @@ const translations = {
     // Game
     yourTurn: "Your turn!",
     waitingFor: (name) => `Waiting for ${name}...`,
+    waitingForPlayers: "Waiting for players...",
     loadingSong: "Loading song...",
     dragToPlace: "Drag to place",
     isPlaying: (name) => `${name} is playing...`,
@@ -38,6 +39,18 @@ const translations = {
     nextPlayer: "Next Player",
     giveCoin: (name) => `🎤 Give coin to ${name}`,
     iKnowThisSong: "🎵 I know this song! +1🪙",
+    myCards: "📋 My Cards",
+    myTimeline: "My Timeline",
+    closeOverview: "✕ Close",
+    sCard: (name) => `${name}'s Card`,
+    sTurn: (name) => `${name}'s Turn`,
+    leaveGame: "Leave the game?",
+    connecting: "Connecting…",
+    buzzedIn: "Buzzed in! Wait for the reveal…",
+    iKnowThisSongBuzz: "🎤 I know this song! +1 🪙",
+    recognizedSong: "recognized the song!",
+    knewSong: "knew the song — +1 🪙",
+    howToPlay: "📖 How to Play",
 
     // Winner
     winner: "🎉 Winner!",
@@ -99,6 +112,7 @@ const translations = {
     // Game
     yourTurn: "Du bist dran!",
     waitingFor: (name) => `Warten auf ${name}...`,
+    waitingForPlayers: "Warte auf Spieler...",
     loadingSong: "Song wird geladen...",
     dragToPlace: "Ziehen zum Platzieren",
     isPlaying: (name) => `${name} spielt gerade...`,
@@ -106,6 +120,18 @@ const translations = {
     nextPlayer: "Nächster Spieler",
     giveCoin: (name) => `🎤 Münze geben an ${name}`,
     iKnowThisSong: "🎵 Ich kenne diesen Song! +1🪙",
+    myCards: "📋 Meine Karten",
+    myTimeline: "Meine Zeitleiste",
+    closeOverview: "✕ Schließen",
+    sCard: (name) => `${name}s Karte`,
+    sTurn: (name) => `${name} ist dran`,
+    leaveGame: "Spiel wirklich verlassen?",
+    connecting: "Verbinde…",
+    buzzedIn: "Eingeloggt! Warte auf Aufdeckung…",
+    iKnowThisSongBuzz: "🎤 Ich kenn den Song! +1 🪙",
+    recognizedSong: "hat den Song erkannt!",
+    knewSong: "kannte den Song — +1 🪙",
+    howToPlay: "📖 Spielanleitung",
 
     // Winner
     winner: "🎉 Gewinner!",
