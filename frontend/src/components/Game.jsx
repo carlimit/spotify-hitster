@@ -43,7 +43,8 @@ function Game({
   const [coins, setCoins] = useState({});
   const [myCoinIndex, setMyCoinIndex] = useState(null);
 
-  // Recognition
+
+  // Recognition — buzz in BEFORE reveal while song is playing
   const [recognitionBuzzed, setRecognitionBuzzed] = useState(false);
   const [recognitionWinner, setRecognitionWinner] = useState(null);
 
@@ -169,7 +170,7 @@ function Game({
 
       // ✅ Only reset the visual play state — do NOT stop Spotify.
       // The song keeps playing until the new active player starts theirs,
-      // preventing the gap that causes Spotify to drop the session.
+      // preventing the silence gap that makes Spotify drop the connection.
       resetPlaying();
 
       const myTurn = newPlayers[newIndex]?.id === socket.id;
@@ -290,7 +291,7 @@ function Game({
   };
 
   // ============================================================
-  // DRAG
+  // DRAG (unchanged from original)
   // ============================================================
 
   const isHorizontal = () => window.innerWidth > window.innerHeight && window.innerWidth >= 768;
@@ -480,8 +481,8 @@ function Game({
         justifyContent: "center",
         width: horizontal ? 44 : "100%",
         minWidth: horizontal ? 44 : undefined,
-        // ✅ Use fixed 120px in landscape so the standalone slot-0 div
-        // (which has no explicit parent height) centres correctly.
+        // ✅ Fixed 120px in landscape (matches card height) so the leading
+        // slot-0 — which has no sibling card to give it height — stays centred.
         height: horizontal ? 120 : 44,
         minHeight: horizontal ? undefined : 44,
         flexShrink: 0,
@@ -548,7 +549,7 @@ function Game({
       {needsSpotifyApp && isMyTurn && <SpotifyAppPrompt onRetry={retryPlayback} lang={lang} />}
       {timeLeft !== null && isMyTurn && <div className={`timer-display ${timeLeft <= 5 ? "timer-urgent" : ""}`}>{timeLeft}s</div>}
 
-      {/* Recognition buzz strip */}
+      {/* Recognition buzz strip — visible to non-active players while song plays, before reveal */}
       {!isMyTurn && !revealed && playing && (
         <div style={{ width: "100%", maxWidth: 480, margin: "8px auto 0", display: "flex", alignItems: "center", justifyContent: "center" }}>
           {recognitionWinner ? (

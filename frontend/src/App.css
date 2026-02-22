@@ -893,7 +893,7 @@ button:active { transform: scale(0.97); }
     flex-direction: row !important;
   }
 
-  /* Coin slot wrapper in landscape: narrow column beside the card */
+  /* Coin slot wrapper in landscape: narrow column beside the card, stretch to card height */
   .timeline .coin-slot-wrapper {
     flex-direction: column !important;
     width: 44px !important;
@@ -962,8 +962,7 @@ button:active { transform: scale(0.97); }
     right: 24px;
   }
 
-  /* ── iPad landscape: scale down play button and drag hint
-     inside the 120px-tall timeline cards so they fit neatly ── */
+  /* ── iPad/landscape: scale down play button and hint to fit 120px card ── */
   .timeline .card .play-button {
     width: 46px !important;
     height: 46px !important;
