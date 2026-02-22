@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import axios from "axios";
 import { socket } from "../socket";
 import { useSpotifyPlayer } from "./useSpotifyPlayer";
@@ -43,10 +43,7 @@ function Game({
   const [coins, setCoins] = useState({});
   const [myCoinIndex, setMyCoinIndex] = useState(null);
 
-
-  // Recognition — buzz in BEFORE reveal while song is playing
-  // recognitionBuzzed: this player already buzzed this turn
-  // recognitionWinner: { name } of whoever buzzed first (shown after reveal)
+  // Recognition
   const [recognitionBuzzed, setRecognitionBuzzed] = useState(false);
   const [recognitionWinner, setRecognitionWinner] = useState(null);
 
@@ -170,7 +167,10 @@ function Game({
       setRecognitionBuzzed(false); setRecognitionWinner(null);
       clearInterval(timerRef.current); setTimeLeft(null);
 
-      stop(); resetPlaying();
+      // ✅ Only reset the visual play state — do NOT stop Spotify.
+      // The song keeps playing until the new active player starts theirs,
+      // preventing the gap that causes Spotify to drop the session.
+      resetPlaying();
 
       const myTurn = newPlayers[newIndex]?.id === socket.id;
       isMyTurnRef.current = myTurn;
@@ -209,7 +209,6 @@ function Game({
 
     socket.on("coin_refunded", () => setMyCoinIndex(null));
 
-    // Someone buzzed in for recognition before the reveal
     socket.on("recognition_claimed", ({ playerName }) => {
       setRecognitionWinner({ name: playerName });
     });
@@ -291,7 +290,7 @@ function Game({
   };
 
   // ============================================================
-  // DRAG (unchanged logic)
+  // DRAG
   // ============================================================
 
   const isHorizontal = () => window.innerWidth > window.innerHeight && window.innerWidth >= 768;
@@ -359,7 +358,6 @@ function Game({
     if (!dragCardRef.current || !timelineRef.current) return;
     const draggedRect = dragCardRef.current.getBoundingClientRect();
     const allCardEls = timelineRef.current.querySelectorAll(".card");
-    const fixedCardEl = Array.from(allCardEls).find((el, i) => currentCards[i]?.type !== "new");
     const fixedMidpoints = [];
     currentCards.forEach((c, i) => { if (c.type !== "new" && allCardEls[i]) { const r = allCardEls[i].getBoundingClientRect(); fixedMidpoints.push({ mid: horiz ? r.left + r.width / 2 : r.top + r.height / 2, originalIndex: i }); } });
     const draggedCenter = horiz ? draggedRect.left + draggedRect.width / 2 : draggedRect.top + draggedRect.height / 2;
@@ -442,7 +440,7 @@ function Game({
   const removeCoin = () => { setMyCoinIndex(null); socket.emit("remove_coin", { code: roomCode }); };
 
   // ============================================================
-  // RECOGNITION — buzz in BEFORE reveal
+  // RECOGNITION
   // ============================================================
 
   const buzzRecognition = () => {
@@ -475,7 +473,20 @@ function Game({
     const myHere = myCoinIndex === slotIndex;
     const othersCount = coinsHere - (myHere ? 1 : 0);
     return (
-      <div key={`coin-slot-${slotIndex}`} className="coin-slot-wrapper" style={{ display: "flex", flexDirection: horizontal ? "column" : "row", alignItems: "center", justifyContent: "center", width: horizontal ? 44 : "100%", minWidth: horizontal ? 44 : undefined, height: horizontal ? "100%" : 44, minHeight: horizontal ? undefined : 44, flexShrink: 0, gap: 4 }}>
+      <div key={`coin-slot-${slotIndex}`} className="coin-slot-wrapper" style={{
+        display: "flex",
+        flexDirection: horizontal ? "column" : "row",
+        alignItems: "center",
+        justifyContent: "center",
+        width: horizontal ? 44 : "100%",
+        minWidth: horizontal ? 44 : undefined,
+        // ✅ Use fixed 120px in landscape so the standalone slot-0 div
+        // (which has no explicit parent height) centres correctly.
+        height: horizontal ? 120 : 44,
+        minHeight: horizontal ? undefined : 44,
+        flexShrink: 0,
+        gap: 4,
+      }}>
         {othersCount > 0 && <div style={{ fontSize: 16, lineHeight: 1 }}>{"🪙".repeat(Math.min(othersCount, 5))}</div>}
         {myHere ? (
           <button className="coin-btn coin-placed" onClick={removeCoin} style={{ margin: 0 }}>🪙</button>
@@ -537,7 +548,7 @@ function Game({
       {needsSpotifyApp && isMyTurn && <SpotifyAppPrompt onRetry={retryPlayback} lang={lang} />}
       {timeLeft !== null && isMyTurn && <div className={`timer-display ${timeLeft <= 5 ? "timer-urgent" : ""}`}>{timeLeft}s</div>}
 
-      {/* Recognition buzz strip — visible to non-active players while song plays, before reveal */}
+      {/* Recognition buzz strip */}
       {!isMyTurn && !revealed && playing && (
         <div style={{ width: "100%", maxWidth: 480, margin: "8px auto 0", display: "flex", alignItems: "center", justifyContent: "center" }}>
           {recognitionWinner ? (
@@ -610,7 +621,6 @@ function Game({
                       <div ref={(el) => { dragCardRef.current = el; newCardRef.current = el; }} className="card new-card-unrevealed" style={{ position: "relative", zIndex: isDragged ? 1000 : 1, transition: "none", cursor: dragging ? "grabbing" : "grab", userSelect: "none", touchAction: "none" }}>
                         <div className={`card-inner ${result === "correct" ? "result-correct" : ""} ${result === "wrong" ? "result-wrong" : ""}`}>
                           <div className="card-front new">
-                            {/* Play button — shows ⏳ while connecting, re-pressable on failure */}
                             <button
                               className="play-button"
                               onClick={(e) => { e.stopPropagation(); if (!connecting) togglePlay(card.uri); }}
@@ -638,7 +648,6 @@ function Game({
                       style={{ position: "relative", zIndex: spectatorDragging ? 100 : (isNewCard && revealed ? 100 : 1), transform: `translate(${shiftX}px, ${shiftY}px)`, transition: "transform 0.15s ease, box-shadow 0.15s ease, scale 0.15s ease", cursor: "default", userSelect: "none", ...(spectatorDragging ? { boxShadow: "0 20px 50px rgba(29,185,84,0.5)", scale: "1.03" } : {}) }}>
                       {isNewCard ? (
                         <div className={`card-inner ${revealed ? "flipped" : ""} ${result === "correct" ? "result-correct" : ""} ${result === "wrong" ? "result-wrong" : ""}`}>
-                          {/* Spectator view: no play button, just label */}
                           <div className="card-front new" style={{ gap: 10 }}>
                             <div style={{ fontSize: 32, opacity: 0.7 }}>🎵</div>
                             <div style={{ fontSize: 14, fontWeight: 700, color: "rgba(255,255,255,0.92)", textAlign: "center", padding: "0 14px", lineHeight: 1.35, textTransform: "none", letterSpacing: 0 }}>
