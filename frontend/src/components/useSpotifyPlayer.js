@@ -82,6 +82,14 @@ async function playOnDevice(token, uri, deviceId) {
   return res.ok;
 }
 
+async function transferPlayback(token, deviceId) {
+  await fetch("https://api.spotify.com/v1/me/player", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ device_ids: [deviceId], play: false }),
+  }).catch(() => {});
+}
+
 async function connectPlay(token, uri) {
   // Step 1: try playing on whatever is active
   const res = await fetch("https://api.spotify.com/v1/me/player/play", {
@@ -96,9 +104,20 @@ async function connectPlay(token, uri) {
     const device = await findDevice(token);
     if (!device) return { ok: false, needsApp: true };
 
-    // Play directly on the device — this also activates it
+    // Try direct play on device
     const ok = await playOnDevice(token, uri, device.id);
     if (ok) return { ok: true };
+
+    // Step 3: device is stale/sleeping — wake it up via transfer, then retry
+    await transferPlayback(token, device.id);
+    await new Promise(r => setTimeout(r, 600));
+    const ok2 = await playOnDevice(token, uri, device.id);
+    if (ok2) return { ok: true };
+
+    // Step 4: one more attempt after a longer wait
+    await new Promise(r => setTimeout(r, 1000));
+    const ok3 = await playOnDevice(token, uri, device.id);
+    if (ok3) return { ok: true };
 
     return { ok: false, needsApp: true };
   }

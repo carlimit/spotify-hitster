@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Fragment } from "react";
 import axios from "axios";
 import { socket } from "../socket";
 import { useSpotifyPlayer } from "./useSpotifyPlayer";
@@ -729,20 +729,26 @@ function Game({
   // REMOTE DRAG INDICATOR (for spectators)
   // ============================================================
 
-  const renderRemoteDragIndicator = (beforeIndex) => {
+  const renderRemoteDragIndicator = (slotIndex) => {
     if (isMyTurn || remoteDragIndex === null || revealed) return null;
-    if (remoteDragIndex !== beforeIndex) return null;
+    if (remoteDragIndex !== slotIndex) return null;
     return (
-      <div style={{
-        width: horizontal ? 4 : "80%",
-        height: horizontal ? "80%" : 4,
-        background: "#1DB954",
-        borderRadius: 2,
-        alignSelf: "center",
-        boxShadow: "0 0 12px rgba(29,185,84,0.6)",
-        transition: "all 0.15s ease",
-        flexShrink: 0,
-      }} />
+      <div
+        key={`drag-ind-${slotIndex}`}
+        className="remote-drag-indicator"
+        style={{
+          width: horizontal ? 4 : "80%",
+          height: horizontal ? 100 : 4,
+          background: "#1DB954",
+          borderRadius: 2,
+          alignSelf: "center",
+          boxShadow: "0 0 12px rgba(29,185,84,0.6)",
+          transition: "all 0.15s ease",
+          flexShrink: 0,
+          margin: horizontal ? "0 -4px" : "-4px 0",
+          zIndex: 50,
+        }}
+      />
     );
   };
 
@@ -922,8 +928,8 @@ function Game({
               const isFirstCardBelowNew = !horizontal && revealed && index === newCardOriginalIndex + 1;
 
               return (
+                <Fragment key={card.id}>
                 <div
-                  key={card.id}
                   style={{
                     display: "flex",
                     flexDirection: horizontal ? "row" : "column",
@@ -1023,14 +1029,15 @@ function Game({
                     </div>
                   )}
 
-                  {/* Remote drag indicator after this card */}
-                  {renderRemoteDragIndicator(index + 1)}
-
                   {/* Coin slot AFTER each card (slot index + 1) */}
                   {renderCoinSlot(index + 1)}
                 </div>
-              );
-            })}
+
+                {/* Remote drag indicator BETWEEN card wrappers — direct child of timeline */}
+                {renderRemoteDragIndicator(index + 1)}
+              </Fragment>
+            );
+          })}
           </div>
         </div>
       )}

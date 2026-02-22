@@ -1,4 +1,4 @@
-*{
+* {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
@@ -893,13 +893,23 @@ button:active { transform: scale(0.97); }
     flex-direction: row !important;
   }
 
-  /* Coin slot wrapper in landscape: narrow column beside the card */
+  /* Coin slot wrapper in landscape: narrow column beside the card, stretch to card height */
   .timeline .coin-slot-wrapper {
     flex-direction: column !important;
     width: 44px !important;
     min-width: 44px !important;
     height: auto !important;
     min-height: unset !important;
+    align-self: stretch !important;
+    justify-content: center !important;
+  }
+
+  /* Remote drag indicator in landscape: vertical bar between card groups */
+  .timeline .remote-drag-indicator {
+    width: 4px !important;
+    height: 100px !important;
+    align-self: center !important;
+    margin: 0 -2px !important;
   }
 
   .timeline .card,
