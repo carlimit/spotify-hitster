@@ -904,14 +904,6 @@ button:active { transform: scale(0.97); }
     justify-content: center !important;
   }
 
-  /* Remote drag indicator in landscape: vertical bar between card groups */
-  .timeline .remote-drag-indicator {
-    width: 4px !important;
-    height: 100px !important;
-    align-self: center !important;
-    margin: 0 -2px !important;
-  }
-
   .timeline .card,
   .timeline .card.small-fixed,
   .timeline .card.new-card-unrevealed {

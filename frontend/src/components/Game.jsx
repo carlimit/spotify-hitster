@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, Fragment } from "react";
+import { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { socket } from "../socket";
 import { useSpotifyPlayer } from "./useSpotifyPlayer";
@@ -50,7 +50,7 @@ function Game({
 
   const [overviewMode, setOverviewMode] = useState(false);
 
-  // Remote drag indicator for spectators
+  // Remote drag: spectators store the insertIndex from active player
   const [remoteDragIndex, setRemoteDragIndex] = useState(null);
 
   const { ready: spotifyReady, playing, togglePlay, stop, needsSpotifyApp, retryPlayback, isMobile } = useSpotifyPlayer(roomCode, isHost);
@@ -85,7 +85,7 @@ function Game({
   const startScrollXRef = useRef(0);
   const startScrollYRef = useRef(0);
 
-  // Track orientation for coin slots
+  // Track orientation
   const [horizontal, setHorizontal] = useState(
     window.innerWidth > window.innerHeight && window.innerWidth >= 768
   );
@@ -182,7 +182,7 @@ function Game({
       setMyCoinIndex(null);
       setCoinGiven(false);
       setOverviewMode(false);
-      stop();
+      // Don't stop music — let it keep playing until next player presses play
       clearInterval(timerRef.current);
       setTimeLeft(null);
 
@@ -219,15 +219,31 @@ function Game({
       }, 300);
     });
 
-    // ── Live drag sync from active player ──
+    // Spectator sees new card when active player loads it
+    socket.on("new_card_loaded", ({ cards: newCards }) => {
+      if (!isMyTurnRef.current) {
+        setCards(newCards);
+        cardsRef.current = newCards;
+        setRemoteDragIndex(null);
+      }
+    });
+
+    // Live drag sync: spectator gets the insert position
     socket.on("drag_move", ({ insertIndex: remoteIdx }) => {
       if (!isMyTurnRef.current) {
         setRemoteDragIndex(remoteIdx);
       }
     });
 
-    socket.on("drag_end", () => {
-      setRemoteDragIndex(null);
+    // Drag ended: spectator gets final card order
+    socket.on("drag_end", ({ cards: finalCards }) => {
+      if (!isMyTurnRef.current) {
+        setRemoteDragIndex(null);
+        if (finalCards) {
+          setCards(finalCards);
+          cardsRef.current = finalCards;
+        }
+      }
     });
 
     return () => {
@@ -235,6 +251,7 @@ function Game({
       socket.off("coins_updated");
       socket.off("coins_updated_players");
       socket.off("card_revealed");
+      socket.off("new_card_loaded");
       socket.off("drag_move");
       socket.off("drag_end");
     };
@@ -250,7 +267,6 @@ function Game({
 
     const handleReconnect = () => {
       if (!roomCode || !myName) return;
-      console.log("🔄 Socket reconnected — rejoining game...");
       socket.emit("rejoin_game", { code: roomCode, name: myName });
     };
 
@@ -264,8 +280,6 @@ function Game({
       usedUris,
       coins: newCoins,
     }) => {
-      console.log("✅ Rejoin successful");
-
       if (genres?.length) selectedGenresRef.current = genres;
       if (min) minYearRef.current = Number(min);
       if (max) maxYearRef.current = Number(max);
@@ -357,6 +371,9 @@ function Game({
       ];
       setCards(newCards);
       cardsRef.current = newCards;
+
+      // Share cards with spectators
+      socket.emit("new_card_loaded", { code: roomCode, cards: newCards });
 
       setTimeout(() => {
         newCardRef.current?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
@@ -533,7 +550,7 @@ function Game({
     insertIndexRef.current = arraySlot;
     setInsertIndex(prev => prev === arraySlot ? prev : arraySlot);
 
-    // ── Emit live drag position to other players ──
+    // Emit live drag position to other players
     socket.emit("drag_move", { code: roomCode, insertIndex: arraySlot });
   };
 
@@ -567,8 +584,8 @@ function Game({
     startYRef.current = 0;
     startXRef.current = 0;
 
-    // ── Tell others drag ended ──
-    socket.emit("drag_end", { code: roomCode });
+    // Tell others drag ended with final card positions
+    socket.emit("drag_end", { code: roomCode, cards: reordered });
   };
 
   useEffect(() => {
@@ -726,33 +743,6 @@ function Game({
   };
 
   // ============================================================
-  // REMOTE DRAG INDICATOR (for spectators)
-  // ============================================================
-
-  const renderRemoteDragIndicator = (slotIndex) => {
-    if (isMyTurn || remoteDragIndex === null || revealed) return null;
-    if (remoteDragIndex !== slotIndex) return null;
-    return (
-      <div
-        key={`drag-ind-${slotIndex}`}
-        className="remote-drag-indicator"
-        style={{
-          width: horizontal ? 4 : "80%",
-          height: horizontal ? 100 : 4,
-          background: "#1DB954",
-          borderRadius: 2,
-          alignSelf: "center",
-          boxShadow: "0 0 12px rgba(29,185,84,0.6)",
-          transition: "all 0.15s ease",
-          flexShrink: 0,
-          margin: horizontal ? "0 -4px" : "-4px 0",
-          zIndex: 50,
-        }}
-      />
-    );
-  };
-
-  // ============================================================
   // UI
   // ============================================================
 
@@ -769,6 +759,10 @@ function Game({
   Object.values(coins).forEach(({ insertIndex: idx }) => {
     coinsBySlot[idx] = (coinsBySlot[idx] || 0) + 1;
   });
+
+  // Unified drag index: local for active player, remote for spectators
+  const activeDragIdx = isMyTurn ? (dragging ? insertIndex : null) : remoteDragIndex;
+  const isDragActive = activeDragIdx !== null && !revealed;
 
   if (overviewMode) {
     const myTimeline = myPlayer?.timeline || [];
@@ -898,38 +892,52 @@ function Game({
               ...(zoomed ? { transform: `scale(${ZOOM_OUT})` } : {})
             }}
           >
-            {/* Remote drag indicator before first card */}
-            {renderRemoteDragIndicator(0)}
-
             {/* Coin slot BEFORE the first card (slot 0) */}
             {renderCoinSlot(0)}
 
             {cards.map((card, index) => {
               const isNewCard = card.type === "new";
-              const isDragged = isNewCard && dragging;
+              const isDragged = isNewCard && dragging && isMyTurn;
 
-              let shiftY = 0;
+              // Compute card transform for both active dragger AND spectators
               let shiftX = 0;
+              let shiftY = 0;
 
-              if (!isNewCard && dragging && insertIndex !== null) {
+              if (isDragActive && newCardOriginalIndex >= 0) {
                 const origIdx = newCardOriginalIndex;
                 const cardEls = timelineRef.current?.querySelectorAll(".card");
-                if (horizontal) {
-                  const cardW = (cardEls?.[0]?.getBoundingClientRect().width || 200) + 12;
-                  if (insertIndex <= origIdx && index >= insertIndex && index < origIdx) shiftX = cardW;
-                  else if (insertIndex > origIdx + 1 && index > origIdx && index < insertIndex) shiftX = -cardW;
-                } else {
-                  const cardH = (cardEls?.[0]?.getBoundingClientRect().height || 180) + 16;
-                  if (insertIndex <= origIdx && index >= insertIndex && index < origIdx) shiftY = cardH;
-                  else if (insertIndex > origIdx + 1 && index > origIdx && index < insertIndex) shiftY = -cardH;
+                const cardW = (cardEls?.[0]?.getBoundingClientRect().width || 200) + 12;
+                const cardH = (cardEls?.[0]?.getBoundingClientRect().height || 180) + 16;
+
+                if (isNewCard && !isMyTurn) {
+                  // SPECTATOR: slide the new card to the target gap
+                  // Always uses the SPECTATOR's own orientation
+                  const diff = activeDragIdx <= origIdx
+                    ? -(origIdx - activeDragIdx)
+                    : activeDragIdx - origIdx - 1;
+                  if (horizontal) {
+                    shiftX = diff * cardW;
+                  } else {
+                    shiftY = diff * cardH;
+                  }
+                } else if (!isNewCard) {
+                  // BOTH active player and spectator: fixed cards shift to make room
+                  if (horizontal) {
+                    if (activeDragIdx <= origIdx && index >= activeDragIdx && index < origIdx) shiftX = cardW;
+                    else if (activeDragIdx > origIdx + 1 && index > origIdx && index < activeDragIdx) shiftX = -cardW;
+                  } else {
+                    if (activeDragIdx <= origIdx && index >= activeDragIdx && index < origIdx) shiftY = cardH;
+                    else if (activeDragIdx > origIdx + 1 && index > origIdx && index < activeDragIdx) shiftY = -cardH;
+                  }
                 }
               }
 
               const isFirstCardBelowNew = !horizontal && revealed && index === newCardOriginalIndex + 1;
+              const spectatorDragging = isNewCard && !isMyTurn && isDragActive;
 
               return (
-                <Fragment key={card.id}>
                 <div
+                  key={card.id}
                   style={{
                     display: "flex",
                     flexDirection: horizontal ? "row" : "column",
@@ -939,21 +947,19 @@ function Game({
                     flexShrink: 0,
                   }}
                 >
-                  {/* The card itself */}
+                  {/* The card */}
                   {isNewCard && !revealed && isMyTurn ? (
+                    /* Active player's draggable card */
                     <div
                       className="drag-wrapper"
                       style={{ touchAction: "none", userSelect: "none" }}
                       onMouseDown={handleDragStart}
-                      onTouchStart={(e) => {
-                        e.preventDefault();
-                        handleDragStart(e);
-                      }}
+                      onTouchStart={(e) => { e.preventDefault(); handleDragStart(e); }}
                       onTouchMove={(e) => e.preventDefault()}
                     >
                       <div
                         ref={(el) => { dragCardRef.current = el; newCardRef.current = el; }}
-                        className={`card new-card-unrevealed`}
+                        className="card new-card-unrevealed"
                         style={{
                           position: "relative",
                           zIndex: isDragged ? 1000 : 1,
@@ -971,7 +977,6 @@ function Game({
                               onMouseDown={e => e.stopPropagation()}
                               onTouchStart={e => e.stopPropagation()}
                               disabled={!spotifyReady}
-                              title={spotifyReady ? "Play / Pause" : "Connecting to Spotify..."}
                             >
                               {playing ? "⏸" : "▶"}
                             </button>
@@ -987,20 +992,25 @@ function Game({
                       </div>
                     </div>
                   ) : (
+                    /* Spectator cards + fixed cards + revealed card */
                     <div
                       ref={isNewCard ? (el) => { newCardRef.current = el; } : null}
                       className={`card ${isNewCard ? "new-card-unrevealed" : "small-fixed"} ${isNewCard && revealed ? (horizontal ? "card-expanded-horizontal" : "card-expanded") : ""}`}
                       style={{
                         position: "relative",
-                        zIndex: isNewCard && revealed ? 100 : 1,
-                        transform: `translate(${shiftX}px, ${shiftY}px) scale(1)`,
-                        transition: isNewCard ? "none" : "transform 0.3s ease",
+                        zIndex: spectatorDragging ? 100 : (isNewCard && revealed ? 100 : 1),
+                        transform: `translate(${shiftX}px, ${shiftY}px)`,
+                        transition: "transform 0.15s ease, box-shadow 0.15s ease, scale 0.15s ease",
                         cursor: "default",
                         userSelect: "none",
+                        ...(spectatorDragging ? {
+                          boxShadow: "0 20px 50px rgba(29,185,84,0.5)",
+                          scale: "1.03",
+                        } : {}),
                       }}
                     >
                       {isNewCard ? (
-                        <div className={`card-inner flipped ${result === "correct" ? "result-correct" : ""} ${result === "wrong" ? "result-wrong" : ""}`}>
+                        <div className={`card-inner ${revealed ? "flipped" : ""} ${result === "correct" ? "result-correct" : ""} ${result === "wrong" ? "result-wrong" : ""}`}>
                           <div className="card-front new">
                             <button
                               className="play-button"
@@ -1008,7 +1018,6 @@ function Game({
                               onMouseDown={e => e.stopPropagation()}
                               onTouchStart={e => e.stopPropagation()}
                               disabled={!spotifyReady}
-                              title={spotifyReady ? "Play / Pause" : "Connecting to Spotify..."}
                             >
                               {playing ? "⏸" : "▶"}
                             </button>
@@ -1029,15 +1038,11 @@ function Game({
                     </div>
                   )}
 
-                  {/* Coin slot AFTER each card (slot index + 1) */}
+                  {/* Coin slot AFTER each card */}
                   {renderCoinSlot(index + 1)}
                 </div>
-
-                {/* Remote drag indicator BETWEEN card wrappers — direct child of timeline */}
-                {renderRemoteDragIndicator(index + 1)}
-              </Fragment>
-            );
-          })}
+              );
+            })}
           </div>
         </div>
       )}

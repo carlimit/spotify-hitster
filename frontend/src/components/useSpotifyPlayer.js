@@ -46,11 +46,6 @@ function initSDK(token, name, onReady, onStateChange) {
 
 // ─────────────────────────────────────────────────────────────
 // Spotify Connect helpers (mobile)
-//
-// Simple approach:
-//   1. Try playing without device_id (works if a device is active)
-//   2. If 404 → fetch devices, pick one, play directly on it
-//   3. Only return needsApp if zero devices exist
 // ─────────────────────────────────────────────────────────────
 
 async function findDevice(token) {
@@ -115,13 +110,14 @@ async function connectPlay(token, uri) {
     if (ok2) return { ok: true };
 
     // Step 4: one more attempt after a longer wait
-    await new Promise(r => setTimeout(r, 1000));
+    await new Promise(r => setTimeout(r, 1200));
     const ok3 = await playOnDevice(token, uri, device.id);
     if (ok3) return { ok: true };
 
     return { ok: false, needsApp: true };
   }
 
+  // 403 = premium required, etc.
   return { ok: false, needsApp: false };
 }
 
@@ -157,7 +153,6 @@ export function useSpotifyPlayer(roomCode, isHost) {
       const token = localStorage.getItem("token");
       if (!token) return;
 
-      // Small delay for Spotify to register
       await new Promise(r => setTimeout(r, 800));
 
       const result = await connectPlay(token, uri);
@@ -176,6 +171,7 @@ export function useSpotifyPlayer(roomCode, isHost) {
 
   useEffect(() => {
     if (!isHost) {
+      // Non-host: just listen for state from host
       setReady(true);
       const onPlayerState = ({ playing: isPlaying }) => setPlaying(isPlaying);
       socket.on("player_state", onPlayerState);
@@ -189,10 +185,27 @@ export function useSpotifyPlayer(roomCode, isHost) {
       console.log("📱 Mobile host — using Spotify Connect");
       setReady(true);
 
-      const onPlayTrack = ({ uri }) => {
-        connectPlay(token, uri).catch(console.error);
+      // When a non-host asks host to play, handle it with full retry logic
+      const onPlayTrack = async ({ uri }) => {
+        const result = await connectPlay(token, uri);
+        if (result.ok) {
+          setPlaying(true);
+          setNeedsSpotifyApp(false);
+          pendingUriRef.current = null;
+          currentUriRef.current = uri;
+          socket.emit("player_state", { code: roomCode, playing: true });
+        } else if (result.needsApp) {
+          pendingUriRef.current = uri;
+          setNeedsSpotifyApp(true);
+          // Tell non-host it failed
+          socket.emit("player_state", { code: roomCode, playing: false });
+        }
       };
-      const onPauseTrack = () => connectPause(token).catch(console.error);
+      const onPauseTrack = async () => {
+        await connectPause(token);
+        setPlaying(false);
+        socket.emit("player_state", { code: roomCode, playing: false });
+      };
       socket.on("play_track", onPlayTrack);
       socket.on("pause_track", onPauseTrack);
       return () => {
@@ -239,9 +252,13 @@ export function useSpotifyPlayer(roomCode, isHost) {
 
   const togglePlay = useCallback(async (uri) => {
     if (!isHost) {
-      if (playing) socket.emit("pause_track", { code: roomCode });
-      else socket.emit("play_track", { code: roomCode, uri });
-      setPlaying(p => !p);
+      // Non-host: emit to host and DON'T set local state.
+      // State will update when host emits player_state back.
+      if (playing) {
+        socket.emit("pause_track", { code: roomCode });
+      } else {
+        socket.emit("play_track", { code: roomCode, uri });
+      }
       return;
     }
 
