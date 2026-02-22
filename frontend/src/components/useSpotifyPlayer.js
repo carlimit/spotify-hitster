@@ -57,9 +57,11 @@ async function findDevice(token) {
     const data = await res.json();
     const devices = data.devices || [];
     if (!devices.length) return null;
-    return devices.find(d => d.is_active) ||
-           devices.find(d => d.type === "Smartphone") ||
-           devices[0];
+    return (
+      devices.find(d => d.is_active) ||
+      devices.find(d => d.type === "Smartphone") ||
+      devices[0]
+    );
   } catch {
     return null;
   }
@@ -86,7 +88,7 @@ async function transferPlayback(token, deviceId) {
 }
 
 async function connectPlay(token, uri) {
-  // Step 1: try playing on whatever is active
+  // Step 1: try whatever device is currently active
   const res = await fetch("https://api.spotify.com/v1/me/player/play", {
     method: "PUT",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -99,17 +101,16 @@ async function connectPlay(token, uri) {
     const device = await findDevice(token);
     if (!device) return { ok: false, needsApp: true };
 
-    // Try direct play on device
     const ok = await playOnDevice(token, uri, device.id);
     if (ok) return { ok: true };
 
-    // Step 3: device is stale/sleeping — wake it up via transfer, then retry
+    // Step 3: device sleeping — wake via transfer then retry
     await transferPlayback(token, device.id);
     await new Promise(r => setTimeout(r, 600));
     const ok2 = await playOnDevice(token, uri, device.id);
     if (ok2) return { ok: true };
 
-    // Step 4: one more attempt after a longer wait
+    // Step 4: one final longer wait
     await new Promise(r => setTimeout(r, 1200));
     const ok3 = await playOnDevice(token, uri, device.id);
     if (ok3) return { ok: true };
@@ -141,7 +142,14 @@ export function useSpotifyPlayer(roomCode, isHost) {
   const mobileRef = useRef(isMobileBrowser());
   const pendingUriRef = useRef(null);
 
-  // When user comes back from Spotify app, auto-retry once
+  // resetPlaying — called on turn change so the new player's button shows ▶
+  // and not ⏸. This only resets the React state; it does NOT pause Spotify.
+  const resetPlaying = useCallback(() => {
+    setPlaying(false);
+    currentUriRef.current = null;
+  }, []);
+
+  // Auto-retry when user comes back from Spotify app
   useEffect(() => {
     if (!isHost || !mobileRef.current) return;
 
@@ -149,12 +157,9 @@ export function useSpotifyPlayer(roomCode, isHost) {
       if (document.visibilityState !== "visible") return;
       const uri = pendingUriRef.current;
       if (!uri) return;
-
       const token = localStorage.getItem("token");
       if (!token) return;
-
       await new Promise(r => setTimeout(r, 800));
-
       const result = await connectPlay(token, uri);
       if (result.ok) {
         pendingUriRef.current = null;
@@ -171,7 +176,6 @@ export function useSpotifyPlayer(roomCode, isHost) {
 
   useEffect(() => {
     if (!isHost) {
-      // Non-host: just listen for state from host
       setReady(true);
       const onPlayerState = ({ playing: isPlaying }) => setPlaying(isPlaying);
       socket.on("player_state", onPlayerState);
@@ -185,7 +189,6 @@ export function useSpotifyPlayer(roomCode, isHost) {
       console.log("📱 Mobile host — using Spotify Connect");
       setReady(true);
 
-      // When a non-host asks host to play, handle it with full retry logic
       const onPlayTrack = async ({ uri }) => {
         const result = await connectPlay(token, uri);
         if (result.ok) {
@@ -197,7 +200,6 @@ export function useSpotifyPlayer(roomCode, isHost) {
         } else if (result.needsApp) {
           pendingUriRef.current = uri;
           setNeedsSpotifyApp(true);
-          // Tell non-host it failed
           socket.emit("player_state", { code: roomCode, playing: false });
         }
       };
@@ -236,7 +238,11 @@ export function useSpotifyPlayer(roomCode, isHost) {
     return () => {
       socket.off("play_track", onPlayTrack);
       socket.off("pause_track", onPauseTrack);
-      if (playerRef.current) { playerRef.current.disconnect(); playerRef.current = null; deviceIdRef.current = null; }
+      if (playerRef.current) {
+        playerRef.current.disconnect();
+        playerRef.current = null;
+        deviceIdRef.current = null;
+      }
     };
   }, [isHost, roomCode]);
 
@@ -252,13 +258,8 @@ export function useSpotifyPlayer(roomCode, isHost) {
 
   const togglePlay = useCallback(async (uri) => {
     if (!isHost) {
-      // Non-host: emit to host and DON'T set local state.
-      // State will update when host emits player_state back.
-      if (playing) {
-        socket.emit("pause_track", { code: roomCode });
-      } else {
-        socket.emit("play_track", { code: roomCode, uri });
-      }
+      if (playing) socket.emit("pause_track", { code: roomCode });
+      else socket.emit("play_track", { code: roomCode, uri });
       return;
     }
 
@@ -286,7 +287,7 @@ export function useSpotifyPlayer(roomCode, isHost) {
       return;
     }
 
-    // Desktop
+    // Desktop SDK
     if (!playerRef.current || !deviceIdRef.current) return;
     if (currentUriRef.current === uri && playing) {
       await playerRef.current.pause();
@@ -322,11 +323,8 @@ export function useSpotifyPlayer(roomCode, isHost) {
   }, [isHost, roomCode]);
 
   /**
-   * keepAlive — silently wakes the Spotify device between turns without
-   * starting playback. Prevents the long "no active device" delay when the
-   * next player presses play after a gap between songs.
-   * Only does anything on mobile (Connect API) because the Web Playback SDK
-   * keeps its own device alive automatically.
+   * keepAlive — silently transfers playback to wake the Spotify device
+   * between turns without starting playback. Only meaningful on mobile.
    */
   const keepAlive = useCallback(async () => {
     if (!isHost || !mobileRef.current) return;
@@ -339,7 +337,7 @@ export function useSpotifyPlayer(roomCode, isHost) {
         console.log("🔄 Spotify keep-alive ping sent");
       }
     } catch {
-      // Non-critical — ignore silently
+      // Non-critical — ignore
     }
   }, [isHost]);
 
@@ -357,7 +355,17 @@ export function useSpotifyPlayer(roomCode, isHost) {
     }
   }, [roomCode]);
 
-  return { ready, playing, togglePlay, stop, keepAlive, isMobile: mobileRef.current, needsSpotifyApp, retryPlayback };
+  return {
+    ready,
+    playing,
+    resetPlaying,
+    togglePlay,
+    stop,
+    keepAlive,
+    isMobile: mobileRef.current,
+    needsSpotifyApp,
+    retryPlayback,
+  };
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -405,30 +413,30 @@ export function useSpotifyDirect() {
       (state) => { setPlaying(!state.paused); currentUriRef.current = state.track_window?.current_track?.uri || null; }
     );
     if (player) playerRef.current = player;
-    return () => { if (playerRef.current) { playerRef.current.disconnect(); playerRef.current = null; deviceIdRef.current = null; } };
+    return () => {
+      if (playerRef.current) {
+        playerRef.current.disconnect();
+        playerRef.current = null;
+        deviceIdRef.current = null;
+      }
+    };
   }, []);
 
   const togglePlay = useCallback(async (uri) => {
     const token = localStorage.getItem("token");
     if (!token) return;
-
     if (mobileRef.current) {
-      if (playing) {
-        await connectPause(token);
-        setPlaying(false);
-      } else {
+      if (playing) { await connectPause(token); setPlaying(false); }
+      else {
         const result = await connectPlay(token, uri);
         if (result.ok) { setPlaying(true); setNeedsSpotifyApp(false); currentUriRef.current = uri; }
         else if (result.needsApp) { pendingUriRef.current = uri; setNeedsSpotifyApp(true); }
       }
       return;
     }
-
     if (!playerRef.current || !deviceIdRef.current) return;
-    if (currentUriRef.current === uri && playing) {
-      await playerRef.current.pause();
-      setPlaying(false);
-    } else {
+    if (currentUriRef.current === uri && playing) { await playerRef.current.pause(); setPlaying(false); }
+    else {
       await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceIdRef.current}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -448,10 +456,7 @@ export function useSpotifyDirect() {
     currentUriRef.current = null;
   }, []);
 
-  /**
-   * keepAlive — same as multiplayer version, wakes device between cards
-   * so the next play press responds immediately.
-   */
+  /** keepAlive — wakes device between cards on mobile */
   const keepAlive = useCallback(async () => {
     if (!mobileRef.current) return;
     const token = localStorage.getItem("token");
@@ -469,8 +474,23 @@ export function useSpotifyDirect() {
     const uri = pendingUriRef.current;
     if (!token || !uri) return;
     const result = await connectPlay(token, uri);
-    if (result.ok) { pendingUriRef.current = null; setNeedsSpotifyApp(false); setPlaying(true); currentUriRef.current = uri; }
+    if (result.ok) {
+      pendingUriRef.current = null;
+      setNeedsSpotifyApp(false);
+      setPlaying(true);
+      currentUriRef.current = uri;
+    }
   }, []);
 
-  return { ready, playing, togglePlay, stop, keepAlive, isMobile: mobileRef.current, needsSpotifyApp, retryPlayback };
+  return {
+    ready,
+    playing,
+    resetPlaying: useCallback(() => { setPlaying(false); currentUriRef.current = null; }, []),
+    togglePlay,
+    stop,
+    keepAlive,
+    isMobile: mobileRef.current,
+    needsSpotifyApp,
+    retryPlayback,
+  };
 }

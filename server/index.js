@@ -323,10 +323,7 @@ io.on("connection", (socket) => {
 
     const oldId = player.id;
     player.id = socket.id;
-
-    if (game.host === oldId) {
-      game.host = socket.id;
-    }
+    if (game.host === oldId) game.host = socket.id;
 
     socket.join(code);
 
@@ -359,6 +356,8 @@ io.on("connection", (socket) => {
     game.currentPlayerIndex = 0;
     game.winGoal = winGoal || 10;
     game.timerSeconds = timerSeconds || 0;
+    game.coins = {};
+    game.currentCardFinalIndex = undefined;
 
     if (playlistTracks && playlistTracks.length) {
       const years = playlistTracks.map(t => parseInt(t.year)).filter(y => !isNaN(y));
@@ -403,6 +402,8 @@ io.on("connection", (socket) => {
   socket.on("reveal_card", ({ code, result, cards }) => {
     const game = games[code];
     if (!game) return;
+    // Clear all coins on reveal — nobody can bet after the card flips
+    game.coins = {};
     socket.to(code).emit("card_revealed", { result, cards });
   });
 
@@ -443,25 +444,16 @@ io.on("connection", (socket) => {
   });
 
   /**
-   * card_moved — emitted by the active player after drag_end with the final
-   * array index of the new card. We use this to refund coins placed at that
-   * exact slot (they can't bet *with* the active player) and to refund coins
-   * that were placed at a slot the card was dragged away from.
-   *
-   * Rule: a coin at `finalInsertIndex` gets silently refunded (no penalty,
-   * no reward) because the card landed on top of it — the spectator essentially
-   * guessed the same position as the active player, so we call it a wash.
-   * Coins at any other slot are still evaluated normally at resolve_coins time.
+   * card_moved — active player tells server the final array index of the new
+   * card after each drag. We refund any coins already sitting at that slot
+   * and block future placements there until the card moves again.
    */
   socket.on("card_moved", ({ code, finalInsertIndex }) => {
     const game = games[code];
     if (!game || !game.coins) return;
 
-    // Store final index so resolve_coins can reference it
     game.currentCardFinalIndex = finalInsertIndex;
 
-    // Find any spectators whose coin is now at the same slot as the card
-    // and refund them immediately (so they can re-place elsewhere before reveal)
     const refundedPlayerIds = [];
     Object.entries(game.coins).forEach(([playerId, { insertIndex }]) => {
       if (insertIndex === finalInsertIndex) {
@@ -470,12 +462,8 @@ io.on("connection", (socket) => {
       }
     });
 
-    // Notify refunded players so their UI clears the coin
-    refundedPlayerIds.forEach(playerId => {
-      io.to(playerId).emit("coin_refunded");
-    });
+    refundedPlayerIds.forEach(playerId => io.to(playerId).emit("coin_refunded"));
 
-    // Broadcast updated coins to all (so other spectators see changes)
     if (refundedPlayerIds.length > 0) {
       io.to(code).emit("coins_updated", { coins: game.coins });
     }
@@ -497,9 +485,9 @@ io.on("connection", (socket) => {
     if (!player || player.coins <= 0) return;
     if (!game.coins) game.coins = {};
 
-    // Don't allow placing a coin at the same slot the card currently sits on
+    // Reject coins placed where the card currently sits
     if (game.currentCardFinalIndex !== undefined && insertIndex === game.currentCardFinalIndex) {
-      io.to(socket.id).emit("coin_refunded"); // bounce it back immediately
+      io.to(socket.id).emit("coin_refunded");
       return;
     }
 
@@ -514,13 +502,31 @@ io.on("connection", (socket) => {
     io.to(code).emit("coins_updated", { coins: game.coins });
   });
 
+  /**
+   * claim_recognition — a spectator says they knew the song before it was
+   * revealed. First claimer wins; they get +1 coin and everyone else sees
+   * who claimed it. Only one player can claim per turn.
+   */
   socket.on("claim_recognition", ({ code }) => {
     const game = games[code];
     if (!game) return;
+
+    // Guard: only one claim per turn
+    if (game.recognitionClaimed) return;
+    game.recognitionClaimed = true;
+
     const playerIndex = game.players.findIndex(p => p.id === socket.id);
     if (playerIndex === -1) return;
-    game.players[playerIndex].coins = (game.players[playerIndex].coins || 0) + 1;
+
+    const player = game.players[playerIndex];
+    game.players[playerIndex].coins = (player.coins || 0) + 1;
+
+    // Tell everyone who claimed it (active player sees it too)
+    io.to(code).emit("recognition_claimed", { playerName: player.name });
+    // Push updated coin counts
     io.to(code).emit("coins_updated_players", { players: game.players });
+
+    console.log(`🎤 "${player.name}" claimed recognition in room ${code}`);
   });
 
   socket.on("resolve_coins", ({ code, activeCorrect, activeInsertIndex, newCard }) => {
@@ -545,11 +551,8 @@ io.on("connection", (socket) => {
       if (coinPlayerIndex === -1) return;
       const coinPlayer = game.players[coinPlayerIndex];
 
-      // If coin is at the same slot as where the card landed, refund (already
-      // handled by card_moved but guard here too in case of race conditions)
-      if (insertIndex === activeInsertIndex) {
-        return; // coin returned, no change
-      }
+      // Coin at exact same slot as card: refund silently (no penalty, no reward)
+      if (insertIndex === activeInsertIndex) return;
 
       const coinCorrect = isSlotCorrect(insertIndex);
 
@@ -572,6 +575,7 @@ io.on("connection", (socket) => {
 
     game.coins = {};
     game.currentCardFinalIndex = undefined;
+    game.recognitionClaimed = false; // reset for next turn
     game.currentPlayerIndex = (game.currentPlayerIndex + 1) % game.players.length;
 
     io.to(code).emit("turn_changed", {
@@ -597,6 +601,7 @@ io.on("connection", (socket) => {
     if (!game) return;
     game.coins = {};
     game.currentCardFinalIndex = undefined;
+    game.recognitionClaimed = false;
     game.currentPlayerIndex = (game.currentPlayerIndex + 1) % game.players.length;
     io.to(code).emit("turn_changed", {
       players: game.players,
